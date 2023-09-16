@@ -1,8 +1,10 @@
 #pragma once
 
+#define EPS 1.0e-10
 #undef PI
 #define PI 3.14159265358979323846264338327950288419716939937510582097494459230781
-#define EPS 1.0e-10
+#define HALF_PI (.5*PI)
+#define TAU (2*PI)
 
 // Any changes here may need to be reflected in OpenCL's constants.cl
 // They are kept separate to avoid accidentally breaking OpenCL compatibility

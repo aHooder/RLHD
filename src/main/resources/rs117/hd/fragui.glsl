@@ -32,7 +32,6 @@
 
 uniform sampler2D uiTexture;
 
-uniform int samplingMode;
 uniform ivec2 sourceDimensions;
 uniform ivec2 targetDimensions;
 uniform float colorBlindnessIntensity;

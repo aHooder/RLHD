@@ -47,7 +47,6 @@ import rs117.hd.utils.ResourcePath;
 
 import static org.lwjgl.opengl.GL43C.*;
 import static rs117.hd.HdPlugin.TEXTURE_UNIT_GAME;
-import static rs117.hd.HdPlugin.TEXTURE_UNIT_UI;
 import static rs117.hd.utils.ResourcePath.path;
 
 @Singleton
@@ -317,7 +316,6 @@ public class TextureManager
 		scaledImage = null;
 		vanillaImage = null;
 		textureProvider.setBrightness(save);
-		glActiveTexture(TEXTURE_UNIT_UI);
 
 		plugin.updateMaterialUniformBuffer(textureAnimations);
 		plugin.updateWaterTypeUniformBuffer();

@@ -34,7 +34,9 @@
 
 uniform sampler2DArray textureArray;
 uniform sampler2D shadowMap;
+uniform sampler2D skyTexture;
 
+uniform mat4 projectionMatrix;
 uniform mat4 lightProjectionMatrix;
 uniform float elapsedTime;
 uniform float colorBlindnessIntensity;
@@ -95,6 +97,7 @@ vec2 worldUvs(float scale) {
 #include utils/displacement.glsl
 #include utils/shadows.glsl
 #include utils/water.glsl
+#include utils/sky.glsl
 
 void main() {
     vec3 camPos = vec3(cameraX, cameraY, cameraZ);
@@ -412,12 +415,11 @@ void main() {
         // apply shadows
         dirLightColor *= inverseShadow;
 
-        vec3 lightColor = dirLightColor;
-        vec3 lightOut = max(lightDotNormals, 0.0) * lightColor;
+        vec3 lightOut = max(lightDotNormals, 0.0) * dirLightColor;
 
         // directional light specular
         vec3 lightReflectDir = reflect(-lightDir, normals);
-        vec3 lightSpecularOut = lightColor * specular(viewDir, lightReflectDir, vSpecularGloss, vSpecularStrength);
+        vec3 lightSpecularOut = dirLightColor * specular(viewDir, lightReflectDir, vSpecularGloss, vSpecularStrength);
 
         // point lights
         vec3 pointLightsOut = vec3(0);
