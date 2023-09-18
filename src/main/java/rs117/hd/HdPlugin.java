@@ -83,6 +83,7 @@ import rs117.hd.config.ShadowMode;
 import rs117.hd.config.UIScalingMode;
 import rs117.hd.data.WaterType;
 import rs117.hd.data.materials.Material;
+import rs117.hd.dynamicsky.hosek.ArHosekSkyModel;
 import rs117.hd.dynamicsky.hosek.ArHosekSkyModelData_Spectral;
 import rs117.hd.dynamicsky.hosek.ArHosekSkyModelState;
 import rs117.hd.model.ModelHasher;
@@ -118,8 +119,6 @@ import static net.runelite.api.Perspective.*;
 import static org.lwjgl.opencl.CL10.*;
 import static org.lwjgl.opengl.GL43C.*;
 import static rs117.hd.HdPluginConfig.*;
-import static rs117.hd.dynamicsky.hosek.ArHosekSkyModel.arhosek_rgb_skymodelstate_alloc_init;
-import static rs117.hd.dynamicsky.hosek.ArHosekSkyModel.arhosek_tristim_skymodel_radiance;
 import static rs117.hd.scene.TimeOfDay.MINUTES_PER_DAY;
 import static rs117.hd.utils.HDUtils.add;
 import static rs117.hd.utils.HDUtils.clamp;
@@ -381,6 +380,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	private int uniSkyProjectionMatrix;
 	private int uniSkyViewportDimensions;
 	private int uniSkyColorBlindnessIntensity;
+	private int uniSkyLightDir;
+	private int uniSkyLightColor;
 
 	// Shadow program uniforms
 	private int uniShadowLightProjectionMatrix;
@@ -878,6 +879,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		uniSkyProjectionMatrix = glGetUniformLocation(glSkyProgram, "projectionMatrix");
 		uniSkyViewportDimensions = glGetUniformLocation(glSkyProgram, "viewportDimensions");
 		uniSkyColorBlindnessIntensity = glGetUniformLocation(glSkyProgram, "colorBlindnessIntensity");
+		uniSkyLightDir = glGetUniformLocation(glSkyProgram, "lightDir");
+		uniSkyLightColor = glGetUniformLocation(glSkyProgram, "lightColor");
 
 		uniBlockCamera = glGetUniformBlockIndex(glSceneProgram, "CameraUniforms");
 		uniBlockMaterials = glGetUniformBlockIndex(glSceneProgram, "MaterialUniforms");
@@ -1418,36 +1421,38 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			int height = 256;
 			int[] pixels = new int[width * height];
 
-			double turbidity = 3; // "haziness" from 1 to 10, with 50 being foggy, but unsupported by the model
+			double turbidity = 4; // "haziness" from 1 to 10, with 50 being foggy, but unsupported by the model
 //			double albedo = .09; // grass
-			double albedo = 1; // snow
-			double solarElevation = (Math.cos(elapsedTime * Math.PI / 10) + 1) * 1.1 / 2 * Math.PI / 2; // radians from 0 to pi/2
+			double albedo = .5; // snow
+			double solarElevation = (Math.cos(elapsedTime * Math.PI / 10) + 1) / 2 * Math.PI / 2; // radians from 0 to pi/2
 			solarElevation = -lightPitch % Math.PI;
+//			lightYaw = 0;
+//			solarElevation = Math.toRadians(90);
 			System.out.println("elevation: " + Math.toDegrees(solarElevation));
 
 			// See https://cgg.mff.cuni.cz/projects/SkylightModelling/
 			ArHosekSkyModelData_Spectral.loadDatasets(gson);
 
 			ArHosekSkyModelState model;
-			model = arhosek_rgb_skymodelstate_alloc_init(turbidity, albedo, solarElevation);
-			model.solar_radius = Math.toRadians(30);
-//			model = arhosekskymodelstate_alloc_init(turbidity, albedo, solarElevation);
-			double[] wavelengths = {
-				590, // red
-				530, // green
-				500, // blue
-			};
-			double[] sensitivities = {
-				0.7570,
-				0.8620,
-				0.3230,
-			};
+			model = ArHosekSkyModel.arhosek_rgb_skymodelstate_alloc_init(turbidity, albedo, solarElevation);
+//			model = ArHosekSkyModel.arhosek_xyz_skymodelstate_alloc_init(turbidity, albedo, solarElevation);
+//			model = ArHosekSkyModel.arhosekskymodelstate_alloc_init(turbidity, albedo, solarElevation);
+//			double[] wavelengths = {
+//				590, // red
+//				530, // green
+//				500, // blue
+//			};
+//			double[] sensitivities = {
+//				0.7570,
+//				0.8620,
+//				0.3230,
+//			};
 
 			for (int y = 0; y < height; ++y) {
 				for (int x = 0; x < width; ++x) {
-					double u = (x + .5) / width * 2 - 1;
-					double v = (y + .5) / height * 2 - 1;
-					double dist = Math.sqrt(u * u + v * v);
+//					double u = (x + .5) / width * 2 - 1;
+//					double v = (y + .5) / height * 2 - 1;
+//					double dist = Math.sqrt(u * u + v * v);
 //					if (dist > 1)
 //						continue;
 //					double gamma = Math.abs(Math.atan2(v, u));
@@ -1456,8 +1461,27 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 //					double gamma = u * model.solar_radius;
 //					double theta = solarElevation + v * model.solar_radius;
 
-					double gamma = (u + .5) * Math.PI + 4 * Math.PI - Math.PI / 2 - lightYaw; // azimuthal angle
-					double theta = (y + .5) / height * Math.PI; // angle from zenith
+//					double gamma = (x + .5) / width * Math.PI + 4 * Math.PI - Math.PI / 2 - lightYaw; // azimuthal angle
+//					double theta = (y + .5) / height * Math.PI; // angle from zenith
+
+					double theta = Math.acos(1 - 2 * (y + .5) / height); // angle from zenith
+
+					double azimuth = (x + .5) / width * 2 * Math.PI - lightYaw + Math.PI;
+					float[] viewDir = {
+						(float) (Math.sin(azimuth) * Math.cos(theta)),
+						(float) (Math.sin(theta)),
+						(float) (Math.cos(azimuth) * Math.cos(theta))
+					};
+					float[] sunDir = {
+						0,
+						(float) Math.cos(solarElevation),
+						(float) Math.sin(solarElevation)
+					};
+
+					double gamma = Math.acos(HDUtils.dot(viewDir, sunDir));
+
+//					gamma = (u + .5) * 2 * Math.PI + Math.PI;
+//					theta = dist * Math.PI;
 
 //					float[] sunDir = { 0, (float) Math.sin(solarElevation), (float) Math.cos(solarElevation) };
 //					float phi = (float) gamma;
@@ -1470,11 +1494,11 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 					int pixel = 0xFF << 24;
 					for (int c = 0; c < 3; c++) {
-						double radiance = arhosek_tristim_skymodel_radiance(model, theta, gamma, c);
-						pixel |= clamp((int) (radiance * 5), 0, 0xFF) << 8 * (2 - c);
-//						double radiance = arhosekskymodel_radiance(model, theta, gamma, wavelengths[c]);
-//						pixel |= clamp((int) (radiance * 2.5 * 255), 0, 0xFF) << 8 * (2 - c);
-//						double radiance = arhosekskymodel_solar_radiance(model, theta, gamma, wavelengths[c]);
+						double radiance = ArHosekSkyModel.arhosek_tristim_skymodel_radiance(model, theta, gamma, c);
+						pixel |= clamp((int) (radiance * 2.5), 0, 0xFF) << 8 * (2 - c);
+//						double radiance = ArHosekSkyModel.arhosekskymodel_radiance(model, theta, gamma, wavelengths[c]);
+//						pixel |= clamp((int) (radiance * 1 * 255), 0, 0xFF) << 8 * (2 - c);
+//						double radiance = ArHosekSkyModel.arhosekskymodel_solar_radiance(model, theta, gamma, wavelengths[c]);
 //						radiance *= sensitivities[c];
 //						pixel |= clamp((int) (radiance * .01), 0, 0xFF) << 8 * (2 - c);
 					}
@@ -2168,7 +2192,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			Mat4.mul(projectionMatrix, Mat4.translate(-client.getCameraX2(), -client.getCameraY2(), -client.getCameraZ2()));
 
 			if (configDynamicSky) {
-				drawSky(projectionMatrix, viewportWidth, viewportHeight);
+				drawSky(projectionMatrix, lightViewMatrix, lightColor, viewportWidth, viewportHeight);
 			} else {
 				// Clear scene
 				glClearColor(fogColor[0], fogColor[1], fogColor[2], 1f);
@@ -2384,14 +2408,16 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		glDisable(GL_BLEND);
 	}
 
-	private void drawSky(float[] projectionMatrix, int viewportWidth, int viewportHeight) {
+	private void drawSky(float[] projectionMatrix, float[] lightViewMatrix, float[] lightColor, int viewportWidth, int viewportHeight) {
 		// Use the texture bound in the first pass
 		glUseProgram(glSkyProgram);
 		glActiveTexture(TEXTURE_UNIT_SKY);
 		glBindTexture(GL_TEXTURE_2D, texSky);
 		glUniformMatrix4fv(uniSkyProjectionMatrix, false, projectionMatrix);
-		glUniform2i(uniSkyViewportDimensions, viewportWidth, viewportHeight);
+		glUniform2f(uniSkyViewportDimensions, viewportWidth, viewportHeight);
 		glUniform1f(uniSkyColorBlindnessIntensity, config.colorBlindnessIntensity() / 100f);
+		glUniform3f(uniSkyLightDir, lightViewMatrix[2], lightViewMatrix[6], lightViewMatrix[10]);
+		glUniform3fv(uniSkyLightColor, lightColor);
 
 		glBindVertexArray(vaoQuadHandle);
 		glDrawArrays(GL_TRIANGLE_FAN, 0, 4);

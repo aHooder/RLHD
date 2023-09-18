@@ -33,7 +33,12 @@ vec3 sampleSky(vec3 dir, float roughness) {
     uv.x = (uv.x + 1) / 2;
     vec3 day = textureLod(skyTexture, uv, roughness * 8).rgb;
     vec3 night = mix(srgbToLinear(vec3(29.4, 33.3, 51) / 255), srgbToLinear(vec3(.9, .4, 18.8) / 255), -dir.y);
-    return day + night;
+//    vec3 sunDisc = vec3(dot(-lightDir, dir) > cos(50. / 180 * PI) ? 1 : 0, 0, 0);
+    float sunCos = clamp(dot(normalize(lightDir), dir), 0, 1);
+//    vec3 sunDisc = (sunCos > cos((.51 / 2) / 180 * PI) ? 3.5 : 0) * lightColor * 1000;
+    vec3 sunDisc = (sunCos > cos(1. / 180 * PI) ? 3.5 : 0) * lightColor * 1000;
+    vec3 sunGlow = pow(sunCos, 2000.) * lightColor * 5;
+    return day + night + sunDisc + sunGlow;
 }
 
 vec3 sampleSky(vec3 dir) {

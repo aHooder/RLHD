@@ -211,6 +211,39 @@ public class ArHosekSkyModel {
 	}
 
 
+	public static ArHosekSkyModelState arhosek_xyz_skymodelstate_alloc_init(
+		double turbidity,
+		double albedo,
+		double elevation
+	) {
+		ArHosekSkyModelState state = new ArHosekSkyModelState();
+
+		state.solar_radius = TERRESTRIAL_SOLAR_RADIUS;
+		state.turbidity = turbidity;
+		state.albedo = albedo;
+		state.elevation = elevation;
+
+		for (int channel = 0; channel < 3; ++channel) {
+			ArHosekSkyModel_CookConfiguration(
+				ArHosekSkyModelData_XYZ.datasetsXYZ[channel],
+				state.configs[channel],
+				turbidity,
+				albedo,
+				elevation
+			);
+
+			state.radiances[channel] =
+				ArHosekSkyModel_CookRadianceConfiguration(
+					ArHosekSkyModelData_XYZ.datasetsXYZRad[channel],
+					turbidity,
+					albedo,
+					elevation
+				);
+		}
+
+		return state;
+	}
+
 	public static ArHosekSkyModelState arhosek_rgb_skymodelstate_alloc_init(double turbidity, double albedo, double elevation) {
 		ArHosekSkyModelState state = new ArHosekSkyModelState();
 		state.solar_radius = TERRESTRIAL_SOLAR_RADIUS;

@@ -29,6 +29,8 @@ uniform sampler2D skyTexture;
 uniform mat4 projectionMatrix;
 uniform vec2 viewportDimensions;
 uniform float colorBlindnessIntensity;
+uniform vec3 lightDir;
+uniform vec3 lightColor;
 
 #include utils/sky.glsl
 #include utils/color_utils.glsl
@@ -65,9 +67,6 @@ void main() {
     c = vec3(uv, 0);
 
     c = sampleSky(ray);
-
-//    c = texture(skyTexture, fUv).rgb;
-    c = aces(c);
 
     c = linearToSrgb(c);
 
