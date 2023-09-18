@@ -33,6 +33,7 @@ uniform float colorBlindnessIntensity;
 #include utils/sky.glsl
 #include utils/color_utils.glsl
 #include utils/color_blindness.glsl
+#include utils/aces.glsl
 
 in vec3 fRay;
 in vec2 fUv;
@@ -63,11 +64,17 @@ void main() {
 
     c = vec3(uv, 0);
 
-//    c = textureLod(skyTexture, uv, 0).rgb;
-
     c = sampleSky(ray);
 
+//    c = texture(skyTexture, fUv).rgb;
+    c = aces(c);
+
     c = linearToSrgb(c);
+
+    #if !VANILLA_COLOR_BANDING
+    // Reduce color banding in smooth gradients
+    c *= .97 + .06 * fract(sin(dot(gl_FragCoord.xy * .00035251, vec2(12.9898, 78.233))) * 43758.5453123);
+    #endif
 
     c = colorBlindnessCompensation(c.rgb);
     FragColor = vec4(c, 1);

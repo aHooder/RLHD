@@ -24,13 +24,16 @@
  */
 #pragma once
 #include utils/constants.glsl
+#include utils/color_utils.glsl
 
 vec3 sampleSky(vec3 dir, float roughness) {
     float azimuth = atan(dir.x, dir.z);
     float altitude = acos(-dir.y);
     vec2 uv = vec2(azimuth, altitude) / PI;
     uv.x = (uv.x + 1) / 2;
-    return textureLod(skyTexture, uv, roughness * 8).rgb;
+    vec3 day = textureLod(skyTexture, uv, roughness * 8).rgb;
+    vec3 night = mix(srgbToLinear(vec3(29.4, 33.3, 51) / 255), srgbToLinear(vec3(.9, .4, 18.8) / 255), -dir.y);
+    return day + night;
 }
 
 vec3 sampleSky(vec3 dir) {

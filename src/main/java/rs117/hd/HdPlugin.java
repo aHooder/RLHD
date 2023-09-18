@@ -33,7 +33,6 @@ import java.awt.Dimension;
 import java.awt.GraphicsConfiguration;
 import java.awt.Image;
 import java.awt.geom.AffineTransform;
-import java.awt.image.AffineTransformOp;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferInt;
 import java.io.IOException;
@@ -84,6 +83,8 @@ import rs117.hd.config.ShadowMode;
 import rs117.hd.config.UIScalingMode;
 import rs117.hd.data.WaterType;
 import rs117.hd.data.materials.Material;
+import rs117.hd.dynamicsky.hosek.ArHosekSkyModelData_Spectral;
+import rs117.hd.dynamicsky.hosek.ArHosekSkyModelState;
 import rs117.hd.model.ModelHasher;
 import rs117.hd.model.ModelPusher;
 import rs117.hd.model.TempModelInfo;
@@ -117,6 +118,8 @@ import static net.runelite.api.Perspective.*;
 import static org.lwjgl.opencl.CL10.*;
 import static org.lwjgl.opengl.GL43C.*;
 import static rs117.hd.HdPluginConfig.*;
+import static rs117.hd.dynamicsky.hosek.ArHosekSkyModel.arhosek_rgb_skymodelstate_alloc_init;
+import static rs117.hd.dynamicsky.hosek.ArHosekSkyModel.arhosek_tristim_skymodel_radiance;
 import static rs117.hd.scene.TimeOfDay.MINUTES_PER_DAY;
 import static rs117.hd.utils.HDUtils.add;
 import static rs117.hd.utils.HDUtils.clamp;
@@ -627,6 +630,9 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			modelPusher.shutDown();
 			lightManager.shutDown();
 			environmentManager.reset();
+
+			// TODO: Probably move this elsewhere
+			ArHosekSkyModelData_Spectral.clearDatasets();
 
 			if (lwjglInitialized) {
 				textureManager.shutDown();
@@ -1382,31 +1388,113 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		if (!configDynamicSky)
 			return;
 
-//		var imagePath = path(TextureManager.class, "hdris/mod_ash.png");
-//		var imagePath = path(TextureManager.class, "hdris/DaySkyHDRI015A_4K-TONEMAPPED.jpg");
-		var imagePath = path(TextureManager.class, "hdris/EveningSkyHDRI020B_8K-TONEMAPPED.jpg");
 		try {
-			var image = imagePath.loadImage();
-			int width = image.getWidth();
-			int height = image.getHeight();
+//			var imagePath = path(TextureManager.class, "hdris/mod_ash.png");
+//			var imagePath = path(TextureManager.class, "hdris/DaySkyHDRI015A_4K-TONEMAPPED.jpg");
+//			var imagePath = path(TextureManager.class, "hdris/EveningSkyHDRI020B_8K-TONEMAPPED.jpg");
+//			var image = imagePath.loadImage();
+//			int width = image.getWidth();
+//			int height = image.getHeight();
+//
+//			var reformattedImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+//			AffineTransform t = new AffineTransform();
+//			AffineTransformOp scaleOp = new AffineTransformOp(t, AffineTransformOp.TYPE_NEAREST_NEIGHBOR);
+//			scaleOp.filter(image, reformattedImage);
+//			int[] pixels = ((DataBufferInt) reformattedImage.getRaster().getDataBuffer()).getData();
 
-			var reformattedImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
-			AffineTransform t = new AffineTransform();
-			AffineTransformOp scaleOp = new AffineTransformOp(t, AffineTransformOp.TYPE_NEAREST_NEIGHBOR);
-			scaleOp.filter(image, reformattedImage);
-			int[] pixels = ((DataBufferInt) reformattedImage.getRaster().getDataBuffer()).getData();
+			float lightPitch = (float) Math.toRadians(environmentManager.currentLightPitch);
+			float lightYaw = (float) Math.toRadians(environmentManager.currentLightYaw);
+			if (environmentManager.useDaylightCycle()) {
+				switch (config.daylightCycle()) {
+					case HOUR_LONG_DAYS:
+						double[] sunAngles = TimeOfDay.getSunAngles(latLong, MINUTES_PER_DAY);
+						lightPitch = (float) -sunAngles[1];
+						lightYaw = (float) (sunAngles[0] + Math.PI);
+						break;
+				}
+			}
+
+			int width = 256;
+			int height = 256;
+			int[] pixels = new int[width * height];
+
+			double turbidity = 3; // "haziness" from 1 to 10, with 50 being foggy, but unsupported by the model
+//			double albedo = .09; // grass
+			double albedo = 1; // snow
+			double solarElevation = (Math.cos(elapsedTime * Math.PI / 10) + 1) * 1.1 / 2 * Math.PI / 2; // radians from 0 to pi/2
+			solarElevation = -lightPitch % Math.PI;
+			System.out.println("elevation: " + Math.toDegrees(solarElevation));
+
+			// See https://cgg.mff.cuni.cz/projects/SkylightModelling/
+			ArHosekSkyModelData_Spectral.loadDatasets(gson);
+
+			ArHosekSkyModelState model;
+			model = arhosek_rgb_skymodelstate_alloc_init(turbidity, albedo, solarElevation);
+			model.solar_radius = Math.toRadians(30);
+//			model = arhosekskymodelstate_alloc_init(turbidity, albedo, solarElevation);
+			double[] wavelengths = {
+				590, // red
+				530, // green
+				500, // blue
+			};
+			double[] sensitivities = {
+				0.7570,
+				0.8620,
+				0.3230,
+			};
+
+			for (int y = 0; y < height; ++y) {
+				for (int x = 0; x < width; ++x) {
+					double u = (x + .5) / width * 2 - 1;
+					double v = (y + .5) / height * 2 - 1;
+					double dist = Math.sqrt(u * u + v * v);
+//					if (dist > 1)
+//						continue;
+//					double gamma = Math.abs(Math.atan2(v, u));
+//					double theta = Math.acos(dist);
+
+//					double gamma = u * model.solar_radius;
+//					double theta = solarElevation + v * model.solar_radius;
+
+					double gamma = (u + .5) * Math.PI + 4 * Math.PI - Math.PI / 2 - lightYaw; // azimuthal angle
+					double theta = (y + .5) / height * Math.PI; // angle from zenith
+
+//					float[] sunDir = { 0, (float) Math.sin(solarElevation), (float) Math.cos(solarElevation) };
+//					float phi = (float) gamma;
+//					float[] v = {
+//						(float) (Math.cos(phi) * Math.sin(theta)),
+//						(float) Math.cos(theta),
+//						(float) (Math.sin(phi) * Math.sin(theta))
+//					};
+//					gamma = Math.acos(clamp(dot(v, sunDir), -1, 1));
+
+					int pixel = 0xFF << 24;
+					for (int c = 0; c < 3; c++) {
+						double radiance = arhosek_tristim_skymodel_radiance(model, theta, gamma, c);
+						pixel |= clamp((int) (radiance * 5), 0, 0xFF) << 8 * (2 - c);
+//						double radiance = arhosekskymodel_radiance(model, theta, gamma, wavelengths[c]);
+//						pixel |= clamp((int) (radiance * 2.5 * 255), 0, 0xFF) << 8 * (2 - c);
+//						double radiance = arhosekskymodel_solar_radiance(model, theta, gamma, wavelengths[c]);
+//						radiance *= sensitivities[c];
+//						pixel |= clamp((int) (radiance * .01), 0, 0xFF) << 8 * (2 - c);
+					}
+
+					pixels[y * width + x] = pixel;
+				}
+			}
 
 			texSky = glGenTextures();
 			glActiveTexture(TEXTURE_UNIT_SKY);
 			glBindTexture(GL_TEXTURE_2D, texSky);
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8, width, height, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, pixels);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
-			glGenerateMipmap(GL_TEXTURE_2D);
-		} catch (IOException ex) {
+//			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+//			glGenerateMipmap(GL_TEXTURE_2D);
+		} catch (Exception ex) {
 			throw new RuntimeException(ex);
 		}
 	}
@@ -1457,6 +1545,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		texTileHeightMap = 0;
 	}
 
+	long lastTime = 0;
+
 	@Override
 	public void drawScene(int cameraX, int cameraY, int cameraZ, int cameraPitch, int cameraYaw, int plane) {
 		final Scene scene = client.getScene();
@@ -1464,6 +1554,12 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			log.error("Scene being drawn is not the current scene context", new Throwable());
 			stopPlugin();
 			return;
+		}
+
+		if (System.currentTimeMillis() - lastTime > 40) {
+			lastTime = System.currentTimeMillis();
+			destroySkyTexture();
+			initSkyTexture();
 		}
 
 		scene.setDrawDistance(getDrawDistance());
