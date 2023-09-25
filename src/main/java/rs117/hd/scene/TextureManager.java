@@ -28,12 +28,14 @@ import java.awt.geom.AffineTransform;
 import java.awt.image.AffineTransformOp;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferInt;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import javax.imageio.ImageIO;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.RequiredArgsConstructor;
@@ -64,6 +66,7 @@ public class TextureManager {
 		"rlhd.texture-path",
 		() -> path(TextureManager.class, "textures")
 	);
+	private static final boolean EXPORT_VANILLA_TEXTURES = Props.getBooleanOrDefault("rlhd.export-vanilla-textures", false);
 
 	@Inject
 	private HdPlugin plugin;
@@ -238,6 +241,10 @@ public class TextureManager {
 		vanillaImage = new BufferedImage(128, 128, BufferedImage.TYPE_INT_ARGB);
 		vanillaTextureAnimations = new float[vanillaTextures.length * 2];
 
+		ResourcePath vanillaTextureExportPath = null;
+//		if (EXPORT_VANILLA_TEXTURES)
+			vanillaTextureExportPath = path("exports/vanilla-textures").mkdirs();
+
 		int vanillaTextureCount = 0;
 		int hdTextureCount = 0;
 		for (var textureLayer : textureLayers) {
@@ -245,16 +252,16 @@ public class TextureManager {
 
 			BufferedImage image = null;
 			// Check if HD provides a texture for the material
-			if (material != Material.VANILLA) {
-				image = loadTextureImage(material);
-				if (image == null && material.vanillaTextureIndex == -1) {
-					log.warn("No texture found for material: {}", material);
-					continue;
-				}
-			}
+//			if (material != Material.VANILLA) {
+//				image = loadTextureImage(material);
+//				if (image == null && material.vanillaTextureIndex == -1) {
+//					log.warn("No texture found for material: {}", material);
+//					continue;
+//				}
+//			}
 
 			// Fallback to loading a vanilla image
-			if (image == null) {
+			if (image == null && textureLayer.vanillaIndex != -1) {
 				int vanillaIndex = textureLayer.vanillaIndex;
 				var texture = vanillaTextures[vanillaIndex];
 				if (texture == null)
@@ -285,6 +292,26 @@ public class TextureManager {
 					float radians = direction * -HALF_PI;
 					vanillaTextureAnimations[vanillaIndex * 2] = (float) Math.cos(radians) * speed;
 					vanillaTextureAnimations[vanillaIndex * 2 + 1] = (float) Math.sin(radians) * speed;
+				}
+
+				if (vanillaTextureExportPath != null) {
+					try {
+						// TODO: scale and transform on the GPU for better performance
+						AffineTransform t = new AffineTransform();
+						t.translate(128, 0);
+						t.scale(-1, 1);
+						AffineTransformOp scaleOp = new AffineTransformOp(t, AffineTransformOp.TYPE_NEAREST_NEIGHBOR);
+
+						var orientedImage = new BufferedImage(128, 128, BufferedImage.TYPE_INT_ARGB);
+						scaleOp.filter(vanillaImage, orientedImage);
+
+						var name = textureLayer.material == Material.VANILLA ?
+							"vanilla-" + textureLayer.vanillaIndex :
+							textureLayer.material.name().toLowerCase();
+						ImageIO.write(orientedImage, "png", vanillaTextureExportPath.resolve(name + ".png").toFile());
+					} catch (IOException ex) {
+						log.error("Unable to export vanilla texture index {}:", textureLayer.vanillaIndex, ex);
+					}
 				}
 
 				image = vanillaImage;
