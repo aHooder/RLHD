@@ -62,6 +62,7 @@ import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
+import net.runelite.client.events.PluginChanged;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDependency;
 import net.runelite.client.plugins.PluginDescriptor;
@@ -449,7 +450,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				if (!textureManager.vanillaTexturesAvailable())
 					return false;
 
-				client.setMinimapTileDrawer(null);
 				renderBufferOffset = 0;
 				fboSceneHandle = rboSceneHandle = 0; // AA FBO
 				fboShadowMap = 0;
@@ -574,7 +574,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				lastAntiAliasingMode = null;
 
 				modelPusher.startUp();
-				client.setMinimapTileDrawer(minimapRender::drawTile);
+
 				modelOverrideManager.startUp();
 				lightManager.startUp();
 
@@ -582,7 +582,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				redrawPreviousFrame = false;
 				skipScene = null;
 				isInChambersOfXeric = false;
-
+				client.setMinimapTileDrawer(minimapRender::drawTile);
 				if (client.getGameState() == GameState.LOGGED_IN) {
 					// We need to force the client to reload the scene if GPU flags have changed
 					client.setGameState(GameState.LOADING);
@@ -664,6 +664,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			// force main buffer provider rebuild to turn off alpha channel
 			client.resizeCanvas();
 		});
+
 	}
 
 	public void stopPlugin()
@@ -2208,6 +2209,9 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			hasLoggedIn = false;
 			environmentManager.reset();
 		}
+		if (gameStateChanged.getGameState() == GameState.LOGGING_IN) {
+			client.setMinimapTileDrawer(minimapRender::drawTile);
+		}
 	}
 
 	public void reuploadScene() {
@@ -2377,7 +2381,15 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	}
 
 	@Subscribe
+	public void onPluginChanged(PluginChanged event) {
+		if(event.getPlugin().getName().equals("HD Minimap")) {
+			client.setMinimapTileDrawer(minimapRender::drawTile);
+		}
+	}
+
+ 	@Subscribe
 	public void onConfigChanged(ConfigChanged event) {
+		
 		if (!event.getGroup().equals(CONFIG_GROUP))
 			return;
 
