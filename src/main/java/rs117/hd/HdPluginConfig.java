@@ -37,6 +37,7 @@ import rs117.hd.config.Contrast;
 import rs117.hd.config.DefaultSkyColor;
 import rs117.hd.config.FogDepthMode;
 import rs117.hd.config.MaxDynamicLights;
+import rs117.hd.config.MinimapType;
 import rs117.hd.config.Saturation;
 import rs117.hd.config.ShadowDistance;
 import rs117.hd.config.ShadowMode;
@@ -92,6 +93,19 @@ public interface HdPluginConfig extends Config
 	default int expandedMapLoadingChunks() {
 		return 3;
 	}
+
+	@ConfigItem(
+		keyName = "minimapType",
+		name = "Minimap Mode",
+		description = "Edits the minimap style.<br>Normal - Default oldschool map<br>Shaded - Add the map style from 2008<br>HD - Adds a topdown detailed map in 3d",
+		position = 1,
+		section = generalSettings
+	)
+	default MinimapType minimapType()
+	{
+		return MinimapType.SHADED;
+	}
+
 
 	@ConfigItem(
 		keyName = "antiAliasingMode",

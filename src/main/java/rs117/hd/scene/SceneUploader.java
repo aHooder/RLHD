@@ -926,6 +926,7 @@ class SceneUploader {
 			sceneContext.stagingBufferVertices.put(localVertices[1][0], localVertices[1][2], localVertices[1][1], colorB);
 			sceneContext.stagingBufferVertices.put(localVertices[2][0], localVertices[2][2], localVertices[2][1], colorC);
 
+
 			bufferLength += 3;
 
 			int packedMaterialDataA = modelPusher.packMaterialData(

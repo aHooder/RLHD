@@ -53,8 +53,10 @@ import javax.swing.SwingUtilities;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
+import net.runelite.api.coords.*;
 import net.runelite.api.events.*;
 import net.runelite.api.hooks.*;
+import net.runelite.api.widgets.*;
 import net.runelite.client.RuneLite;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
@@ -66,6 +68,7 @@ import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.plugins.PluginInstantiationException;
 import net.runelite.client.plugins.PluginManager;
 import net.runelite.client.plugins.entityhider.EntityHiderPlugin;
+import net.runelite.client.plugins.minimap.MinimapPlugin;
 import net.runelite.client.ui.ClientUI;
 import net.runelite.client.ui.DrawManager;
 import net.runelite.client.util.LinkBrowser;
@@ -76,6 +79,7 @@ import org.lwjgl.opengl.*;
 import org.lwjgl.system.Callback;
 import org.lwjgl.system.Configuration;
 import rs117.hd.config.AntiAliasingMode;
+import rs117.hd.config.MinimapType;
 import rs117.hd.config.ShadowMode;
 import rs117.hd.config.UIScalingMode;
 import rs117.hd.data.WaterType;
@@ -92,6 +96,7 @@ import rs117.hd.overlays.FrameTimer;
 import rs117.hd.overlays.Timer;
 import rs117.hd.scene.EnvironmentManager;
 import rs117.hd.scene.LightManager;
+import rs117.hd.scene.MinimapRender;
 import rs117.hd.scene.ModelOverrideManager;
 import rs117.hd.scene.ProceduralGenerator;
 import rs117.hd.scene.SceneContext;
@@ -181,6 +186,9 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 	@Inject
 	private LightManager lightManager;
+
+	@Inject
+	private MinimapRender minimapRender;
 
 	@Inject
 	private EnvironmentManager environmentManager;
@@ -441,6 +449,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				if (!textureManager.vanillaTexturesAvailable())
 					return false;
 
+				client.setMinimapTileDrawer(null);
 				renderBufferOffset = 0;
 				fboSceneHandle = rboSceneHandle = 0; // AA FBO
 				fboShadowMap = 0;
@@ -565,6 +574,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				lastAntiAliasingMode = null;
 
 				modelPusher.startUp();
+				t.setMinimapTileDrawer(minimapRender::drawTile);
 				modelOverrideManager.startUp();
 				lightManager.startUp();
 
@@ -650,7 +660,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			if (modelPassthroughBuffer != null)
 				modelPassthroughBuffer.destroy();
 			modelPassthroughBuffer = null;
-
+			client.setMinimapTileDrawer(null);
 			// force main buffer provider rebuild to turn off alpha channel
 			client.resizeCanvas();
 		});
@@ -2346,6 +2356,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		gameTicksUntilSceneReload = 0;
 	}
 
+
 	private void updateCachedConfigs() {
 		configGroundTextures = config.groundTextures();
 		configGroundBlending = config.groundBlending();
@@ -2783,6 +2794,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			);
 		}
 	}
+
 
 	public int getDrawDistance() {
 		return HDUtils.clamp(config.drawDistance(), 0, MAX_DISTANCE);
