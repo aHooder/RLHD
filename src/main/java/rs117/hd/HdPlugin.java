@@ -574,7 +574,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				lastAntiAliasingMode = null;
 
 				modelPusher.startUp();
-				t.setMinimapTileDrawer(minimapRender::drawTile);
+				client.setMinimapTileDrawer(minimapRender::drawTile);
 				modelOverrideManager.startUp();
 				lightManager.startUp();
 
