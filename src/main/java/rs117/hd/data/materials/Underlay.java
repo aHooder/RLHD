@@ -429,7 +429,7 @@ public enum Underlay {
 		return match;
 	}
 
-	public int[] modifyColor(int[] colorHSL) {
+	public int[] modifyColor(int[] colorHSL, boolean includeMinimap) {
 		colorHSL[0] = hue >= 0 ? hue : colorHSL[0];
 		colorHSL[0] += shiftHue;
 		colorHSL[0] = HDUtils.clamp(colorHSL[0], 0, 63);
@@ -440,10 +440,14 @@ public enum Underlay {
 
 		colorHSL[2] = lightness >= 0 ? lightness : colorHSL[2];
 		colorHSL[2] += shiftLightness;
-		colorHSL[2] += shiftMinimapLightness;
+		colorHSL[2] += includeMinimap ? shiftMinimapLightness : 0;
 		colorHSL[2] = HDUtils.clamp(colorHSL[2], 0, 127);
 
 
 		return colorHSL;
+	}
+
+	public int[] modifyColor(int[] colorHSL) {
+		return modifyColor(colorHSL,false);
 	}
 }

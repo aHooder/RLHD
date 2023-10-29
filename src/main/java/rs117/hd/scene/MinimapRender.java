@@ -115,14 +115,22 @@ public class MinimapRender {
 
 			Overlay overlay = Overlay.getOverlay(client.getScene(), tile, plugin);
 
-			if (overlay == Overlay.NONE)
+			if (overlay != Overlay.NONE)
+			{
+
+				swColor = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(swColor),true));
+				seColor = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(seColor),true));
+				nwColor = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(nwColor),true));
+				neColor = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(neColor),true));
+			}
+			else
 			{
 				Underlay underlay = Underlay.getUnderlay(client.getScene(), tile, plugin);
 
-				swColor = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(swColor)));
-				seColor = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(seColor)));
-				nwColor = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(nwColor)));
-				neColor = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(neColor)));
+				swColor = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(swColor),true));
+				seColor = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(seColor),true));
+				nwColor = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(nwColor),true));
+				neColor = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(neColor),true));
 			}
 
 
@@ -178,11 +186,16 @@ public class MinimapRender {
 			int c2 = color2[face];
 			int c3 = color3[face];
 
-			if (!ProceduralGenerator.isOverlayFace(tile, face)) {
+			if (ProceduralGenerator.isOverlayFace(tile, face)) {
+				Overlay overlay = Overlay.getOverlay(client.getScene(), tile, plugin);
+				c1 = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(c1),true));
+				c2 = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(c2),true));
+				c3 = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(c3),true));
+			} else {
 				Underlay underlay = Underlay.getUnderlay(client.getScene(), tile, plugin);
-				c1 = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(c1)));
-				c2 = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(c2)));
-				c3 = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(c3)));
+				c1 = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(c1),true));
+				c2 = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(c2),true));
+				c3 = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(c3),true));
 			}
 
 			if (textures != null && textures[face] != -1) {
