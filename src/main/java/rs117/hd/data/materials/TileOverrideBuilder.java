@@ -25,6 +25,8 @@ class TileOverrideBuilder<T> {
     public int shiftSaturation = 0;
     public int lightness = -1;
     public int shiftLightness = 0;
+	public int shiftMinimapLightness = 0;
+
 	public TileOverrideResolver<T> replacementResolver;
 
     TileOverrideBuilder<T> apply(Consumer<TileOverrideBuilder<T>> consumer) {

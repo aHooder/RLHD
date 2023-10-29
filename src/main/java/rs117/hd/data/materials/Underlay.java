@@ -43,9 +43,9 @@ import rs117.hd.utils.HDUtils;
 
 public enum Underlay {
 	// Seasonal Winter Textures
-	WINTER_GRASS(p -> p.ids().groundMaterial(GroundMaterial.SNOW_1).hue(0).saturation(0).shiftLightness(40).blended(true)),
-	WINTER_DIRT(p -> p.ids().groundMaterial(GroundMaterial.DIRT).hue(0).saturation(0).shiftLightness(40).blended(true)),
-	WINTER_GRUNGE(p -> p.ids().groundMaterial(GroundMaterial.SNOW_2).hue(0).saturation(0).shiftLightness(40).blended(true)),
+	WINTER_GRASS(p -> p.ids().groundMaterial(GroundMaterial.SNOW_1).hue(0).saturation(0).shiftLightness(40).blended(true).shiftMinimapLightness(35)),
+	WINTER_DIRT(p -> p.ids().groundMaterial(GroundMaterial.DIRT).hue(0).saturation(0).shiftLightness(40).blended(true).shiftMinimapLightness(35)),
+	WINTER_GRUNGE(p -> p.ids().groundMaterial(GroundMaterial.SNOW_2).hue(0).saturation(0).shiftLightness(40).blended(true).shiftMinimapLightness(35)),
 	WINTER_EDGEVILLE_PATH(p -> p
 		.ids()
 		.blendedAsOpposite(true)
@@ -119,7 +119,7 @@ public enum Underlay {
 	CRANDOR_SAND(-110, Area.CRANDOR, GroundMaterial.SAND, p -> p.saturation(3).hue(6)),
 
 	// God Wars Dungeon (GWD)
-	GOD_WARS_DUNGEON_SNOW_1(Area.GOD_WARS_DUNGEON, GroundMaterial.SNOW_1, p -> p.ids(58, 59)),
+	GOD_WARS_DUNGEON_SNOW_1(Area.GOD_WARS_DUNGEON, GroundMaterial.SNOW_1, p -> p.ids(58, 59).shiftMinimapLightness(35)),
 
 	// TzHaar
 	INFERNO_1(Area.THE_INFERNO, GroundMaterial.VARIED_DIRT, p -> p.ids(-118, 61, -115, -111, -110, 1, 61, 62, 72, 118, 122)),
@@ -161,7 +161,7 @@ public enum Underlay {
 	// Iceberg
 	ICEBERG_TEXTURE(p -> p
 		.area(Area.ICEBERG)
-		.groundMaterial(GroundMaterial.SNOW_2)
+		.groundMaterial(GroundMaterial.SNOW_2).shiftMinimapLightness(35)
 		.ids(59)
 		.shiftLightness(5)
 	),
@@ -185,7 +185,7 @@ public enum Underlay {
 		.ids(27, 29, 129)
 		.replaceWithIf(WINTER_GRUNGE, plugin -> plugin.configWinterTheme)
 	),
-	STRANGLEWOOD_SNOW_DARK(p -> p.area(Area.THE_STRANGLEWOOD_EXTENDED).ids(174).groundMaterial(GroundMaterial.SNOW_1)),
+	STRANGLEWOOD_SNOW_DARK(p -> p.area(Area.THE_STRANGLEWOOD_EXTENDED).ids(174).groundMaterial(GroundMaterial.SNOW_1).shiftMinimapLightness(35)),
 
 	// Zanaris
 	ZANARIS_GRASS(Area.ZANARIS, GroundMaterial.GRASS_1, p -> p.ids(143, 144)),
@@ -196,7 +196,7 @@ public enum Underlay {
 		.ids(2, 72)),
 
 	// Taverley Underground
-	ICE_QUEENS_DUNGEON_UNDERLAY(Area.ICE_QUEENS_DUNGEON, GroundMaterial.SNOW_1, p -> p.ids(58).lightness(100).hue(0).saturation(0)),
+	ICE_QUEENS_DUNGEON_UNDERLAY(Area.ICE_QUEENS_DUNGEON, GroundMaterial.SNOW_1, p -> p.ids(58).lightness(100).hue(0).saturation(0).shiftMinimapLightness(35)),
 	TAVERLY_DUNGEON_DIRT(GroundMaterial.EARTHEN_CAVE_FLOOR, p -> p
 		.area(Area.TAVERLEY_DUNGEON)
 		.ids(50, 63, 64, 66, 67)
@@ -249,8 +249,8 @@ public enum Underlay {
 	DEATHS_OFFICE_TILE(-110, Area.DEATHS_OFFICE, GroundMaterial.TILES_2X2_1_SEMIGLOSS),
 
 	// Chambers of Xeric
-	COX_SNOW_1(16, Area.COX_SNOW, GroundMaterial.SNOW_1),
-	COX_SNOW_2(59, Area.COX_SNOW, GroundMaterial.SNOW_2),
+	COX_SNOW_1(16, Area.COX_SNOW, GroundMaterial.SNOW_1,p -> p.shiftMinimapLightness(35)),
+	COX_SNOW_2(59, Area.COX_SNOW, GroundMaterial.SNOW_2,p -> p.shiftMinimapLightness(35)),
 
 	// Tombs of Amascut
 	TOA_CRONDIS_ISLAND(Area.TOA_PATH_OF_CRONDIS_BOSS, GroundMaterial.SAND, p -> p.ids(109, 117)),
@@ -269,7 +269,7 @@ public enum Underlay {
 	ARCEUUS_GROUND(Area.ARCEUUS, GroundMaterial.DIRT, p -> p.ids(2, 3, 17, 23, 24)),
 
 	// Secrets of the North dungeon
-	ICY_UNDERGROUND_SNOW(p -> p.area(Area.ICY_UNDERGROUND_DARK).ids(159).groundMaterial(GroundMaterial.SNOW_1)),
+	ICY_UNDERGROUND_SNOW(p -> p.area(Area.ICY_UNDERGROUND_DARK).ids(159).groundMaterial(GroundMaterial.SNOW_1).shiftLightness(35)),
 
 	// Desert Treasure 2 areas
 	LASSAR_UNDERCITY_SUNKEN_CATHEDRAL(p -> p
@@ -311,7 +311,7 @@ public enum Underlay {
 	OVERWORLD_SAND(Area.OVERWORLD, GroundMaterial.SAND, p -> p.ids(-127, -118, 61, 68)),
 	UNDERLAY_PACKED_EARTH(GroundMaterial.PACKED_EARTH, p -> p.ids(15)),
 
-	UNDERLAY_SNOW(GroundMaterial.SNOW_1, p -> p.ids(16, 58, 59)),
+	UNDERLAY_SNOW(GroundMaterial.SNOW_1, p -> p.ids(16, 58, 59).shiftMinimapLightness(35)),
 	UNDERLAY_72(GroundMaterial.VARIED_DIRT, p -> p
 		.ids(72, 73, 98, 112, 113) //112 == Lovakengj
 		.replaceWithIf(WINTER_DIRT, plugin -> plugin.configWinterTheme)
@@ -336,6 +336,7 @@ public enum Underlay {
 	public final int shiftSaturation;
 	public final int lightness;
 	public final int shiftLightness;
+	public final int shiftMinimapLightness;
 	public final TileOverrideResolver<Underlay> replacementResolver;
 
 	Underlay(int id, Area area, GroundMaterial material) {
@@ -370,6 +371,7 @@ public enum Underlay {
 		this.lightness = builder.lightness;
 		this.shiftLightness = builder.shiftLightness;
 		this.replacementResolver = builder.replacementResolver;
+		this.shiftMinimapLightness = builder.shiftMinimapLightness;
 	}
 
 	private static final Underlay[] ANY_MATCH;
@@ -438,7 +440,9 @@ public enum Underlay {
 
 		colorHSL[2] = lightness >= 0 ? lightness : colorHSL[2];
 		colorHSL[2] += shiftLightness;
+		colorHSL[2] += shiftMinimapLightness;
 		colorHSL[2] = HDUtils.clamp(colorHSL[2], 0, 127);
+
 
 		return colorHSL;
 	}

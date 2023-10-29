@@ -361,7 +361,7 @@ public enum Overlay {
 		.ids(2, 10, 34)
 	),
 	ICE_QUEENS_SYMBOL(33, Area.ICE_QUEENS_DUNGEON, GroundMaterial.ICE_1),
-	ICE_QUEENS_DUNGEON_OVERLAY(Area.ICE_QUEENS_DUNGEON, GroundMaterial.SNOW_1, p -> p.ids(42).lightness(100).hue(0).saturation(0)),
+	ICE_QUEENS_DUNGEON_OVERLAY(Area.ICE_QUEENS_DUNGEON, GroundMaterial.SNOW_1, p -> p.ids(42).lightness(100).hue(0).saturation(0).shiftMinimapLightness(35)),
 
 	// Seers Indoors
 	SEERS_ELEMENTAL_WORKSHOP_HOUSE_171_BLENDED(171, Area.ELEMENTAL_WORKSHOP_HOUSE_ENTRANCE, GroundMaterial.VARROCK_PATHS),
@@ -844,6 +844,7 @@ public enum Overlay {
 	public final int shiftSaturation;
 	public final int lightness;
 	public final int shiftLightness;
+	public final int shiftMinimapLightness;
 	public final TileOverrideResolver<Overlay> replacementResolver;
 
 	Overlay(int id, GroundMaterial material) {
@@ -894,6 +895,7 @@ public enum Overlay {
 		this.shiftSaturation = builder.shiftSaturation;
 		this.lightness = builder.lightness;
 		this.shiftLightness = builder.shiftLightness;
+		this.shiftMinimapLightness = builder.shiftMinimapLightness;
 	}
 
 	private static final Overlay[] ANY_MATCH;
@@ -962,6 +964,7 @@ public enum Overlay {
 
 		colorHSL[2] = lightness >= 0 ? lightness : colorHSL[2];
 		colorHSL[2] += shiftLightness;
+		colorHSL[2] += shiftMinimapLightness;
 		colorHSL[2] = HDUtils.clamp(colorHSL[2], 0, 127);
 
 		return colorHSL;

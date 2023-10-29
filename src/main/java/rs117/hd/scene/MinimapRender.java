@@ -6,19 +6,23 @@ import rs117.hd.HdPluginConfig;
 import rs117.hd.config.MinimapType;
 
 import javax.inject.Inject;
-import java.awt.*;
 import rs117.hd.data.materials.Overlay;
 import rs117.hd.data.materials.Underlay;
 import rs117.hd.utils.HDUtils;
 
 public class MinimapRender {
 
+	public static SceneTileModel[] tileModels = new SceneTileModel[52];
+
+	public static SceneTileModel createTileModel(final int shape, final int rotation, final int unused, final int tileX, final int tileY, final int posSW, final int posSE, final int northeastY, final int posNW, final int colorSW, final int colorSE, final int colorNE, final int colorNW, final int colorSW2, final int colorSE2, final int colorNE2, final int colorNW2, final int underlayRgb, final int overlayRgb) {
+		return new SceneTileModelCustom(shape, rotation, unused, tileX, tileY, posSW, posSE, northeastY, posNW, colorSW, colorSE, colorNE, colorNW, colorSW2, colorSE2, colorNE2, colorNW2, underlayRgb, overlayRgb);
+	}
+
     @Inject
     private Client client;
 
 	@Inject
 	private HdPlugin plugin;
-
 
 	@Inject
     private HdPluginConfig config;
@@ -56,7 +60,7 @@ public class MinimapRender {
 					SceneTileModel model = tile.getSceneTileModel();
 					if (model != null)
 					{
-						SceneTileModel stm = model;
+						SceneTileModel stm = tileModels[(model.getShape() << 2) | model.getRotation() & 3];;
 						int[] vertexX = stm.getVertexX();
 						int[] vertexZ = stm.getVertexZ();
 
@@ -110,9 +114,11 @@ public class MinimapRender {
 			int neColor = paint.getNeColor();
 
 			Overlay overlay = Overlay.getOverlay(client.getScene(), tile, plugin);
+
 			if (overlay == Overlay.NONE)
 			{
 				Underlay underlay = Underlay.getUnderlay(client.getScene(), tile, plugin);
+
 				swColor = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(swColor)));
 				seColor = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(seColor)));
 				nwColor = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(nwColor)));
@@ -200,6 +206,15 @@ public class MinimapRender {
 		Rasterizer g3d = client.getRasterizer();
 		g3d.rasterGouraud(py0, py0, py1, px0, px1, px0, c00, c10, c01);
 		g3d.rasterGouraud(py0, py1, py1, px1, px0, px1, c10, c01, c11);
+	}
+
+	static {
+		for (int index = 0; index < tileModels.length; ++index) {
+			int shape = index >> 2;
+			int rotation = index & 0x3;
+
+			tileModels[index] = createTileModel(shape, rotation, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0);
+		}
 	}
 
 }
