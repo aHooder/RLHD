@@ -31,8 +31,10 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public enum MinimapType
 {
-	NORMAL("Normal"),
-	SHADED("Shaded");
+	OFF("RuneLite Controlled"),
+	NORMAL("Flat - OSRS Style"),
+	HD("HD - 117 Lighting"),
+	HD_2008("HD - 2008 Lighting");
 
 	private final String name;
 

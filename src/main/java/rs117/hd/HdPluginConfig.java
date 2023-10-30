@@ -96,16 +96,20 @@ public interface HdPluginConfig extends Config
 
 	@ConfigItem(
 		keyName = "minimapType",
-		name = "Minimap Mode",
-		description = "Edits the minimap style.<br>Normal - Default oldschool map<br>Shaded - Add the map style from 2008<br>HD - Adds a topdown detailed map in 3d",
+		name = "Minimap",
+		description =
+			"Edits the minimap style.<br>" +
+			"Runelite - Allow runelite to decide what map to use.<br>"+
+			"Flat - Default oldschool map with 117 paths and lighting.<br>" +
+			"HD - HD map like 2008, with 117 paths and lighting.<br>" +
+			"HD - 2008 Lighting - HD map like 2008.",
 		position = 1,
 		section = generalSettings
 	)
 	default MinimapType minimapType()
 	{
-		return MinimapType.SHADED;
+		return MinimapType.HD;
 	}
-
 
 	@ConfigItem(
 		keyName = "antiAliasingMode",
