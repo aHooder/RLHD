@@ -17,6 +17,7 @@ import rs117.hd.utils.HDUtils;
 import rs117.hd.utils.buffer.GpuFloatBuffer;
 import rs117.hd.utils.buffer.GpuIntBuffer;
 
+import static net.runelite.api.Constants.*;
 import static net.runelite.api.Perspective.*;
 import static rs117.hd.HdPlugin.UV_SIZE;
 import static rs117.hd.HdPlugin.VERTEX_SIZE;
@@ -40,7 +41,7 @@ public class SceneContext {
 	public Map<Integer, Integer> vertexTerrainColor;
 	public Map<Integer, Material> vertexTerrainTexture;
 	public Map<Integer, float[]> vertexTerrainNormals;
-	// used for overriding potentially low quality vertex colors
+	// used for overriding potentially low quality vertex colors;
 	public HashMap<Integer, Boolean> highPriorityColor;
 
 	// water-related data
@@ -52,6 +53,9 @@ public class SceneContext {
 	public boolean[][][] skipTile;
 	public Map<Integer, Integer> vertexUnderwaterDepth;
 	public int[][][] underwaterDepthLevels;
+
+	public int[] minimapTilePaintColors = new int[MAX_Z * EXTENDED_SCENE_SIZE * EXTENDED_SCENE_SIZE * 4];
+	public int[] minimapTileModelColors = new int[MAX_Z * EXTENDED_SCENE_SIZE * EXTENDED_SCENE_SIZE * 6 * 3];
 
 	public final ArrayList<SceneLight> lights = new ArrayList<>();
 	public final HashSet<Projectile> projectiles = new HashSet<>();

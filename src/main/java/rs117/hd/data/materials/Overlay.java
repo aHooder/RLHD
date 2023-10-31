@@ -361,7 +361,13 @@ public enum Overlay {
 		.ids(2, 10, 34)
 	),
 	ICE_QUEENS_SYMBOL(33, Area.ICE_QUEENS_DUNGEON, GroundMaterial.ICE_1),
-	ICE_QUEENS_DUNGEON_OVERLAY(Area.ICE_QUEENS_DUNGEON, GroundMaterial.SNOW_1, p -> p.ids(42).lightness(100).hue(0).saturation(0).shiftMinimapLightness(35)),
+	ICE_QUEENS_DUNGEON_OVERLAY(Area.ICE_QUEENS_DUNGEON, GroundMaterial.SNOW_1, p -> p
+		.ids(42)
+		.hue(0)
+		.saturation(0)
+		.lightness(100)
+		.shiftMinimapLightness(35)
+	),
 
 	// Seers Indoors
 	SEERS_ELEMENTAL_WORKSHOP_HOUSE_171_BLENDED(171, Area.ELEMENTAL_WORKSHOP_HOUSE_ENTRANCE, GroundMaterial.VARROCK_PATHS),
@@ -966,7 +972,6 @@ public enum Overlay {
 		colorHSL[2] += shiftLightness;
 		colorHSL[2] += includeMinimap ? shiftMinimapLightness : 0;
 		colorHSL[2] = HDUtils.clamp(colorHSL[2], 0, 127);
-
 
 		return colorHSL;
 	}

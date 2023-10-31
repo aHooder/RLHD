@@ -53,23 +53,19 @@ import javax.swing.SwingUtilities;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
-import net.runelite.api.coords.*;
 import net.runelite.api.events.*;
 import net.runelite.api.hooks.*;
-import net.runelite.api.widgets.*;
 import net.runelite.client.RuneLite;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
-import net.runelite.client.events.PluginChanged;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDependency;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.plugins.PluginInstantiationException;
 import net.runelite.client.plugins.PluginManager;
 import net.runelite.client.plugins.entityhider.EntityHiderPlugin;
-import net.runelite.client.plugins.minimap.MinimapPlugin;
 import net.runelite.client.ui.ClientUI;
 import net.runelite.client.ui.DrawManager;
 import net.runelite.client.util.LinkBrowser;
@@ -80,7 +76,6 @@ import org.lwjgl.opengl.*;
 import org.lwjgl.system.Callback;
 import org.lwjgl.system.Configuration;
 import rs117.hd.config.AntiAliasingMode;
-import rs117.hd.config.MinimapType;
 import rs117.hd.config.ShadowMode;
 import rs117.hd.config.UIScalingMode;
 import rs117.hd.data.WaterType;
@@ -97,7 +92,7 @@ import rs117.hd.overlays.FrameTimer;
 import rs117.hd.overlays.Timer;
 import rs117.hd.scene.EnvironmentManager;
 import rs117.hd.scene.LightManager;
-import rs117.hd.scene.MinimapRender;
+import rs117.hd.scene.MinimapRenderer;
 import rs117.hd.scene.ModelOverrideManager;
 import rs117.hd.scene.ProceduralGenerator;
 import rs117.hd.scene.SceneContext;
@@ -189,9 +184,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	private LightManager lightManager;
 
 	@Inject
-	private MinimapRender minimapRender;
-
-	@Inject
 	private EnvironmentManager environmentManager;
 
 	@Inject
@@ -208,6 +200,9 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 	@Inject
 	private ModelHasher modelHasher;
+
+	@Inject
+	private MinimapRenderer minimapRenderer;
 
 	@Inject
 	@Named("developerMode")
@@ -563,6 +558,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 				checkGLErrors();
 
+				client.setMinimapTileDrawer(minimapRenderer::drawTile);
 				client.setDrawCallbacks(this);
 				client.setGpuFlags(DrawCallbacks.GPU | DrawCallbacks.HILLSKEW | DrawCallbacks.NORMALS);
 				client.setExpandedMapLoading(getExpandedMapLoadingChunks());
@@ -574,7 +570,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				lastAntiAliasingMode = null;
 
 				modelPusher.startUp();
-
 				modelOverrideManager.startUp();
 				lightManager.startUp();
 
@@ -582,7 +577,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				redrawPreviousFrame = false;
 				skipScene = null;
 				isInChambersOfXeric = false;
-				client.setMinimapTileDrawer(minimapRender::drawTile);
+
 				if (client.getGameState() == GameState.LOGGED_IN) {
 					// We need to force the client to reload the scene if GPU flags have changed
 					client.setGameState(GameState.LOADING);
@@ -610,6 +605,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			if (scene != null)
 				scene.setMinLevel(0);
 
+			client.setMinimapTileDrawer(null);
 			client.setGpuFlags(0);
 			client.setDrawCallbacks(null);
 			client.setUnlockedFps(false);
@@ -660,11 +656,10 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			if (modelPassthroughBuffer != null)
 				modelPassthroughBuffer.destroy();
 			modelPassthroughBuffer = null;
-			client.setMinimapTileDrawer(null);
+
 			// force main buffer provider rebuild to turn off alpha channel
 			client.resizeCanvas();
 		});
-
 	}
 
 	public void stopPlugin()
@@ -2204,13 +2199,15 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 	@Subscribe
 	public void onGameStateChanged(GameStateChanged gameStateChanged) {
-		if (gameStateChanged.getGameState() == GameState.LOGIN_SCREEN) {
-			renderBufferOffset = 0;
-			hasLoggedIn = false;
-			environmentManager.reset();
-		}
-		if (gameStateChanged.getGameState() == GameState.LOGGING_IN) {
-			client.setMinimapTileDrawer(minimapRender::drawTile);
+		switch (gameStateChanged.getGameState()) {
+			case LOGIN_SCREEN:
+				renderBufferOffset = 0;
+				hasLoggedIn = false;
+				environmentManager.reset();
+				break;
+			case LOGGING_IN:
+				client.setMinimapTileDrawer(minimapRenderer::drawTile);
+				break;
 		}
 	}
 
@@ -2257,6 +2254,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				environmentManager.loadSceneEnvironments(context);
 				lightManager.loadSceneLights(context);
 				sceneUploader.upload(context);
+				minimapRenderer.prepareScene(context);
 			}
 		} catch (OutOfMemoryError oom) {
 			log.error("Ran out of memory while loading scene (32-bit: {}, low memory mode: {})",
@@ -2360,7 +2358,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		gameTicksUntilSceneReload = 0;
 	}
 
-
 	private void updateCachedConfigs() {
 		configGroundTextures = config.groundTextures();
 		configGroundBlending = config.groundBlending();
@@ -2381,15 +2378,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	}
 
 	@Subscribe
-	public void onPluginChanged(PluginChanged event) {
-		if(event.getPlugin().getName().equals("HD Minimap")) {
-			client.setMinimapTileDrawer(minimapRender::drawTile);
-		}
-	}
-
- 	@Subscribe
 	public void onConfigChanged(ConfigChanged event) {
-		
 		if (!event.getGroup().equals(CONFIG_GROUP))
 			return;
 
@@ -2806,7 +2795,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			);
 		}
 	}
-
 
 	public int getDrawDistance() {
 		return HDUtils.clamp(config.drawDistance(), 0, MAX_DISTANCE);

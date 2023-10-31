@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Lotto <https://github.com/Mark7625>
+ * Copyright (c) 2023, Mark <https://github.com/Mark7625>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -29,19 +29,16 @@ import lombok.RequiredArgsConstructor;
 
 @Getter
 @RequiredArgsConstructor
-public enum MinimapType
-{
-	OFF("RuneLite Controlled"),
-	NORMAL("Flat - OSRS Style"),
-	HD("HD - 117 Lighting"),
-	HD_2008("HD - 2008 Lighting");
+public enum MinimapStyle {
+	DEFAULT("117 HD Style"),
+	RUNELITE("RuneLite Controlled"),
+	OSRS("Old School Style"),
+	HD2008("2008 Style");
 
 	private final String name;
 
 	@Override
-	public String toString()
-	{
+	public String toString() {
 		return name;
 	}
-
 }
