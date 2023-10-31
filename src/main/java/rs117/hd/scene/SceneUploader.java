@@ -26,6 +26,7 @@
 package rs117.hd.scene;
 
 import com.google.common.base.Stopwatch;
+import java.util.HashMap;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -60,11 +61,17 @@ class SceneUploader {
 
 	private static final float[] UP_NORMAL = { 0, -1, 0 };
 
+	private final HashMap<Integer, int[]> minimapSceneTilePaint = new HashMap<>();
+	private final HashMap<Integer, int[]> minimapSceneTileModel = new HashMap<>();
+
 	@Inject
 	private Client client;
 
 	@Inject
 	private HdPlugin plugin;
+
+	@Inject
+	private EnvironmentManager environmentManager;
 
 	@Inject
 	private HdPluginConfig config;
@@ -77,6 +84,9 @@ class SceneUploader {
 
 	public void upload(SceneContext sceneContext) {
 		Stopwatch stopwatch = Stopwatch.createStarted();
+
+		minimapSceneTilePaint.clear();
+		minimapSceneTileModel.clear();
 
 		for (int z = 0; z < Constants.MAX_Z; ++z) {
 			for (int x = 0; x < Constants.EXTENDED_SCENE_SIZE; ++x) {
@@ -360,6 +370,98 @@ class SceneUploader {
 		}
 	}
 
+	public int generateMinimapUID(int face,int x, int y, int plane) {
+		return face << 18 | plane << 16 | x << 8 | y;
+	}
+
+	public int[] requestMinimapSceneTilePaint(int face,int x, int y, int plane) {
+		return minimapSceneTilePaint.get(generateMinimapUID(face,x,y,plane));
+	}
+
+	public int[] requestMinimapSceneTileModel(int face,int x, int y, int plane) {
+		return minimapSceneTileModel.get(generateMinimapUID(face,x,y,plane));
+	}
+
+	public void uploadMinimapSceneTileModel(SceneContext sceneContext,Tile tile) {
+		Scene scene = sceneContext.scene;
+
+		int plane = tile.getPlane();
+		int x = tile.getSceneLocation().getX();
+		int y = tile.getSceneLocation().getY();
+
+		final int[] faceColorA = tile.getSceneTileModel().getTriangleColorA();
+		final int[] faceColorB = tile.getSceneTileModel().getTriangleColorB();
+		final int[] faceColorC = tile.getSceneTileModel().getTriangleColorC();
+
+		final int faceCount = tile.getSceneTileModel().getFaceX().length;
+
+		WaterType waterType = WaterType.NONE;
+
+		for (int face = 0; face < faceCount; ++face) {
+			int colorA = faceColorA[face];
+			int colorB = faceColorB[face];
+			int colorC = faceColorC[face];
+
+			waterType = proceduralGenerator.faceWaterType(scene, tile, face, tile.getSceneTileModel());
+			if (waterType == WaterType.NONE) {
+				if (ProceduralGenerator.isOverlayFace(tile, face)) {
+					Overlay overlay = Overlay.getOverlay(scene, tile, plugin);
+					colorA = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(colorA),true));
+					colorB = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(colorB),true));
+					colorC = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(colorC),true));
+				} else {
+					Underlay underlay = Underlay.getUnderlay(scene, tile, plugin);
+					colorA = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(colorA),true));
+					colorB = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(colorB),true));
+					colorC = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(colorC),true));
+				}
+			} else {
+				// set colors for the shoreline to create a foam effect in the water shader
+				colorA = colorB = colorC = 127;
+
+			}
+			minimapSceneTileModel.put(generateMinimapUID(face,x,y,plane), new int[] { colorA, colorB, colorC });
+
+		}
+
+	}
+
+
+	public void uploadMinimapSceneTilePaint(SceneContext sceneContext,Tile tile) {
+		final Scene scene = sceneContext.scene;
+
+		int plane = tile.getPlane();
+		int x = tile.getSceneLocation().getX();
+		int y = tile.getSceneLocation().getY();
+
+		int swColor = tile.getSceneTilePaint().getSwColor();
+		int seColor = tile.getSceneTilePaint().getSeColor();
+		int nwColor = tile.getSceneTilePaint().getNwColor();
+		int neColor = tile.getSceneTilePaint().getNeColor();
+
+		Overlay overlay = Overlay.getOverlay(scene, tile, plugin);
+		WaterType waterType = proceduralGenerator.tileWaterType(scene, tile, tile.getSceneTilePaint());
+		if (waterType == WaterType.NONE) {
+			if (overlay != Overlay.NONE) {
+				swColor = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(swColor), true));
+				seColor = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(seColor), true));
+				nwColor = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(nwColor), true));
+				neColor = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(neColor), true));
+			} else {
+				Underlay underlay = Underlay.getUnderlay(scene, tile, plugin);
+				swColor = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(swColor), true));
+				seColor = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(seColor), true));
+				nwColor = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(nwColor), true));
+				neColor = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(neColor), true));
+			}
+		} else {
+			swColor = seColor = nwColor = neColor = 127;
+		}
+
+		minimapSceneTilePaint.put(generateMinimapUID(0,x,y,plane), new int[] { swColor, seColor, nwColor, neColor });
+
+	}
+
 	private int[] upload(SceneContext sceneContext, Tile tile, SceneTilePaint sceneTilePaint) {
 		int bufferLength = 0;
 		int uvBufferLength = 0;
@@ -596,7 +698,7 @@ class SceneUploader {
 
 			uvBufferLength += 6;
 		}
-
+		uploadMinimapSceneTilePaint(sceneContext,tile);
 		return new int[]{bufferLength, uvBufferLength, underwaterTerrain};
 	}
 
@@ -944,6 +1046,7 @@ class SceneUploader {
 			uvBufferLength += 3;
 		}
 
+		uploadMinimapSceneTileModel(sceneContext,tile);
 		return new int[]{bufferLength, uvBufferLength, underwaterTerrain};
 	}
 

@@ -6,8 +6,6 @@ import rs117.hd.HdPluginConfig;
 import rs117.hd.config.MinimapType;
 
 import javax.inject.Inject;
-import rs117.hd.data.materials.Overlay;
-import rs117.hd.data.materials.Underlay;
 import rs117.hd.utils.ColorUtils;
 import rs117.hd.utils.HDUtils;
 
@@ -30,6 +28,9 @@ public class MinimapRender {
 
 	@Inject
     private HdPluginConfig config;
+
+	@Inject
+	private SceneUploader sceneUploader;
 
     private final int[] tmpScreenX = new int[6];
     private final int[] tmpScreenY = new int[6];
@@ -140,35 +141,25 @@ public class MinimapRender {
 
 	public void drawMinimapShaded(Tile tile, int tx, int ty, int px0, int py0, int px1, int py1, boolean classicLighting) {
 		SceneTilePaint paint = tile.getSceneTilePaint();
+
+		int plane = tile.getPlane();
+		int x = tile.getSceneLocation().getX();
+		int y = tile.getSceneLocation().getY();
+
 		if (paint != null) {
 			int swColor = paint.getSwColor();
 			int seColor = paint.getSeColor();
 			int nwColor = paint.getNwColor();
 			int neColor = paint.getNeColor();
 
+			int[] requestTile = sceneUploader.requestMinimapSceneTilePaint(0,x,y,plane);
 
-			Overlay overlay = Overlay.getOverlay(client.getScene(), tile, plugin);
-
-			if (overlay != Overlay.NONE)
-			{
-
-				swColor = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(swColor),true));
-				seColor = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(seColor),true));
-				nwColor = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(nwColor),true));
-				neColor = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(neColor),true));
+			if (requestTile != null) {
+				swColor = requestTile[0];
+				seColor = requestTile[1];
+				nwColor = requestTile[2];
+				neColor = requestTile[3];
 			}
-			else
-			{
-				Underlay underlay = Underlay.getUnderlay(client.getScene(), tile, plugin);
-
-				swColor = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(swColor),true));
-				seColor = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(seColor),true));
-				nwColor = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(nwColor),true));
-				neColor = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(neColor),true));
-			}
-
-
-
 
 			int tex = paint.getTexture();
 			if (tex == -1) {
@@ -178,27 +169,6 @@ public class MinimapRender {
 					client.getRasterizer().fillRectangle(px0, py0, px1 - px0, py1 - py0, paint.getRBG());
 				}
 			} else {
-
-
-				if (overlay != Overlay.NONE)
-				{
-
-					swColor = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(swColor),true));
-					seColor = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(seColor),true));
-					nwColor = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(nwColor),true));
-					neColor = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(neColor),true));
-				}
-				else
-				{
-					Underlay underlay = Underlay.getUnderlay(client.getScene(), tile, plugin);
-
-					swColor = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(swColor),true));
-					seColor = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(seColor),true));
-					nwColor = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(nwColor),true));
-					neColor = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(neColor),true));
-				}
-
-
 				int hsl = client.getTextureProvider().getDefaultColor(tex);
 				fillGradient(px0, py0, px1, py1, blend(hsl, nwColor), blend(hsl, neColor), blend(hsl, swColor), blend(hsl, seColor));
 			}
@@ -233,6 +203,7 @@ public class MinimapRender {
 			tmpScreenY[vert] = py0 + (((Perspective.LOCAL_TILE_SIZE - (vertexZ[vert] - localY)) * h) >> Perspective.LOCAL_COORD_BITS);
 		}
 
+
 		for (int face = 0; face < indicies1.length; ++face) {
 			int idx1 = indicies1[face];
 			int idx2 = indicies2[face];
@@ -242,16 +213,12 @@ public class MinimapRender {
 			int c2 = color2[face];
 			int c3 = color3[face];
 
-			if (ProceduralGenerator.isOverlayFace(tile, face)) {
-				Overlay overlay = Overlay.getOverlay(client.getScene(), tile, plugin);
-				c1 = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(c1),true));
-				c2 = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(c2),true));
-				c3 = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(c3),true));
-			} else {
-				Underlay underlay = Underlay.getUnderlay(client.getScene(), tile, plugin);
-				c1 = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(c1),true));
-				c2 = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(c2),true));
-				c3 = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(c3),true));
+			int[] requestTile = sceneUploader.requestMinimapSceneTileModel(face,x,y,plane);
+
+			if (requestTile != null) {
+				c1 = requestTile[0];
+				c2 = requestTile[1];
+				c3 = requestTile[2];
 			}
 
 			if (textures != null && textures[face] != -1) {
