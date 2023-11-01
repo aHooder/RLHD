@@ -47,6 +47,8 @@ public class MinimapRenderer {
 	public void prepareScene(SceneContext sceneContext) {
 		final Scene scene = sceneContext.scene;
 
+		boolean classicLighting = config.minimapType() == MinimapStyle.HD2008;
+
 		for (int z = 0; z < MAX_Z; ++z) {
 			for (int x = 0; x < EXTENDED_SCENE_SIZE; ++x) {
 				for (int y = 0; y < EXTENDED_SCENE_SIZE; ++y) {
@@ -65,16 +67,16 @@ public class MinimapRenderer {
 						WaterType waterType = proceduralGenerator.tileWaterType(scene, tile, paint);
 						if (waterType == WaterType.NONE) {
 							if (overlay != Overlay.NONE) {
-								swColor = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(swColor), true));
-								seColor = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(seColor), true));
-								nwColor = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(nwColor), true));
-								neColor = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(neColor), true));
+								swColor = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(swColor), classicLighting));
+								seColor = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(seColor), classicLighting));
+								nwColor = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(nwColor), classicLighting));
+								neColor = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(neColor), classicLighting));
 							} else {
 								Underlay underlay = Underlay.getUnderlay(scene, tile, plugin);
-								swColor = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(swColor), true));
-								seColor = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(seColor), true));
-								nwColor = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(nwColor), true));
-								neColor = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(neColor), true));
+								swColor = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(swColor), classicLighting));
+								seColor = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(seColor), classicLighting));
+								nwColor = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(nwColor), classicLighting));
+								neColor = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(neColor), classicLighting));
 							}
 						} else {
 							swColor = seColor = nwColor = neColor = 127;
@@ -109,14 +111,14 @@ public class MinimapRenderer {
 							if (waterType == WaterType.NONE) {
 								if (ProceduralGenerator.isOverlayFace(tile, face)) {
 									Overlay overlay = Overlay.getOverlay(scene, tile, plugin);
-									colorA = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(colorA), true));
-									colorB = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(colorB), true));
-									colorC = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(colorC), true));
+									colorA = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(colorA), classicLighting));
+									colorB = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(colorB), classicLighting));
+									colorC = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(colorC), classicLighting));
 								} else {
 									Underlay underlay = Underlay.getUnderlay(scene, tile, plugin);
-									colorA = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(colorA), true));
-									colorB = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(colorB), true));
-									colorC = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(colorC), true));
+									colorA = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(colorA), classicLighting));
+									colorB = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(colorB), classicLighting));
+									colorC = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(colorC), classicLighting));
 								}
 							} else {
 								// set colors for the shoreline to create a foam effect in the water shader
@@ -182,7 +184,6 @@ public class MinimapRenderer {
 			if (paint != null) {
 				int color = paint.getRBG();
 				if (color != 0) {
-
 					client.getRasterizer().fillRectangle(px0, py0, px1 - px0, py1 - py0, color);
 				}
 			} else {

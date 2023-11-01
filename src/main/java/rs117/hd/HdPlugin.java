@@ -2385,7 +2385,15 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 			try {
 				updateCachedConfigs();
-
+				System.out.println(event.getNewValue());
+				switch (event.getNewValue()) {
+					case "HD2008":
+					case "DEFAULT":
+						if(sceneContext != null) {
+							minimapRenderer.prepareScene(sceneContext);
+						}
+						break;
+				}
 				switch (event.getKey()) {
 					case KEY_EXPANDED_MAP_LOADING_CHUNKS:
 						client.setExpandedMapLoading(getExpandedMapLoadingChunks());
