@@ -60,6 +60,7 @@ import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
+import net.runelite.client.events.PluginChanged;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDependency;
 import net.runelite.client.plugins.PluginDescriptor;
@@ -76,6 +77,7 @@ import org.lwjgl.opengl.*;
 import org.lwjgl.system.Callback;
 import org.lwjgl.system.Configuration;
 import rs117.hd.config.AntiAliasingMode;
+import rs117.hd.config.MinimapStyle;
 import rs117.hd.config.ShadowMode;
 import rs117.hd.config.UIScalingMode;
 import rs117.hd.data.WaterType;
@@ -2199,15 +2201,10 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 	@Subscribe
 	public void onGameStateChanged(GameStateChanged gameStateChanged) {
-		switch (gameStateChanged.getGameState()) {
-			case LOGIN_SCREEN:
-				renderBufferOffset = 0;
-				hasLoggedIn = false;
-				environmentManager.reset();
-				break;
-			case LOGGING_IN:
-				client.setMinimapTileDrawer(minimapRenderer::drawTile);
-				break;
+		if (gameStateChanged.getGameState() == GameState.LOGIN_SCREEN) {
+			renderBufferOffset = 0;
+			hasLoggedIn = false;
+			environmentManager.reset();
 		}
 	}
 
@@ -2921,6 +2918,9 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	public void onBeforeRender(BeforeRender beforeRender) {
 		// The game runs significantly slower with lower planes in Chambers of Xeric
 		client.getScene().setMinLevel(isInChambersOfXeric ? client.getPlane() : client.getScene().getMinLevel());
+		if (config.minimapType() != MinimapStyle.RUNELITE) {
+			client.setMinimapTileDrawer(minimapRenderer::drawTile);
+		}
 	}
 
 	@Subscribe
