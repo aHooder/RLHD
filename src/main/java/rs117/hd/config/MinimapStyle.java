@@ -31,9 +31,9 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public enum MinimapStyle {
 	DEFAULT("117 HD Style"),
-	RUNELITE("RuneLite Controlled"),
-	OSRS("Old School Style"),
-	HD2008("2008 Style");
+	HD2008("2008 Style"),
+	OSRS("OSRS Style"),
+	RUNELITE("No changes");
 
 	private final String name;
 

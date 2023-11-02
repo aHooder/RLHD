@@ -96,7 +96,7 @@ public interface HdPluginConfig extends Config
 
 	@ConfigItem(
 		keyName = "minimapStyle",
-		name = "Minimap",
+		name = "Improved Minimap",
 		description =
 			"Edits the minimap style.<br>" +
 			"Runelite - Allow runelite to decide what map to use.<br>" +
