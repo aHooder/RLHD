@@ -22,13 +22,13 @@ import static rs117.hd.HdPlugin.UV_SIZE;
 import static rs117.hd.HdPlugin.VERTEX_SIZE;
 
 public class SceneContext {
-	public final int id = HDUtils.rand.nextInt();
+	public final int id = HDUtils.rand.nextInt() & SceneUploader.SCENE_ID_MASK;
 	public final Scene scene;
 	public final HashSet<Integer> regionIds;
 	public final int expandedMapLoadingChunks;
 
 	public int staticVertexCount = 0;
-	public GpuIntBuffer staticUnorderedModelBuffer = new GpuIntBuffer();
+	public GpuIntBuffer staticUnorderedModelBuffer;
 	public GpuIntBuffer stagingBufferVertices;
 	public GpuFloatBuffer stagingBufferUvs;
 	public GpuFloatBuffer stagingBufferNormals;
@@ -53,7 +53,6 @@ public class SceneContext {
 	public Map<Integer, Integer> vertexUnderwaterDepth;
 	public int[][][] underwaterDepthLevels;
 
-	public int visibleLightCount = 0;
 	public final ArrayList<SceneLight> lights = new ArrayList<>();
 	public final HashSet<Projectile> projectiles = new HashSet<>();
 
@@ -64,19 +63,31 @@ public class SceneContext {
 	public final float[] modelFaceNormals = new float[12];
 	public final int[] modelPusherResults = new int[2];
 
-	public SceneContext(Scene scene, int expandedMapLoadingChunks, @Nullable SceneContext previousSceneContext) {
+	public SceneContext(Scene scene, int expandedMapLoadingChunks, boolean reuseBuffers, @Nullable SceneContext previous) {
 		this.scene = scene;
 		this.regionIds = HDUtils.getSceneRegionIds(scene);
 		this.expandedMapLoadingChunks = expandedMapLoadingChunks;
 
-		if (previousSceneContext == null) {
+		if (previous == null) {
+			staticUnorderedModelBuffer = new GpuIntBuffer();
 			stagingBufferVertices = new GpuIntBuffer();
 			stagingBufferUvs = new GpuFloatBuffer();
 			stagingBufferNormals = new GpuFloatBuffer();
+		} else if (reuseBuffers) {
+			// Avoid reallocating buffers whenever possible
+			staticUnorderedModelBuffer = previous.staticUnorderedModelBuffer.clear();
+			stagingBufferVertices = previous.stagingBufferVertices.clear();
+			stagingBufferUvs = previous.stagingBufferUvs.clear();
+			stagingBufferNormals = previous.stagingBufferNormals.clear();
+			previous.staticUnorderedModelBuffer = null;
+			previous.stagingBufferVertices = null;
+			previous.stagingBufferUvs = null;
+			previous.stagingBufferNormals = null;
 		} else {
-			stagingBufferVertices = new GpuIntBuffer(previousSceneContext.stagingBufferVertices.getBuffer().capacity());
-			stagingBufferUvs = new GpuFloatBuffer(previousSceneContext.stagingBufferUvs.getBuffer().capacity());
-			stagingBufferNormals = new GpuFloatBuffer(previousSceneContext.stagingBufferNormals.getBuffer().capacity());
+			staticUnorderedModelBuffer = new GpuIntBuffer(previous.staticUnorderedModelBuffer.capacity());
+			stagingBufferVertices = new GpuIntBuffer(previous.stagingBufferVertices.capacity());
+			stagingBufferUvs = new GpuFloatBuffer(previous.stagingBufferUvs.capacity());
+			stagingBufferNormals = new GpuFloatBuffer(previous.stagingBufferNormals.capacity());
 		}
 	}
 
@@ -116,11 +127,9 @@ public class SceneContext {
 	 * @param plane		 which the local coordinate is on
 	 * @return world coordinate
 	 */
-	public WorldPoint localToWorld(LocalPoint localPoint, int plane)
+	public int[] localToWorld(LocalPoint localPoint, int plane)
 	{
-		int[] pos = HDUtils.localToWorld(scene, localPoint.getX(), localPoint.getY(), plane);
-		return new WorldPoint(pos[0], pos[1], pos[2]);
-
+		return HDUtils.localToWorld(scene, localPoint.getX(), localPoint.getY(), plane);
 	}
 
 	public int[] localToWorld(int localX, int localY, int plane)

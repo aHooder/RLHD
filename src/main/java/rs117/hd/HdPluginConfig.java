@@ -790,6 +790,21 @@ public interface HdPluginConfig extends Config
 		return false;
 	}
 
+	String KEY_LOW_MEMORY_MODE = "lowMemoryMode";
+	@ConfigItem(
+		keyName = KEY_LOW_MEMORY_MODE,
+		name = "Low Memory Mode",
+		description = "Turns off features which require extra memory, such as model caching, faster scene loading & extended scene loading.",
+		warning =
+			"<html>This <b>will not</b> result in better performance. It is recommended only if you are unable to install<br>" +
+			"the 64-bit version of RuneLite, or if your computer has a very low amount of memory available.</html>",
+		position = 6,
+		section = miscellaneousSettings
+	)
+	default boolean lowMemoryMode() {
+		return false;
+	}
+
 
 	/*====== Experimental settings ======*/
 
@@ -801,39 +816,47 @@ public interface HdPluginConfig extends Config
 	)
 	String experimentalSettings = "experimentalSettings";
 
-	String KEY_FURTHER_UNLOCK_FPS = "furtherUnlockFps";
-	@ConfigItem(
-		keyName = KEY_FURTHER_UNLOCK_FPS,
-		name = "Further unlock FPS",
-		description = "Avoids unnecessarily updating geometry, leading to higher frame rates if already above 50 FPS.",
-		position = 0,
-		section = experimentalSettings
-	)
-	default boolean furtherUnlockFps() {
-		return false;
-	}
-
 	String KEY_FILL_GAPS_IN_TERRAIN = "experimentalFillGapsInTerrain2";
 	@ConfigItem(
 		keyName = KEY_FILL_GAPS_IN_TERRAIN,
 		name = "Fill gaps in terrain",
 		description = "Attempt to patch all holes in the ground, such as around trapdoors and ladders.",
-		position = 1,
 		section = experimentalSettings
 	)
 	default boolean fillGapsInTerrain() {
 		return true;
 	}
 
-	String KEY_MODEL_SORTING_CONFIGURATION = "useOldModelSortingConfiguration";
+	String KEY_FASTER_MODEL_HASHING = "experimentalFasterModelHashing";
 	@ConfigItem(
-		keyName = KEY_MODEL_SORTING_CONFIGURATION,
-		name = "Use old model sorting",
-		description = "Revert back to the previous version of model sorting, in case performance has gotten worse.",
-		position = 2,
+		keyName = KEY_FASTER_MODEL_HASHING,
+		name = "Use faster model hashing",
+		description = "Should increase performance at the expensive of potential graphical issues.",
 		section = experimentalSettings
 	)
-	default boolean useOldModelSortingConfiguration() {
+	default boolean fasterModelHashing() {
+		return true;
+	}
+
+	String KEY_UNDO_VANILLA_SHADING_IN_COMPUTE = "experimentalUndoVanillaShadingInCompute";
+	@ConfigItem(
+		keyName = KEY_UNDO_VANILLA_SHADING_IN_COMPUTE,
+		name = "Undo vanilla shading in compute",
+		description = "Should increase performance at the expensive of potential graphical issues.",
+		section = experimentalSettings
+	)
+	default boolean undoVanillaShadingInCompute() {
+		return true;
+	}
+
+	String KEY_PRESERVE_VANILLA_NORMALS = "experimentalPreserveVanillaNormals";
+	@ConfigItem(
+		keyName = KEY_PRESERVE_VANILLA_NORMALS,
+		name = "Preserve vanilla normals",
+		description = "Originally, 117 HD would respect vanilla normals, but these are often less accurate.",
+		section = experimentalSettings
+	)
+	default boolean preserveVanillaNormals() {
 		return false;
 	}
 

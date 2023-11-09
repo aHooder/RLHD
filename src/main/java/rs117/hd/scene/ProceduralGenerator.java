@@ -30,7 +30,6 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
-import net.runelite.api.coords.*;
 import rs117.hd.HdPlugin;
 import rs117.hd.data.WaterType;
 import rs117.hd.data.materials.Material;
@@ -45,10 +44,10 @@ import static net.runelite.api.Constants.*;
 
 @Slf4j
 @Singleton
-public class ProceduralGenerator
-{
+public class ProceduralGenerator {
+	public static final int[] DEPTH_LEVEL_SLOPE = new int[] { 150, 300, 470, 610, 700, 750, 820, 920, 1080, 1300, 1350, 1380 };
+
 	private static final int VERTICES_PER_FACE = 3;
-	private static final int[] DEPTH_LEVEL_SLOPE = new int[]{150, 300, 470, 610, 700, 750, 820, 920, 1080, 1300, 1350, 1380};
 	private static final boolean[][] TILE_OVERLAY_TRIS = new boolean[][]
 		{
 			/*  0 */ { true, true, true, true }, // Used by tilemodels of varying tri counts?
@@ -148,7 +147,7 @@ public class ProceduralGenerator
 
 		int tileExX = tile.getSceneLocation().getX() + SceneUploader.SCENE_OFFSET;
 		int tileExY = tile.getSceneLocation().getY() + SceneUploader.SCENE_OFFSET;
-		WorldPoint worldPos = sceneContext.localToWorld(tile.getLocalLocation(), tile.getRenderLevel());
+		int[] worldPos = sceneContext.localToWorld(tile.getLocalLocation(), tile.getRenderLevel());
 
 		Scene scene = sceneContext.scene;
 		if (tile.getSceneTilePaint() != null) {
@@ -280,12 +279,12 @@ public class ProceduralGenerator
 			Material material = Material.DIRT_1;
 			Overlay overlay = vertexOverlays[vertex];
 			if (overlay != Overlay.NONE) {
-				material = overlay.groundMaterial.getRandomMaterial(worldPos.getPlane(), worldPos.getX(), worldPos.getY());
+				material = overlay.groundMaterial.getRandomMaterial(worldPos[2], worldPos[0], worldPos[1]);
 				isOverlay = !overlay.blendedAsUnderlay;
 				overlay.modifyColor(colorHSL);
 			} else if (vertexUnderlays[vertex] != Underlay.NONE) {
 				Underlay underlay = vertexUnderlays[vertex];
-				material = underlay.groundMaterial.getRandomMaterial(worldPos.getPlane(), worldPos.getX(), worldPos.getY());
+				material = underlay.groundMaterial.getRandomMaterial(worldPos[2], worldPos[0], worldPos[1]);
 				isOverlay = underlay.blendedAsOverlay;
 				underlay.modifyColor(colorHSL);
 			}
@@ -777,19 +776,28 @@ public class ProceduralGenerator
 			}
 
 			float[] vertexNormals = HDUtils.calculateSurfaceNormals(
-				// Vertex Xs
-				new int[]{faceVertices[face][0][0], faceVertices[face][1][0], faceVertices[face][2][0]},
-				// Vertex Ys
-				new int[]{faceVertices[face][0][1], faceVertices[face][1][1], faceVertices[face][2][1]},
-				// Vertex Zs
-				new int[]{vertexHeights[0], vertexHeights[1], vertexHeights[2]}
+				new float[] {
+					faceVertices[face][0][0],
+					faceVertices[face][0][1],
+					vertexHeights[0]
+				},
+				new float[] {
+					faceVertices[face][1][0],
+					faceVertices[face][1][1],
+					vertexHeights[1]
+				},
+				new float[] {
+					faceVertices[face][2][0],
+					faceVertices[face][2][1],
+					vertexHeights[2]
+				}
 			);
 
 			for (int vertex = 0; vertex < VERTICES_PER_FACE; vertex++)
 			{
 				int vertexKey = faceVertexKeys[face][vertex];
 				// accumulate normals to hashmap
-				sceneContext.vertexTerrainNormals.merge(vertexKey, vertexNormals, (a, b) -> HDUtils.add(b, a));
+				sceneContext.vertexTerrainNormals.merge(vertexKey, vertexNormals, (a, b) -> HDUtils.add(a, a, b));
 			}
 		}
 	}
@@ -1019,17 +1027,25 @@ public class ProceduralGenerator
 	private static final int gradientBottom = 200;
 	private static final int gradientTop = -200;
 
-	public static int[][] recolorTzHaar(ModelOverride modelOverride, int aY, int bY, int cY, int packedAlphaPriority, ObjectType objectType, int color1S, int color1L, int color2S, int color2L, int color3S, int color3L)
-	{
+	public static int[][] recolorTzHaar(
+		ModelOverride modelOverride,
+		Model model,
+		int face,
+		int packedAlphaPriority,
+		ObjectType objectType,
+		int color1S,
+		int color1L,
+		int color2S,
+		int color2L,
+		int color3S,
+		int color3L
+	) {
 		// recolor tzhaar to look like the 2008+ HD version
-		if (objectType == ObjectType.GROUND_OBJECT)
-		{
+		if (objectType == ObjectType.GROUND_OBJECT) {
 			// remove the black parts of floor objects to allow the ground to show
 			// so we can apply textures, ground blending, etc. to it
 			if (color1S <= 1)
-			{
 				packedAlphaPriority = 0xFF << 24;
-			}
 		}
 
 		// shift model hues from red->yellow
@@ -1038,20 +1054,26 @@ public class ProceduralGenerator
 		int color2H = hue;
 		int color3H = hue;
 
-		if (modelOverride.tzHaarRecolorType == TzHaarRecolorType.GRADIENT)
-		{
+		if (modelOverride.tzHaarRecolorType == TzHaarRecolorType.GRADIENT) {
+			final int triA = model.getFaceIndices1()[face];
+			final int triB = model.getFaceIndices2()[face];
+			final int triC = model.getFaceIndices3()[face];
+			final int[] yVertices = model.getVerticesY();
+			int heightA = yVertices[triA];
+			int heightB = yVertices[triB];
+			int heightC = yVertices[triC];
+
 			// apply coloring to the rocky walls
-			if (color1L < 20)
-			{
-				float pos = HDUtils.clamp((float) (aY - gradientTop) / (float) gradientBottom, 0.0f, 1.0f);
-				color1H = (int)HDUtils.lerp(gradientDarkColor[0], gradientBaseColor[0], pos);
-				color1S = (int)HDUtils.lerp(gradientDarkColor[1], gradientBaseColor[1], pos);
-				color1L = (int)HDUtils.lerp(gradientDarkColor[2], gradientBaseColor[2], pos);
+			if (color1L < 20) {
+				float pos = HDUtils.clamp((float) (heightA - gradientTop) / (float) gradientBottom, 0.0f, 1.0f);
+				color1H = (int) HDUtils.lerp(gradientDarkColor[0], gradientBaseColor[0], pos);
+				color1S = (int) HDUtils.lerp(gradientDarkColor[1], gradientBaseColor[1], pos);
+				color1L = (int) HDUtils.lerp(gradientDarkColor[2], gradientBaseColor[2], pos);
 			}
 
 			if (color2L < 20)
 			{
-				float pos = HDUtils.clamp((float) (bY - gradientTop) / (float) gradientBottom, 0.0f, 1.0f);
+				float pos = HDUtils.clamp((float) (heightB - gradientTop) / (float) gradientBottom, 0.0f, 1.0f);
 				color2H = (int)HDUtils.lerp(gradientDarkColor[0], gradientBaseColor[0], pos);
 				color2S = (int)HDUtils.lerp(gradientDarkColor[1], gradientBaseColor[1], pos);
 				color2L = (int)HDUtils.lerp(gradientDarkColor[2], gradientBaseColor[2], pos);
@@ -1059,7 +1081,7 @@ public class ProceduralGenerator
 
 			if (color3L < 20)
 			{
-				float pos = HDUtils.clamp((float) (cY - gradientTop) / (float) gradientBottom, 0.0f, 1.0f);
+				float pos = HDUtils.clamp((float) (heightC - gradientTop) / (float) gradientBottom, 0.0f, 1.0f);
 				color3H = (int)HDUtils.lerp(gradientDarkColor[0], gradientBaseColor[0], pos);
 				color3S = (int)HDUtils.lerp(gradientDarkColor[1], gradientBaseColor[1], pos);
 				color3L = (int)HDUtils.lerp(gradientDarkColor[2], gradientBaseColor[2], pos);

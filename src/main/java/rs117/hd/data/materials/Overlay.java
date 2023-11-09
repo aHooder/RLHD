@@ -31,8 +31,8 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Consumer;
-import java.util.function.Function;
 import javax.annotation.Nullable;
+import lombok.NonNull;
 import net.runelite.api.*;
 import net.runelite.api.coords.*;
 import rs117.hd.HdPlugin;
@@ -55,6 +55,10 @@ public enum Overlay {
 	WINTER_JAGGED_STONE_TILE_LIGHT_2(p -> p
 		.ids()
 		.groundMaterial(GroundMaterial.WINTER_JAGGED_STONE_TILE_LIGHT_2)
+	),
+	SNOW_2(p -> p
+		.ids()
+		.groundMaterial(GroundMaterial.SNOW_2)
 	),
 	WINTER_EAST_ARDOUGNE_CASTLE_PATH_FIX(10, Area.EAST_ARDOUGNE_CASTLE_PATH_FIX, GroundMaterial.VARROCK_PATHS, p -> p
 		.replaceWithIf(WINTER_JAGGED_STONE_TILE_LIGHT, plugin -> plugin.configWinterTheme)
@@ -346,6 +350,11 @@ public enum Overlay {
 	WARRIORS_GUILD_FLOOR_1(11, Area.WARRIORS_GUILD, GroundMaterial.VARROCK_PATHS, p -> p.blended(false)),
 	WARRIORS_GUILD_CARPET(86, Area.WARRIORS_GUILD, GroundMaterial.CARPET, p -> p.blended(false)),
 
+	// Trollweiss Region
+	TROLLHEIM_WALLS(83, Area.TROLLHEIM, GroundMaterial.DIRT_VERT),
+	WEISS_FIREPIT_FIX(171, Area.WEISS_FIRE_PIT, GroundMaterial.DIRT),
+	WEISS_TENT_INTERIOR(171, Area.INTERIOR_WEISS_THRONE_TENT, GroundMaterial.VARROCK_PATHS),
+	WEISS_SNOWY_PATH(171, Area.WEISS_REGION, GroundMaterial.WINTER_JAGGED_STONE_TILE),
 	// Taverley Underground
 	TAVERLEY_DUNGEON_BLACK_KNIGHT_KITCHEN(GroundMaterial.TILES_2X2_2_SEMIGLOSS, p -> p
 		.area(Area.TAVERLEY_DUNGEON_BLACK_KNIGHT_KITCHEN)
@@ -605,22 +614,17 @@ public enum Overlay {
 
 	// Wilderness
 	WILDERNESS_NORTH_OF_RESOURCE_AREA_HILLS(11, Area.WILDERNESS_NORTH_OF_RESOURCE_AREA, GroundMaterial.VARIED_DIRT),
+	WILDERNESS_FOUNTAIN_OF_RUNE_BLOOD(p -> p.ids(86).area(Area.WILDERNESS_FOUNTAIN_OF_RUNE).waterType(WaterType.BLOOD)),
 
 	// Tirannwn
 	ARANDAR_PATHS(p -> p
 		.area(Area.ARANDAR)
-		.groundMaterial(GroundMaterial.SAND_BRICK)
 		.ids(106)
+		.groundMaterial(GroundMaterial.SAND_BRICK)
 		.shiftLightness(12)
 		.shiftSaturation(-2)
 	),
-	TIRANNWN_PATHS(p -> p
-		.area(Area.TIRANNWN)
-		.groundMaterial(GroundMaterial.SAND_BRICK)
-		.ids(106)
-		.shiftLightness(12)
-		.shiftSaturation(-2)
-	),
+	TIRANNWN_PATHS(p -> p.area(Area.TIRANNWN).ids(106).groundMaterial(GroundMaterial.GRASSY_DIRT)),
 	POISON_WASTE(85, Area.POISON_WASTE, WaterType.POISON_WASTE),
 	POISON_WASTE_DUNGEON_TAR(p -> p.ids(304).area(Area.POISON_WASTE_DUNGEON).waterType(WaterType.BLACK_TAR_FLAT)),
 
@@ -674,6 +678,7 @@ public enum Overlay {
 		.replaceWithIf(WINTER_JAGGED_STONE_TILE, plugin -> plugin.configWinterTheme)
 		.ids(44)
 	),
+	XAMPHUR_BOSS_TILES(p -> p.ids(115, 133).area(Area.XAMPHUR_BOSS).groundMaterial(GroundMaterial.MARBLE_2_SEMIGLOSS).blended(false)),
 
 	OVERLAY_KOUREND_PATH(Area.ZEAH, GroundMaterial.MARBLE_1, p -> p.ids(133).blended(false)),
 	OVERLAY_ZEAH_PATHS(Area.ZEAH, GroundMaterial.VARROCK_PATHS, p -> p
@@ -757,11 +762,15 @@ public enum Overlay {
 		.area(Area.LASSAR_UNDERCITY)
 		.groundMaterial(GroundMaterial.LASSAR_UNDERCITY_TILES)
 		.blended(false)),
-	LASSAR_UNDERCITY_WATER(p -> p.ids(292).area(Area.LASSAR_UNDERCITY).waterType(WaterType.LASSAR_UNDERCITY_WATER).blended(false)),
+	LASSAR_UNDERCITY_WATER(p -> p
+		.ids(292)
+		.area(Area.LASSAR_UNDERCITY_WATER)
+		.waterType(WaterType.PLAIN_WATER)
+		.blended(false)),
+	ANCIENT_VAULT_CARPET(283, Area.ANCIENT_VAULT, GroundMaterial.NONE, p -> p.blended(false)),
 
 	// POHs
 	POH_DESERT_INDOORS(Area.PLAYER_OWNED_HOUSE, GroundMaterial.TILES_2x2_2, p -> p.blended(false).ids(26, 99)),
-	POH_BASEMENT_FLOOR_SHADOW_FIX(Area.PLAYER_OWNED_HOUSE, GroundMaterial.TRANSPARENT, p -> p.blended(false).ids(120)),
 
 	// Cutscenes
 	LAND_OF_GOBLINS_WATER_FIX(13, Area.LAND_OF_GOBLINS_CUTSCENE_WATER, WaterType.WATER),
@@ -780,7 +789,7 @@ public enum Overlay {
 		.blended(false)),
 
 	// Ancient Cavern upper level water change
-	ANCIENT_CAVERN_UPPER_WATER(41, Area.ANCIENT_CAVERN_UPPER, WaterType.WATER_FLAT),
+	ANCIENT_CAVERN_WATER(41, Area.ANCIENT_CAVERN, WaterType.WATER_FLAT),
 
 	// Lunar Isles
 	LUNAR_ISLAND_HOUSES_DIRT_FLOOR(81, Area.LUNAR_VILLAGE_HOUSE_INTERIORS_GROUND, GroundMaterial.VARIED_DIRT, p -> p
@@ -796,19 +805,25 @@ public enum Overlay {
 	OVERLAY_WATER(WaterType.WATER, p -> p.ids(-128, -105, -98, 6, 41, 104, 196)),
 	OVERLAY_DIRT(
 		GroundMaterial.DIRT,
-		p -> p.ids(-124, -84, -83, 14, 15, 21, 22, 23, 60, 77, 81, 82, 88, 89, 101, 102, 107, 108, 110, 115, 123, 227)
+		p -> p.ids(-124, -84, -83, 14, 15, 16, 21, 22, 23, 60, 77, 81, 82, 88, 89, 101, 102, 107, 108, 110, 115, 123, 227)
 	),
 	OVERLAY_GRAVEL(GroundMaterial.GRAVEL, p -> p.ids(-76, 2, 3, 4, 6, 8, 9, 10, 119, 127)),
 	OVERLAY_VARROCK_PATHS(GroundMaterial.VARROCK_PATHS, p -> p
 		.replaceWithIf(WINTER_JAGGED_STONE_TILE, plugin -> plugin.configWinterTheme)
 		.ids(-85, -77, 11)
 	),
+	WIZARD_TOWER_ROOF(GroundMaterial.MARBLE_1_GLOSS, p -> p
+		.ids(33)
+		.blended(false)
+		.area(Area.WIZARD_TOWER_ROOF)
+		.replaceWithIf(SNOW_2, plugin -> plugin.configWinterTheme)
+	),
 	OVERLAY_SWAMP_WATER(WaterType.SWAMP_WATER, p -> p.ids(-100, 7)),
 	OVERLAY_WOOD_PLANKS(GroundMaterial.WOOD_PLANKS_1, p -> p.ids(5, 35)),
 	OVERLAY_CLEAN_WOOD_PLANKS(GroundMaterial.CLEAN_WOOD_FLOOR, p -> p.ids(52).shiftLightness(-4)),
 	OVERLAY_SAND(GroundMaterial.SAND, p -> p.ids(25, 26, 76)),
 	OVERLAY_BRICK_BROWN(GroundMaterial.BRICK_BROWN, p -> p.ids(27, 46).blended(false)),
-	OVERLAY_SNOW(GroundMaterial.SNOW_2, p -> p.ids(30, 33)),
+	OVERLAY_SNOW(GroundMaterial.SNOW_2, p -> p.ids(30, 33, 254)),
 	OVERLAY_VARIED_DIRT(GroundMaterial.VARIED_DIRT, p -> p.ids(49, 83, 91)),
 	OVERLAY_SAND_BRICK(GroundMaterial.SAND_BRICK, p -> p.ids(-49, 84)),
 	OVERLAY_N122(-122, GroundMaterial.TILES_2X2_2_GLOSS),
@@ -844,8 +859,7 @@ public enum Overlay {
 	public final int shiftSaturation;
 	public final int lightness;
 	public final int shiftLightness;
-	public final Overlay replacementOverlay;
-	public final Function<HdPlugin, Boolean> replacementCondition;
+	public final TileOverrideResolver<Overlay> replacementResolver;
 
 	Overlay(int id, GroundMaterial material) {
 		this(p -> p.ids(id).groundMaterial(material));
@@ -883,8 +897,7 @@ public enum Overlay {
 		TileOverrideBuilder<Overlay> builder = new TileOverrideBuilder<>();
 		consumer.accept(builder);
 		this.filterIds = builder.ids;
-		this.replacementOverlay = builder.replacement;
-		this.replacementCondition = builder.replacementCondition;
+		this.replacementResolver = builder.replacementResolver;
 		this.waterType = builder.waterType;
 		this.groundMaterial = builder.groundMaterial;
 		this.area = builder.area;
@@ -919,6 +932,7 @@ public enum Overlay {
 			FILTERED_MAP.put(entry.getKey(), entry.getValue().toArray(new Overlay[0]));
 	}
 
+	@NonNull
 	public static Overlay getOverlay(Scene scene, Tile tile, HdPlugin plugin) {
 		LocalPoint localLocation = tile.getLocalLocation();
 		int[] worldPoint = HDUtils.localToWorld(scene, localLocation.getX(), localLocation.getY(), tile.getRenderLevel());
@@ -946,7 +960,10 @@ public enum Overlay {
 			}
 		}
 
-		return match.replacementCondition.apply(plugin) ? match.replacementOverlay : match;
+		if (match.replacementResolver != null)
+			return match.replacementResolver.resolve(plugin, scene, tile, match);
+
+		return match;
 	}
 
 	public int[] modifyColor(int[] colorHSL) {

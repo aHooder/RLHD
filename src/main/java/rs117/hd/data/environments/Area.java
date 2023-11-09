@@ -201,6 +201,16 @@ public enum Area
 	),
 	// Barbarian Village
 	BARBARIAN_VILLAGE_EAST_PATH_FIX(3111,3420,3112,3421),
+	STRONGHOLD_OF_WAR(7505),
+	STRONGHOLD_OF_FAMINE(8017),
+	STRONGHOLD_OF_PESTILENCE(8530),
+	STRONGHOLD_OF_DEATH(9297),
+	STRONGHOLD_OF_SECURITY(
+			STRONGHOLD_OF_WAR,
+			STRONGHOLD_OF_FAMINE,
+			STRONGHOLD_OF_PESTILENCE,
+			STRONGHOLD_OF_DEATH
+	),
 
 	// A Soul's Bane
 	TOLNA_DUNGEON_ANGER(
@@ -301,6 +311,7 @@ public enum Area
 		new AABB(3118,3166),
 		new AABB(3115,3166)
 	),
+	WIZARD_TOWER_ROOF(new AABB(3101, 3167, 3116, 3153)),
 
 	// Misthalin Mystery
 	MISTHALIN_MYSTERY_MANOR(1600, 4863, 1727, 4779),
@@ -543,6 +554,7 @@ public enum Area
 	ASGARNIA_ICE_DUNGEON_SNOWY(3085, 9531, 3020, 9605),
 
 	// Karamja
+	KARAMJA_VOLCANO(2827, 3192, 2859, 3158),
 	BRIMHAVEN_DOCKS_TEXTURED(2773, 3235, 2771, 3223),
 	BRIMHAVEN_AGILITY_ARENA(11157),
 
@@ -810,8 +822,10 @@ public enum Area
 		new AABB(3275, 2749, 3405, 2670),
 		new AABB(3322, 2773, 3370, 2750)
 	),
+	RIVER_ELID_WATERFALL(3369, 3131, 3370, 3133),
+	KALPHITE_LAIR(13972),
 
-	//Sophanem and Menaphos
+	// Sophanem and Menaphos
 	SOPHANEM_FLOORS(
 		new AABB(3316, 2803, 3308, 2796, 0),
 		new AABB(3307, 2803, 3307, 2801, 0),
@@ -940,6 +954,7 @@ public enum Area
 	WILDERNESS_LOW(2939, 3558, 3391, 3522),
 	WILDERNESS(2939, 3974, 3391, 3522),
 	WILDERNESS_NORTH_OF_RESOURCE_AREA(3175, 3967, 3202, 3945),
+	WILDERNESS_FOUNTAIN_OF_RUNE(3373, 3892, 3375, 3894),
 	MAGE_ARENA_BANK(2527, 4725, 2549, 4708),
 	MAGE_ARENA_GOD_STATUES(2520, 4730, 2495, 4682),
 	GIELINOR_SNOWY_NORTHERN_REGION(
@@ -948,6 +963,24 @@ public enum Area
 		new AABB(2714, 3803, 2757, 3767),
 		new AABB(2723, 3743, 2758, 3710)
 	),
+	// Trollheim - Weiss Region
+	TROLLHEIM(
+		regions(
+			11577,
+			11321,
+			11320,
+			11576,
+			11319,
+			11063
+		),
+		new AABB(2751, 3753, 2726, 3662), // Mountains near Keldagrim Entrance
+		new AABB(2780, 3647, 2815, 3584)  // Mountains near Golden Apple Tree
+	),
+	WEISS_REGION(regions(11325, 11581)),
+	WEISS_UNDERGROUND(10842),
+	WEISS_FIRE_PIT(2877, 3934, 2875, 3932),
+	INTERIOR_WEISS_THRONE_TENT(2877, 3941, 2868, 3931),
+
 
 	// Fremennik Province
 	MOUNTAIN_CAMP_LAKE(
@@ -969,6 +1002,7 @@ public enum Area
 	// Tirannwn
 	GWENITH(2187, 3424, 2229, 3397),
 	PRIFDDINAS(3136, 5952, 3391, 6207),
+	ZALCANO(12126),
 	MYNYDD(2119, 3453, 2215, 3384),
 	LLETYA(2313, 3147, 2363, 3194),
 	POISON_WASTE(
@@ -977,17 +1011,20 @@ public enum Area
 		new AABB(2301, 3137, 2364, 3079)
 	),
 	POISON_WASTE_DUNGEON(regions(5954, 5955)),
-	ARANDAR(2309, 3337, 2394, 3234),
+	ARANDAR_MAINLAND(2309, 3337, 2394, 3234),
+	ARANDAR_PRIFDDINAS(3333, 6089, 3391, 5986),
+	ARANDAR(ARANDAR_MAINLAND, ARANDAR_PRIFDDINAS),
 	SOTE_GRAND_LIBRARY(2752, 6080, 2879, 6207),
 	SOTE_LLETYA_ON_FIRE(2881, 6206, 2937, 6152),
 	SOTE_LLETYA_SMALL_FIRES(2730, 6080, 2820, 6160),
 	SOTE_TEMPLE_OF_LIGHT_SEREN_CUTSCENE(3237, 5913, 3219, 5933),
 	SOTE_FRAGMENT_OF_SEREN_ARENA(3264, 5887, 3328, 5951),
-	TIRANNWN(
+	TIRANNWN_MAINLAND(
 		new AABB(2116, 3455, 2320, 3021),
 		new AABB(2295, 3202, 2365, 3140),
 		new AABB(2688, 6015, 2944, 6207) // SOTE cutscene
 	),
+	TIRANNWN(TIRANNWN_MAINLAND, PRIFDDINAS),
 
 	ZANARIS(2315, 4345, 2500, 4485),
 
@@ -1026,7 +1063,10 @@ public enum Area
 	),
 
 	// Zeah
-	KARUULM_SLAYER_DUNGEON(1112, 10295, 1384, 10124),
+	KARUULM_SLAYER_DUNGEON(
+		regions(5022, 5023, 5279, 5280, 5536),
+		new AABB(1344, 10239, 1354, 10231)
+	),
 	MOUNT_KARUULM(1245,3765,1358,3860),
 	LIZARDMAN_TEMPLE(1280, 10047, 1341, 10109),
 	XERICS_LOOKOUT(1580, 3526, 1596, 3534),
@@ -1093,6 +1133,8 @@ public enum Area
 	THE_STRANGLEWOOD_EXTENDED(1378, 3476, 1080, 3264),
 	THE_STRANGLEWOOD(regions(4403, 4404, 4405, 4659, 4660, 4661, 4916, 4917)),
 	THE_STRANGLEWOOD_QUEST_UNDERGROUND_AREAS(regions(4760, 4761)),
+	JUDGE_OF_YAMA_BOSS(regions(6492, 6748)),
+	XAMPHUR_BOSS(12124),
 	ZEAH(1152, 4078, 1938, 3270),
 
 	// Fossil Island
@@ -1356,16 +1398,16 @@ public enum Area
 	LITHKREN(3519, 4032, 3602, 3967),
 	DS2_FLASHBACK_PLATFORM(1800, 5277, 1814, 5250),
 	DS2_FLEET_ATTACKED(regions(6486, 6487, 6488, 6489, 6742, 6743, 6744, 6745)),
-	DS2_SHIPS(1600, 5503, 1727,5758),
+	DS2_SHIPS(1600, 5503, 1727, 5758),
 
 	// The Gauntlet
-	THE_GAUNTLET(1856, 5632, 1919, 5695),
-	THE_GAUNTLET_CORRUPTED(1920, 5632, 1983, 5695),
+	THE_GAUNTLET(regionOnPlane(7512, 1)),
+	THE_GAUNTLET_CORRUPTED(regionOnPlane(7768, 1)),
 	THE_GAUNTLET_LOBBY(3025, 6131, 3040, 6116),
 
 	// POHs
 	PLAYER_OWNED_HOUSE_SNOWY(1984, 5696, 2047, 5767),
-	PLAYER_OWNED_HOUSE(1856, 5696, 2047, 5767),
+	PLAYER_OWNED_HOUSE(1792, 5696, 2047, 5767),
 
 	// Blackhole
 	BLACKHOLE(1616, 4728, 1623, 4735),
@@ -1386,14 +1428,16 @@ public enum Area
 	TEMPLE_OF_THE_EYE_ENTRANCE_FIX(
 		TEMPLE_OF_THE_EYE_REGULAR_ENTRANCE_FIX,
 		TEMPLE_OF_THE_EYE_QUEST_1_ENTRANCE_FIX,
-		TEMPLE_OF_THE_EYE_QUEST_2_ENTRANCE_FIX),
+		TEMPLE_OF_THE_EYE_QUEST_2_ENTRANCE_FIX
+	),
 	TEMPLE_OF_THE_EYE(
 		TEMPLE_OF_THE_EYE_REGULAR,
 		TEMPLE_OF_THE_EYE_QUEST_1,
-		TEMPLE_OF_THE_EYE_QUEST_2),
+		TEMPLE_OF_THE_EYE_QUEST_2
+	),
 
 	// Death's office
-	DEATHS_OFFICE(3166, 5734, 3185, 4288),
+	DEATHS_OFFICE(3164, 5734, 3185, 5719),
 
 	// Theatre of Blood
 	TOB_ROOM_MAIDEN(3231, 4468, 3152, 4416),
@@ -1543,7 +1587,7 @@ public enum Area
 	GIANTS_PLATEAU_CABBAGE_PATCH(3413, 3181, 3412, 3179),
 	GIANTS_FOUNDRY(3331, 11456, 3393, 11520),
 	ELID_CAVE(3325, 9520, 3395, 9605),
-	ANCIENT_CAVERN_UPPER(1728, 5273, 1790, 5374),
+	ANCIENT_CAVERN(1728, 5273, 1790, 5374),
 	LAND_OF_GOBLINS_CUTSCENE_WATER(3903, 4352, 3840, 4415),
 
 	WEISS_SALT_MINE(11425),
@@ -1590,16 +1634,36 @@ public enum Area
 	SHADOW_DUNGEON(regions(10575, 10831)),
 
 	// Desert Treasure 2 areas
-	THE_SCAR_MAIN_AREA(1984, 6304, 2143, 6463),
+	THE_SCAR_MAIN_AREA(
+		new AABB(1984, 6304, 2143, 6463),
+		new AABB(1920, 6336, 1983, 6399)
+	),
 	THE_SCAR_QUEST_AREAS(regions(7012, 7524, 8804)),
 	THE_SCAR(THE_SCAR_MAIN_AREA, THE_SCAR_QUEST_AREAS),
-	LASSAR_UNDERCITY_NORMAL(regions(10083, 10340, 10339, 10338, 10596, 10595, 10594, 10852, 10851, 10850, 11108, 11106)),
-	LASSAR_UNDERCITY_SHADOW_REALM(regions(9059, 9316, 9315, 9314, 9572, 9571, 9570, 9828, 9827, 9826, 10082)),
+	LASSAR_UNDERCITY_MAIN_NORMAL(regions(10083, 10340, 10339, 10338, 10596, 10595, 10594, 10852, 10851, 10850, 11108)),
+	LASSAR_UNDERCITY_MAIN_SHADOW_REALM(regions(9059, 9316, 9315, 9314, 9572, 9571, 9570, 9828, 9827, 9826)),
+	LASSAR_UNDERCITY_DRAIN_NORMAL(11106),
+	LASSAR_UNDERCITY_DRAIN_SHADOW_REALM(10082),
 	LASSAR_UNDERCITY_SUNKEN_CATHEDRAL(
 		new AABB(2372, 6397, 2428, 6333),
 		new AABB(2628, 6397, 2684, 6333)
 	),
-	LASSAR_UNDERCITY(LASSAR_UNDERCITY_NORMAL, LASSAR_UNDERCITY_SHADOW_REALM),
+	LASSAR_UNDERCITY_WATER_CUTSCENE(12898),
+	LASSAR_UNDERCITY_WATER(LASSAR_UNDERCITY_MAIN_NORMAL, LASSAR_UNDERCITY_MAIN_SHADOW_REALM, LASSAR_UNDERCITY_WATER_CUTSCENE),
+	LASSAR_UNDERCITY_NORMAL(
+		LASSAR_UNDERCITY_MAIN_NORMAL,
+		LASSAR_UNDERCITY_DRAIN_NORMAL,
+		LASSAR_UNDERCITY_WATER_CUTSCENE
+	),
+	LASSAR_UNDERCITY_SHADOW_REALM(
+		LASSAR_UNDERCITY_MAIN_SHADOW_REALM,
+		LASSAR_UNDERCITY_DRAIN_SHADOW_REALM
+	),
+	LASSAR_UNDERCITY(
+		LASSAR_UNDERCITY_NORMAL,
+		LASSAR_UNDERCITY_SHADOW_REALM
+	),
+	ANCIENT_VAULT(13156),
 
 	MAINLAND(700, 2300, 4200, 4095),
 	MAINLAND_EXTENSIONS(
@@ -1635,7 +1699,8 @@ public enum Area
 		new AABB(2419, 5442, 2511, 5352),
 		new AABB(1939, 5363, 2002, 5300),
 		new AABB(3456, 6207, 3646, 6017),
-		new AABB(3137, 4862, 3199, 4800)
+		new AABB(3137, 4862, 3199, 4800),
+		new AABB(8288)
 	),
 
 	OVERWORLD(
@@ -1648,53 +1713,55 @@ public enum Area
 
 	public final AABB[] aabbs;
 
-	Area(AABB... aabbs)
-	{
+	Area(AABB... aabbs) {
 		this.aabbs = aabbs;
 	}
 
-	Area(Area... areas)
-	{
+	Area(AABB[] aabbs1, AABB... aabbs2) {
+		this.aabbs = new AABB[aabbs1.length + aabbs2.length];
+		System.arraycopy(aabbs1, 0, this.aabbs, 0, aabbs1.length);
+		System.arraycopy(aabbs2, 0, this.aabbs, aabbs1.length, aabbs2.length);
+	}
+
+	Area(Area... areas)	{
 		this.aabbs = Arrays.stream(areas)
 			.flatMap(a -> Arrays.stream(a.aabbs))
 			.toArray(AABB[]::new);
 	}
 
-	Area(int pointAX, int pointAY, int pointBX, int pointBY)
-	{
-		aabbs = new AABB[]{new AABB(pointAX, pointAY, pointBX, pointBY)};
+	Area(int pointAX, int pointAY, int pointBX, int pointBY) {
+		aabbs = new AABB[] { new AABB(pointAX, pointAY, pointBX, pointBY) };
 	}
 
-	Area(int pointAX, int pointAY, int pointBX, int pointBY, int plane)
-	{
-		aabbs = new AABB[]{new AABB(pointAX, pointAY, pointBX, pointBY, plane)};
+	Area(int pointAX, int pointAY, int pointBX, int pointBY, int plane) {
+		aabbs = new AABB[] { new AABB(pointAX, pointAY, pointBX, pointBY, plane) };
 	}
 
-	Area(int regionId)
-	{
+	Area(int regionId) {
 		this(regions(regionId));
 	}
 
-	private static AABB[] regions(int... regionIds)
-	{
+	private static AABB[] regions(int... regionIds) {
 		return Arrays.stream(regionIds)
 			.mapToObj(AABB::new)
 			.toArray(AABB[]::new);
 	}
 
-	public boolean containsPoint(int worldX, int worldY, int plane)
-	{
-		for (AABB aabb : this.getAabbs())
-		{
-			if (aabb.contains(worldX, worldY, plane))
-			{
+	private static AABB regionOnPlane(int regionId, int plane) {
+		var aabb = new AABB(regionId);
+		return new AABB(aabb.minX, aabb.minY, plane, aabb.maxX, aabb.maxY, plane);
+	}
+
+	public boolean containsPoint(int worldX, int worldY, int plane) {
+		for (AABB aabb : this.getAabbs()) {
+			if (aabb.contains(worldX, worldY, plane)) {
 				return true;
 			}
 		}
 		return false;
 	}
-	public boolean containsPoint(int[] worldPoint)
-	{
+
+	public boolean containsPoint(int[] worldPoint) {
 		return containsPoint(worldPoint[0], worldPoint[1], worldPoint[2]);
 	}
 

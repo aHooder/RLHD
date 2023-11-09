@@ -50,44 +50,51 @@ public class HDUtils {
 	// The epsilon for floating point values used by jogl
 	public static final float EPSILON = 1.1920929E-7f;
 
-	public static float dot(float[] a, float[] b) {
-		float out = 0;
-		for (int i = 0; i < a.length; i++)
-			out += a[i] * b[i];
-		return out;
-	}
-
-	public static float magnitudeSquared(float[] vector) {
-		return dot(vector, vector);
-	}
-
-	public static float magnitude(float[] vector) {
-		return (float) Math.sqrt(magnitudeSquared(vector));
-	}
-
-	public static float[] add(float[] a, float[] b) {
-		float[] out = new float[a.length];
-		for (int i = 0; i < a.length; i++)
+	/**
+	 * Computes a + b, storing it in the out array
+	 */
+	public static float[] add(float[] out, float[] a, float[] b) {
+		for (int i = 0; i < out.length; i++)
 			out[i] = a[i] + b[i];
 		return out;
 	}
 
-	public static int[] add(int[] a, int[] b) {
-		int[] out = new int[a.length];
-		for (int i = 0; i < a.length; i++)
-			out[i] = a[i] + b[i];
+	/**
+	 * Computes a - b, storing it in the out array
+	 */
+	public static float[] subtract(float[] out, float[] a, float[] b) {
+		for (int i = 0; i < out.length; i++)
+			out[i] = a[i] - b[i];
 		return out;
 	}
 
-	public static float[] multiply(float[] vec, float multiplier) {
-		float[] out = new float[vec.length];
-		for (int i = 0; i < vec.length; i++)
-			out[i] = vec[i] * multiplier;
+	public static float[] cross(float[] out, float[] a, float[] b) {
+		out[0] = a[1] * b[2] - a[2] * b[1];
+		out[1] = a[2] * b[0] - a[0] * b[2];
+		out[2] = a[0] * b[1] - a[1] * b[0];
 		return out;
 	}
 
-	public static float[] divide(float[] vec, float divide) {
-		return multiply(vec, 1 / divide);
+	public static float[] abs(float[] out, float[] v) {
+		for (int i = 0; i < out.length; i++)
+			out[i] = Math.abs(v[i]);
+		return out;
+	}
+
+	public static float min(float... v) {
+		float min = v[0];
+		for (int i = 1; i < v.length; i++)
+			if (v[i] < min)
+				min = v[i];
+		return min;
+	}
+
+	public static float max(float... v) {
+		float max = v[0];
+		for (int i = 1; i < v.length; i++)
+			if (v[i] > max)
+				max = v[i];
+		return max;
 	}
 
 	public static float lerp(float a, float b, float t) {
@@ -108,16 +115,41 @@ public class HDUtils {
 		return out;
 	}
 
-	public static int clamp(int value, int min, int max) {
-		return Math.min(max, Math.max(min, value));
+	public static float hermite(float from, float to, float t) {
+		float t2 = t * t;
+		float t3 = t2 * t;
+		return
+			from * (1 - 3 * t2 + 2 * t3) +
+			to * (3 * t2 - 2 * t3);
+	}
+
+	public static float[] hermite(float[] from, float[] to, float t) {
+		float[] result = new float[from.length];
+		for (int i = 0; i < result.length; i++)
+			result[i] = hermite(from[i], to[i], t);
+		return result;
+	}
+
+	/**
+	 * Modulo that returns the answer with the same sign as the modulus.
+	 */
+	public static float mod(float x, float modulus) {
+		return (float) (x - Math.floor(x / modulus) * modulus);
+	}
+
+	/**
+	 * Modulo that returns the answer with the same sign as the modulus.
+	 */
+	public static int mod(int x, int modulus) {
+		return x - (x / modulus) * modulus;
 	}
 
 	public static float clamp(float value, float min, float max) {
-		return Math.min(max, Math.max(min, value));
+		return Math.min(Math.max(value, min), max);
 	}
 
-	public static double clamp(double value, double min, double max) {
-		return Math.min(max, Math.max(min, value));
+	public static int clamp(int value, int min, int max) {
+		return Math.min(Math.max(value, min), max);
 	}
 
 	public static int vertexHash(int[] vPos) {
@@ -128,29 +160,14 @@ public class HDUtils {
 		return s.toString().hashCode();
 	}
 
-	public static float[] calculateSurfaceNormals(int[] vertexX, int[] vertexY, int[] vertexZ)
-	{
-		// calculate normals
-		float[] a = new float[3];
-		a[0] = vertexX[0] - vertexX[1];
-		a[1] = vertexY[0] - vertexY[1];
-		a[2] = vertexZ[0] - vertexZ[1];
-
-		float[] b = new float[3];
-		b[0] = vertexX[0] - vertexX[2];
-		b[1] = vertexY[0] - vertexY[2];
-		b[2] = vertexZ[0] - vertexZ[2];
-
-		// cross
+	public static float[] calculateSurfaceNormals(float[] a, float[] b, float[] c) {
+		subtract(b, a, b);
+		subtract(c, a, c);
 		float[] n = new float[3];
-		n[0] = a[1] * b[2] - a[2] * b[1];
-		n[1] = a[2] * b[0] - a[0] * b[2];
-		n[2] = a[0] * b[1] - a[1] * b[0];
-		return n;
+		return cross(n, b, c);
 	}
 
-	public static int[] colorIntToHSL(int colorInt)
-	{
+	public static int[] colorIntToHSL(int colorInt) {
 		int[] outHSL = new int[3];
 		outHSL[0] = colorInt >> 10 & 0x3F;
 		outHSL[1] = colorInt >> 7 & 0x7;
@@ -367,5 +384,29 @@ public class HDUtils {
 
 	public static boolean is32Bit() {
 		return System.getProperty("sun.arch.data.model", "Unknown").equals("32");
+	}
+
+	public static boolean sceneIsTheGauntlet(Scene scene) {
+		if (!scene.isInstance())
+			return false;
+
+		var templateChunks = scene.getInstanceTemplateChunks();
+		for (var plane : templateChunks) {
+			for (var column : plane) {
+				for (int chunk : column) {
+					if (chunk == -1)
+						continue;
+
+					int worldX = (chunk >> 14 & 1023) * 8;
+					int worldY = (chunk >> 3 & 2047) * 8;
+					int regionId = HDUtils.worldToRegionID(worldX, worldY);
+
+					// The Gauntlet should only ever consist of chunks from these regions
+					return regionId == 7512 || regionId == 7768;
+				}
+			}
+		}
+
+		return false;
 	}
 }
