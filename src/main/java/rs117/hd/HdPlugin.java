@@ -2903,7 +2903,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	private void updateBuffer(@Nonnull GLBuffer glBuffer, int target, long size, int usage, long clFlags) {
 		if (size > glBuffer.size) {
 			size = HDUtils.ceilPow2(size);
-			logBufferResize(glBuffer, size);
 
 			glBuffer.size = size;
 			glBindBuffer(target, glBuffer.glBufferId);
