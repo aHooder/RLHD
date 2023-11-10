@@ -2296,8 +2296,11 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		nextSceneContext = null;
 
 		// Gaps need to be filled in swapScene, since map regions aren't updated earlier
-		if (config.fillGapsInTerrain())
-			sceneUploader.fillGaps(sceneContext);
+//		if (config.fillGapsInTerrain())
+//			sceneUploader.fillGaps(sceneContext);
+
+		assert sceneContext.getVertexOffset() == 0;
+
 		sceneContext.staticUnorderedModelBuffer.flip();
 
 		dynamicOffsetVertices = sceneContext.getVertexOffset();

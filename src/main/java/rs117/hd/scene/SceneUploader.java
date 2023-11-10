@@ -83,14 +83,14 @@ class SceneUploader {
 	public void upload(SceneContext sceneContext) {
 		Stopwatch stopwatch = Stopwatch.createStarted();
 
-		for (int z = 0; z < Constants.MAX_Z; ++z) {
-			for (int x = 0; x < Constants.EXTENDED_SCENE_SIZE; ++x) {
-				for (int y = 0; y < Constants.EXTENDED_SCENE_SIZE; ++y) {
-					Tile tile = sceneContext.scene.getExtendedTiles()[z][x][y];
-					upload(sceneContext, tile, x, y, z);
-				}
-			}
-		}
+//		for (int z = 0; z < Constants.MAX_Z; ++z) {
+//			for (int x = 0; x < Constants.EXTENDED_SCENE_SIZE; ++x) {
+//				for (int y = 0; y < Constants.EXTENDED_SCENE_SIZE; ++y) {
+//					Tile tile = sceneContext.scene.getExtendedTiles()[z][x][y];
+//					upload(sceneContext, tile, x, y, z);
+//				}
+//			}
+//		}
 
 		stopwatch.stop();
 		log.debug(
