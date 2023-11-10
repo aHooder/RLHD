@@ -2800,11 +2800,13 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		return config.expandedMapLoadingChunks();
 	}
 
-	private void logBufferResize(GLBuffer glBuffer, long newSize) {
-		if (!log.isTraceEnabled())
-			return;
-
-		log.trace("Buffer resize: {} {}", glBuffer, String.format("%.2f MB -> %.2f MB", glBuffer.size / 1e6, newSize / 1e6));
+	private void logBufferResize(GLBuffer glBuffer, long newSize, int offset) {
+		log.warn(
+			"Buffer resize: {} at offset {}, {}",
+			glBuffer,
+			offset,
+			String.format("%.2f MB -> %.2f MB", glBuffer.size / 1e6, newSize / 1e6)
+		);
 	}
 
 	private void updateBuffer(@Nonnull GLBuffer glBuffer, int target, @Nonnull ByteBuffer data, int usage, long clFlags) {
@@ -2812,7 +2814,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		long size = data.remaining();
 		if (size > glBuffer.size) {
 			size = HDUtils.ceilPow2(size);
-			logBufferResize(glBuffer, size);
 
 			glBuffer.size = size;
 			glBufferData(target, size, usage);
@@ -2833,9 +2834,10 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		long size = 4L * (offset + data.remaining());
 		if (size > glBuffer.size) {
 			size = HDUtils.ceilPow2(size);
-			logBufferResize(glBuffer, size);
 
 			if (offset > 0) {
+				logBufferResize(glBuffer, size, offset);
+
 				int oldBuffer = glBuffer.glBufferId;
 				glBuffer.glBufferId = glGenBuffers();
 				glBindBuffer(target, glBuffer.glBufferId);
@@ -2871,9 +2873,10 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		long size = 4L * (offset + data.remaining());
 		if (size > glBuffer.size) {
 			size = HDUtils.ceilPow2(size);
-			logBufferResize(glBuffer, size);
 
 			if (offset > 0) {
+				logBufferResize(glBuffer, size, offset);
+
 				int oldBuffer = glBuffer.glBufferId;
 				glBuffer.glBufferId = glGenBuffers();
 				glBindBuffer(target, glBuffer.glBufferId);
