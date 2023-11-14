@@ -27,9 +27,9 @@ package rs117.hd.utils;
 
 public class Mat4
 {
-	private Mat4()
-	{
-	}
+	/**
+	 * Utility class to work with column-major 4x4 matrices.
+	 */
 
 	public static float[] identity()
 	{
@@ -114,8 +114,14 @@ public class Mat4
 			};
 	}
 
+	/**
+	 * Multiplies matrices a and b, storing the result in matrix a.
+	 *
+	 * @param a column-major 4x4 matrix
+	 * @param b column-major 4x4 matrix
+	 */
 	@SuppressWarnings("PointlessArithmeticExpression")
-	public static void mul(final float[] a, final float[] b)
+	public static void mul(float[] a, float[] b)
 	{
 		final float b00 = b[0 + 0 * 4];
 		final float b10 = b[1 + 0 * 4];
@@ -169,5 +175,91 @@ public class Mat4
 		a[3 + 1 * 4] = ai0 * b01 + ai1 * b11 + ai2 * b21 + ai3 * b31;
 		a[3 + 2 * 4] = ai0 * b02 + ai1 * b12 + ai2 * b22 + ai3 * b32;
 		a[3 + 3 * 4] = ai0 * b03 + ai1 * b13 + ai2 * b23 + ai3 * b33;
+	}
+
+	/**
+	 * Multiplies a 4x4 matrix with a 4x1 vector, storing the result in the output vector.
+	 *
+	 * @param out  where the result should be stored
+	 * @param mat4 4x4 column-major matrix
+	 * @param vec4 4x1 vector
+	 */
+	@SuppressWarnings("PointlessArithmeticExpression")
+	public static void mulVec(float[] out, float[] mat4, float[] vec4) {
+		float a =
+			mat4[0 * 4 + 0] * vec4[0] +
+			mat4[1 * 4 + 0] * vec4[1] +
+			mat4[2 * 4 + 0] * vec4[2] +
+			mat4[3 * 4 + 0] * vec4[3];
+		float b =
+			mat4[0 * 4 + 1] * vec4[0] +
+			mat4[1 * 4 + 1] * vec4[1] +
+			mat4[2 * 4 + 1] * vec4[2] +
+			mat4[3 * 4 + 1] * vec4[3];
+		float c =
+			mat4[0 * 4 + 2] * vec4[0] +
+			mat4[1 * 4 + 2] * vec4[1] +
+			mat4[2 * 4 + 2] * vec4[2] +
+			mat4[3 * 4 + 2] * vec4[3];
+		float d =
+			mat4[0 * 4 + 3] * vec4[0] +
+			mat4[1 * 4 + 3] * vec4[1] +
+			mat4[2 * 4 + 3] * vec4[2] +
+			mat4[3 * 4 + 3] * vec4[3];
+		out[0] = a;
+		out[1] = b;
+		out[2] = c;
+		out[3] = d;
+	}
+
+	/**
+	 * Transforms the vector by the matrix, and does a perspective divide.
+	 *
+	 * @param out  where the result should be stored
+	 * @param mat4 4x4 column-major matrix
+	 * @param vec4 4x1 vector
+	 */
+	public static void projectVec(float[] out, float[] mat4, float[] vec4) {
+		mulVec(out, mat4, vec4);
+		for (int i = 0; i < 4; i++)
+			out[i] /= out[3];
+	}
+
+	/**
+	 * Extracts 6 normalized clipping planes from the matrix, in the form: ax + by + cz + d = 0,
+	 * where the normal is pointing inward. Order: left, right, bottom, top, near, far.
+	 *
+	 * @param out  6x4 arrays where the result should be stored
+	 * @param mat4 4x4 column-major matrix
+	 */
+	@SuppressWarnings("PointlessArithmeticExpression")
+	public static void extractFrustumPlanes(float[][] out, float[] mat4) {
+		for (int i = 0; i < 4; i++) {
+			float row, row4 = mat4[4 * i + 3];
+
+			row = mat4[4 * i + 0];  // row 1
+			out[0][i] = row4 + row; // left plane
+			out[1][i] = row4 - row; // right plane
+
+			row = mat4[4 * i + 1];  // row 2
+			out[2][i] = row4 + row; // bottom plane
+			out[3][i] = row4 - row; // top plane
+
+			row = mat4[4 * i + 2];  // row 3
+			out[4][i] = row4 + row; // near plane
+			out[5][i] = row4 - row; // far plane
+		}
+
+		// Normalize plane vectors
+		for (int i = 0; i < 6; i++) {
+			float x, mag = 0;
+			for (int j = 0; j < 3; j++) {
+				x = out[i][j];
+				mag += x * x;
+			}
+			mag = (float) (1 / Math.sqrt(mag));
+			for (int j = 0; j < 4; j++)
+				out[i][j] *= mag;
+		}
 	}
 }

@@ -52,6 +52,9 @@ public class HDUtils {
 
 	// The epsilon for floating point values used by jogl
 	public static final float EPSILON = 1.1920929E-7f;
+	public static final float PI = (float) Math.PI;
+	public static final float HALF_PI = (float) (Math.PI / 2);
+	public static final float TWO_PI = (float) (2 * Math.PI);
 
 	/**
 	 * Computes a + b, storing it in the out array
@@ -71,11 +74,32 @@ public class HDUtils {
 		return out;
 	}
 
+	public static float dot(float[] a, float[] b) {
+		assert a.length <= b.length : "Only the second vector may have more elements";
+		float v = 0;
+		for (int i = 0; i < a.length; i++)
+			v += a[i] * b[i];
+		return v;
+	}
+
+	public static float dotVec3(float[] a, float[] b) {
+		return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+	}
+
 	public static float[] cross(float[] out, float[] a, float[] b) {
 		out[0] = a[1] * b[2] - a[2] * b[1];
 		out[1] = a[2] * b[0] - a[0] * b[2];
 		out[2] = a[0] * b[1] - a[1] * b[0];
 		return out;
+	}
+
+	public static void normalize(float[] vec) {
+		float mag = 0;
+		for (var v : vec)
+			mag += v * v;
+		mag = (float) (1 / Math.sqrt(mag));
+		for (int i = 0; i < vec.length; i++)
+			vec[i] *= mag;
 	}
 
 	public static float[] abs(float[] out, float[] v) {

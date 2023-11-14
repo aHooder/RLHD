@@ -56,13 +56,13 @@ import static org.lwjgl.opengl.GL43C.*;
 import static rs117.hd.HdPlugin.SCALAR_BYTES;
 import static rs117.hd.HdPlugin.TEXTURE_UNIT_GAME;
 import static rs117.hd.HdPlugin.TEXTURE_UNIT_UI;
+import static rs117.hd.utils.HDUtils.HALF_PI;
 import static rs117.hd.utils.ResourcePath.path;
 
 @Singleton
 @Slf4j
 public class TextureManager {
 	private static final String[] SUPPORTED_IMAGE_EXTENSIONS = { "png", "jpg" };
-	private static final float HALF_PI = (float) (Math.PI / 2);
 	private static final ResourcePath TEXTURE_PATH = Props.getPathOrDefault(
 		"rlhd.texture-path",
 		() -> path(TextureManager.class, "textures")

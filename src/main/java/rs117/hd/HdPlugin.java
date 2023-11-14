@@ -112,6 +112,8 @@ import rs117.hd.utils.ResourcePath;
 import rs117.hd.utils.buffer.GLBuffer;
 import rs117.hd.utils.buffer.GpuIntBuffer;
 
+import static net.runelite.api.Constants.SCENE_SIZE;
+import static net.runelite.api.Constants.*;
 import static net.runelite.api.Perspective.*;
 import static org.lwjgl.opencl.CL10.*;
 import static org.lwjgl.opengl.GL43C.*;
@@ -145,7 +147,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	public static final int UNIFORM_BLOCK_LIGHTS = 3;
 
 	public static final int MAX_FACE_COUNT = 6144;
-	public static final int MAX_DISTANCE = Constants.EXTENDED_SCENE_SIZE;
+	public static final int MAX_DISTANCE = EXTENDED_SCENE_SIZE;
 	public static final int GROUND_MIN_Y = 350; // how far below the ground models extend
 	public static final int MAX_FOG_DEPTH = 100;
 	public static final int SCALAR_BYTES = 4;
@@ -426,7 +428,14 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	public final int[] cameraFocalPoint = new int[2];
 	public final int[] cameraShift = new int[2];
 
-	public int visibleLightCount;
+	private float[] projectionMatrix = Mat4.identity();
+	private float[] lightViewMatrix = Mat4.identity();
+	private float[] lightProjectionMatrix = Mat4.identity();
+	private float[][] projectionFrustumPlanes = new float[7][4];
+	private float[][] lightProjectionFrustumPlanes = new float[6][4];
+	private float[] lightDir = new float[3];
+	private int viewportWidth, viewportHeight;
+	private int visibleLightCount;
 
 	@Provides
 	HdPluginConfig provideConfig(ConfigManager configManager) {
@@ -1302,16 +1311,16 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	}
 
 	private void initTileHeightMap(Scene scene) {
-		final int TILE_HEIGHT_BUFFER_SIZE = Constants.MAX_Z * Constants.EXTENDED_SCENE_SIZE * Constants.EXTENDED_SCENE_SIZE * Short.BYTES;
+		final int TILE_HEIGHT_BUFFER_SIZE = MAX_Z * EXTENDED_SCENE_SIZE * EXTENDED_SCENE_SIZE * Short.BYTES;
 		ShortBuffer tileBuffer = ByteBuffer
 			.allocateDirect(TILE_HEIGHT_BUFFER_SIZE)
 			.order(ByteOrder.nativeOrder())
 			.asShortBuffer();
 
 		int[][][] tileHeights = scene.getTileHeights();
-		for (int z = 0; z < Constants.MAX_Z; ++z) {
-			for (int y = 0; y < Constants.EXTENDED_SCENE_SIZE; ++y) {
-				for (int x = 0; x < Constants.EXTENDED_SCENE_SIZE; ++x) {
+		for (int z = 0; z < MAX_Z; ++z) {
+			for (int y = 0; y < EXTENDED_SCENE_SIZE; ++y) {
+				for (int x = 0; x < EXTENDED_SCENE_SIZE; ++x) {
 					int h = tileHeights[z][x][y];
 					assert (h & 0b111) == 0;
 					h >>= 3;
@@ -1330,7 +1339,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 		glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 		glTexImage3D(GL_TEXTURE_3D, 0, GL_R16I,
-			Constants.EXTENDED_SCENE_SIZE, Constants.EXTENDED_SCENE_SIZE, Constants.MAX_Z,
+			EXTENDED_SCENE_SIZE, EXTENDED_SCENE_SIZE, MAX_Z,
 			0, GL_RED_INTEGER, GL_SHORT, tileBuffer
 		);
 
@@ -1435,6 +1444,180 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				glBindBuffer(GL_UNIFORM_BUFFER, 0);
 			}
 		}
+
+		// Option A
+//			if (configSeasonalTheme == SeasonalTheme.AUTUMN) {
+//				environmentManager.currentFogColor = ColorUtils.rgb(243, 229, 185);
+//				environmentManager.currentDirectionalColor = ColorUtils.colorTemperatureToLinearRgb(3750);
+//				environmentManager.currentDirectionalStrength = 3.0f;
+//				environmentManager.currentAmbientColor = environmentManager.currentFogColor;
+//				environmentManager.currentAmbientStrength = .75f;
+//				environmentManager.currentWaterColor = environmentManager.currentFogColor;
+//			}
+
+		// Option B
+//			if (configSeasonalTheme == SeasonalTheme.AUTUMN) {
+//				environmentManager.currentFogColor = ColorUtils.colorTemperatureToLinearRgb(3000);
+//				environmentManager.currentDirectionalColor = ColorUtils.colorTemperatureToLinearRgb(3750);
+//				environmentManager.currentDirectionalStrength = 3.0f;
+//				environmentManager.currentAmbientColor = environmentManager.currentFogColor;
+//				environmentManager.currentAmbientStrength = .75f;
+//				environmentManager.currentWaterColor = environmentManager.currentFogColor;
+//			}
+
+		// Option C
+//			if (configSeasonalTheme == SeasonalTheme.AUTUMN) {
+//				environmentManager.currentFogColor = ColorUtils.rgb("#FFC085");
+//				environmentManager.currentWaterColor = environmentManager.currentFogColor;
+//			}
+
+		// Option D
+//			if (configSeasonalTheme == SeasonalTheme.AUTUMN) {
+//				environmentManager.currentFogColor = ColorUtils.rgb(185, 214, 255);
+//				environmentManager.currentDirectionalColor = ColorUtils.colorTemperatureToLinearRgb(3750);
+//				environmentManager.currentDirectionalStrength = 3.0f;
+//				environmentManager.currentAmbientColor = environmentManager.currentFogColor;
+//				environmentManager.currentAmbientStrength = .5f;
+//				environmentManager.currentWaterColor = environmentManager.currentFogColor;
+//			}
+
+		// Option E
+//			if (configSeasonalTheme == SeasonalTheme.AUTUMN) {
+//				environmentManager.currentFogDepth = 22 * 10;
+//				environmentManager.currentFogColor = ColorUtils.rgb(253, 220, 180);
+//				environmentManager.currentDirectionalColor = ColorUtils.colorTemperatureToLinearRgb(3500);
+//				environmentManager.currentDirectionalStrength = 1.5f;
+//				environmentManager.currentAmbientColor = environmentManager.currentFogColor;
+//				environmentManager.currentAmbientStrength = .5f;
+//				environmentManager.currentWaterColor = environmentManager.currentFogColor;
+//			}
+
+//			// Option F
+//			if (configSeasonalTheme == SeasonalTheme.AUTUMN) {
+//				environmentManager.currentFogColor = ColorUtils.colorTemperatureToLinearRgb(7300);
+//				environmentManager.currentDirectionalColor = ColorUtils.colorTemperatureToLinearRgb(3750);
+//				environmentManager.currentDirectionalStrength = 1.5f;
+//				environmentManager.currentAmbientColor = environmentManager.currentFogColor;
+//				environmentManager.currentAmbientStrength = .5f;
+//				environmentManager.currentWaterColor = environmentManager.currentFogColor;
+//			}
+
+		// Option G
+//			if (configSeasonalTheme == SeasonalTheme.AUTUMN) {
+//				environmentManager.currentFogColor = ColorUtils.rgb("#cfd8ec");
+//				environmentManager.currentDirectionalColor = ColorUtils.colorTemperatureToLinearRgb(3750);
+//				environmentManager.currentDirectionalStrength = 3.0f;
+//				environmentManager.currentAmbientColor = environmentManager.currentFogColor;
+//				environmentManager.currentAmbientStrength = .75f;
+//				environmentManager.currentWaterColor = environmentManager.currentFogColor;
+//			}
+
+		// Option H
+//			if (configSeasonalTheme == SeasonalTheme.AUTUMN) {
+//				environmentManager.currentFogDepth = 18 * 10;
+//				environmentManager.currentFogColor = ColorUtils.rgb("#fddcb4");
+//				environmentManager.currentDirectionalColor = ColorUtils.colorTemperatureToLinearRgb(3500);
+//				environmentManager.currentDirectionalStrength = 2.f;
+////				environmentManager.currentAmbientColor = ColorUtils.rgb("#ffffff");
+//				environmentManager.currentAmbientColor = environmentManager.currentDirectionalColor;
+//				environmentManager.currentAmbientStrength = environmentManager.currentDirectionalStrength * .2f;
+//				environmentManager.currentWaterColor = environmentManager.currentDirectionalColor;
+//			}
+
+//			environmentManager.currentLightYaw = 200;
+//			environmentManager.currentLightPitch = 220;
+
+//			environmentManager.currentLightYaw = 10;
+//			environmentManager.currentLightPitch = 260;
+
+//		environmentManager.currentLightYaw = 55;
+//		environmentManager.currentLightPitch = -130;
+
+//		environmentManager.currentLightYaw = 200;
+//		environmentManager.currentLightPitch = 220;
+
+		float lightPitch = (float) Math.toRadians(environmentManager.currentLightPitch);
+		float lightYaw = (float) Math.toRadians(environmentManager.currentLightYaw);
+		lightViewMatrix = Mat4.rotateX(lightPitch);
+		Mat4.mul(lightViewMatrix, Mat4.rotateY(-lightYaw));
+
+		lightProjectionMatrix = Mat4.identity();
+		if (configShadowsEnabled) {
+			final int drawDistanceSceneUnits = Math.min(config.shadowDistance().getValue(), getDrawDistance()) * LOCAL_TILE_SIZE / 2;
+			final int camX = cameraFocalPoint[0];
+			final int camY = cameraFocalPoint[1];
+			final int east = Math.min(camX + drawDistanceSceneUnits, LOCAL_TILE_SIZE * SCENE_SIZE);
+			final int west = Math.max(camX - drawDistanceSceneUnits, 0);
+			final int north = Math.min(camY + drawDistanceSceneUnits, LOCAL_TILE_SIZE * SCENE_SIZE);
+			final int south = Math.max(camY - drawDistanceSceneUnits, 0);
+			final int width = east - west;
+			final int height = north - south;
+			final int near = 10000;
+
+			final int maxDrawDistance = 90;
+			final float maxScale = 0.7f;
+			final float minScale = 0.4f;
+			final float scaleMultiplier = 1.0f - (getDrawDistance() / (maxDrawDistance * maxScale));
+			float scale = HDUtils.lerp(maxScale, minScale, scaleMultiplier);
+			Mat4.mul(lightProjectionMatrix, Mat4.scale(scale, scale, scale));
+			Mat4.mul(lightProjectionMatrix, Mat4.ortho(width, height, near));
+			Mat4.mul(lightProjectionMatrix, lightViewMatrix);
+			Mat4.mul(lightProjectionMatrix, Mat4.translate(-(width / 2f + west), 0, -(height / 2f + south)));
+
+			// Extract the 3rd column from the light view matrix (the float array is column-major)
+			// This produces the light's forward direction vector in world space which is already normalized
+			for (int i = 0; i < 3; i++)
+				lightDir[i] = lightViewMatrix[4 * i + 2];
+		}
+
+		// Calculate projection matrix
+		viewportWidth = client.getViewportWidth();
+		viewportHeight = client.getViewportHeight();
+		projectionMatrix = Mat4.scale(client.getScale(), client.getScale(), 1);
+//		Mat4.mul(projectionMatrix, Mat4.projection(viewportWidth, viewportHeight, NEAR_PLANE));
+		{
+			float w = viewportWidth;
+			float h = viewportHeight;
+			float n = 50;
+			float f = (float) Math.sqrt(EXTENDED_SCENE_SIZE * EXTENDED_SCENE_SIZE * LOCAL_TILE_SIZE * LOCAL_TILE_SIZE * 2 + 25000);
+			// Same projection as vanilla, except with usable depth
+			Mat4.mul(projectionMatrix, new float[]
+				{
+					2 / w, 0, 0, 0,
+					0, 2 / h, 0, 0,
+					0, 0, n / (f - n), -1,
+					0, 0, -n - n * n / (f - n), 0
+				});
+
+			// (ax + b) / x
+			//
+			// (an + b) / n = 1
+			// (af + b) / f = 0
+			//
+			// an + b = n
+			// b = n - an
+			//
+			// (af + n - an) / f = 0
+			// a = -n / (f - n)
+			//
+			// b = n + n^2 / (f - n)
+		}
+//		Mat4.mul(projectionMatrix, Mat4.scale(.002f, .002f, .002f));
+//		Mat4.mul(projectionMatrix, Mat4.ortho(viewportWidth, viewportHeight, -10000));
+		Mat4.mul(projectionMatrix, Mat4.rotateX(cameraOrientation[1] - (float) Math.PI));
+		Mat4.mul(projectionMatrix, Mat4.rotateY(cameraOrientation[0]));
+		Mat4.mul(projectionMatrix, Mat4.translate(
+			-cameraPosition[0],
+			-cameraPosition[1],
+			-cameraPosition[2]
+		));
+
+		Mat4.extractFrustumPlanes(projectionFrustumPlanes, projectionMatrix);
+		// Add an extra plane for the ground plane, since nothing is ever below it
+		projectionFrustumPlanes[6][0] = 0;
+		projectionFrustumPlanes[6][1] = -1;
+		projectionFrustumPlanes[6][2] = 0;
+		projectionFrustumPlanes[6][3] = 0;
 	}
 
 	@Override
@@ -1758,14 +1941,11 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			textureProvider != null &&
 			client.getGameState().getState() >= GameState.LOADING.getState()
 		) {
-			final int viewportHeight = client.getViewportHeight();
-			final int viewportWidth = client.getViewportWidth();
-
 			int renderWidthOff = viewportOffsetX;
 			int renderHeightOff = viewportOffsetY;
 			int renderCanvasHeight = canvasHeight;
-			int renderViewportHeight = viewportHeight;
 			int renderViewportWidth = viewportWidth;
+			int renderViewportHeight = viewportHeight;
 
 			if (client.isStretchedEnabled()) {
 				Dimension dim = client.getStretchedDimensions();
@@ -1795,94 +1975,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 			glBindVertexArray(vaoSceneHandle);
 
-			// Option A
-//			if (configSeasonalTheme == SeasonalTheme.AUTUMN) {
-//				environmentManager.currentFogColor = ColorUtils.rgb(243, 229, 185);
-//				environmentManager.currentDirectionalColor = ColorUtils.colorTemperatureToLinearRgb(3750);
-//				environmentManager.currentDirectionalStrength = 3.0f;
-//				environmentManager.currentAmbientColor = environmentManager.currentFogColor;
-//				environmentManager.currentAmbientStrength = .75f;
-//				environmentManager.currentWaterColor = environmentManager.currentFogColor;
-//			}
-
-			// Option B
-//			if (configSeasonalTheme == SeasonalTheme.AUTUMN) {
-//				environmentManager.currentFogColor = ColorUtils.colorTemperatureToLinearRgb(3000);
-//				environmentManager.currentDirectionalColor = ColorUtils.colorTemperatureToLinearRgb(3750);
-//				environmentManager.currentDirectionalStrength = 3.0f;
-//				environmentManager.currentAmbientColor = environmentManager.currentFogColor;
-//				environmentManager.currentAmbientStrength = .75f;
-//				environmentManager.currentWaterColor = environmentManager.currentFogColor;
-//			}
-
-			// Option C
-//			if (configSeasonalTheme == SeasonalTheme.AUTUMN) {
-//				environmentManager.currentFogColor = ColorUtils.rgb("#FFC085");
-//				environmentManager.currentWaterColor = environmentManager.currentFogColor;
-//			}
-
-			// Option D
-//			if (configSeasonalTheme == SeasonalTheme.AUTUMN) {
-//				environmentManager.currentFogColor = ColorUtils.rgb(185, 214, 255);
-//				environmentManager.currentDirectionalColor = ColorUtils.colorTemperatureToLinearRgb(3750);
-//				environmentManager.currentDirectionalStrength = 3.0f;
-//				environmentManager.currentAmbientColor = environmentManager.currentFogColor;
-//				environmentManager.currentAmbientStrength = .5f;
-//				environmentManager.currentWaterColor = environmentManager.currentFogColor;
-//			}
-
-			// Option E
-//			if (configSeasonalTheme == SeasonalTheme.AUTUMN) {
-//				environmentManager.currentFogDepth = 22 * 10;
-//				environmentManager.currentFogColor = ColorUtils.rgb(253, 220, 180);
-//				environmentManager.currentDirectionalColor = ColorUtils.colorTemperatureToLinearRgb(3500);
-//				environmentManager.currentDirectionalStrength = 1.5f;
-//				environmentManager.currentAmbientColor = environmentManager.currentFogColor;
-//				environmentManager.currentAmbientStrength = .5f;
-//				environmentManager.currentWaterColor = environmentManager.currentFogColor;
-//			}
-
-//			// Option F
-//			if (configSeasonalTheme == SeasonalTheme.AUTUMN) {
-//				environmentManager.currentFogColor = ColorUtils.colorTemperatureToLinearRgb(7300);
-//				environmentManager.currentDirectionalColor = ColorUtils.colorTemperatureToLinearRgb(3750);
-//				environmentManager.currentDirectionalStrength = 1.5f;
-//				environmentManager.currentAmbientColor = environmentManager.currentFogColor;
-//				environmentManager.currentAmbientStrength = .5f;
-//				environmentManager.currentWaterColor = environmentManager.currentFogColor;
-//			}
-
-			// Option G
-//			if (configSeasonalTheme == SeasonalTheme.AUTUMN) {
-//				environmentManager.currentFogColor = ColorUtils.rgb("#cfd8ec");
-//				environmentManager.currentDirectionalColor = ColorUtils.colorTemperatureToLinearRgb(3750);
-//				environmentManager.currentDirectionalStrength = 3.0f;
-//				environmentManager.currentAmbientColor = environmentManager.currentFogColor;
-//				environmentManager.currentAmbientStrength = .75f;
-//				environmentManager.currentWaterColor = environmentManager.currentFogColor;
-//			}
-
-			// Option H
-//			if (configSeasonalTheme == SeasonalTheme.AUTUMN) {
-//				environmentManager.currentFogDepth = 18 * 10;
-//				environmentManager.currentFogColor = ColorUtils.rgb("#fddcb4");
-//				environmentManager.currentDirectionalColor = ColorUtils.colorTemperatureToLinearRgb(3500);
-//				environmentManager.currentDirectionalStrength = 2.f;
-////				environmentManager.currentAmbientColor = ColorUtils.rgb("#ffffff");
-//				environmentManager.currentAmbientColor = environmentManager.currentDirectionalColor;
-//				environmentManager.currentAmbientStrength = environmentManager.currentDirectionalStrength * .2f;
-//				environmentManager.currentWaterColor = environmentManager.currentDirectionalColor;
-//			}
-
-//			environmentManager.currentLightYaw = 200;
-//			environmentManager.currentLightPitch = 220;
-
-			float lightPitch = (float) Math.toRadians(environmentManager.currentLightPitch);
-			float lightYaw = (float) Math.toRadians(environmentManager.currentLightYaw);
-			float[] lightViewMatrix = Mat4.rotateX(lightPitch);
-			Mat4.mul(lightViewMatrix, Mat4.rotateY(-lightYaw));
-
-			float[] lightProjectionMatrix = Mat4.identity();
 			if (configShadowsEnabled && fboShadowMap != 0 && environmentManager.currentDirectionalStrength > 0) {
 				frameTimer.begin(Timer.RENDER_SHADOWS);
 
@@ -1895,27 +1987,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 				glUseProgram(glShadowProgram);
 
-				final int camX = cameraFocalPoint[0];
-				final int camY = cameraFocalPoint[1];
-
-				final int drawDistanceSceneUnits = Math.min(config.shadowDistance().getValue(), getDrawDistance()) * LOCAL_TILE_SIZE / 2;
-				final int east = Math.min(camX + drawDistanceSceneUnits, LOCAL_TILE_SIZE * SCENE_SIZE);
-				final int west = Math.max(camX - drawDistanceSceneUnits, 0);
-				final int north = Math.min(camY + drawDistanceSceneUnits, LOCAL_TILE_SIZE * SCENE_SIZE);
-				final int south = Math.max(camY - drawDistanceSceneUnits, 0);
-				final int width = east - west;
-				final int height = north - south;
-				final int near = 10000;
-
-				final int maxDrawDistance = 90;
-				final float maxScale = 0.7f;
-				final float minScale = 0.4f;
-				final float scaleMultiplier = 1.0f - (getDrawDistance() / (maxDrawDistance * maxScale));
-				float scale = HDUtils.lerp(maxScale, minScale, scaleMultiplier);
-				Mat4.mul(lightProjectionMatrix, Mat4.scale(scale, scale, scale));
-				Mat4.mul(lightProjectionMatrix, Mat4.ortho(width, height, near));
-				Mat4.mul(lightProjectionMatrix, lightViewMatrix);
-				Mat4.mul(lightProjectionMatrix, Mat4.translate(-(width / 2f + west), 0, -(height / 2f + south)));
 				glUniformMatrix4fv(uniShadowLightProjectionMatrix, false, lightProjectionMatrix);
 
 				// bind uniforms
@@ -2067,9 +2138,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			glUniform1f(uniElapsedTime, elapsedTime);
 			glUniform3fv(uniCameraPos, cameraPosition);
 
-			// Extract the 3rd column from the light view matrix (the float array is column-major)
-			// This produces the light's forward direction vector in world space
-			glUniform3f(uniLightDir, lightViewMatrix[2], lightViewMatrix[6], lightViewMatrix[10]);
+			glUniform3fv(uniLightDir, lightDir);
 
 			// use a curve to calculate max bias value based on the density of the shadow map
 			float shadowPixelsPerTile = (float) shadowMapResolution / config.shadowDistance().getValue();
@@ -2078,19 +2147,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 			glUniform1i(uniShadowsEnabled, configShadowsEnabled ? 1 : 0);
 
-			// Calculate projection matrix
-			float[] projectionMatrix = Mat4.scale(client.getScale(), client.getScale(), 1);
-			Mat4.mul(projectionMatrix, Mat4.projection(viewportWidth, viewportHeight, NEAR_PLANE));
-			Mat4.mul(projectionMatrix, Mat4.rotateX(cameraOrientation[1] - (float) Math.PI));
-			Mat4.mul(projectionMatrix, Mat4.rotateY(cameraOrientation[0]));
-			Mat4.mul(projectionMatrix, Mat4.translate(
-				-cameraPosition[0],
-				-cameraPosition[1],
-				-cameraPosition[2]
-			));
+			// Bind projection matrices
 			glUniformMatrix4fv(uniProjectionMatrix, false, projectionMatrix);
-
-			// Bind directional light projection matrix
 			glUniformMatrix4fv(uniLightProjectionMatrix, false, lightProjectionMatrix);
 
 			// Bind uniforms
@@ -2578,7 +2636,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		int cameraX,
 		int cameraY,
 		int cameraZ,
-		int plane,
+		int tileZ,
 		int tileExX,
 		int tileExY
 	) {
@@ -2588,22 +2646,92 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		int[][][] tileHeights = scene.getTileHeights();
 		int x = ((tileExX - SCENE_OFFSET) << Perspective.LOCAL_COORD_BITS) + 64;
 		int z = ((tileExY - SCENE_OFFSET) << Perspective.LOCAL_COORD_BITS) + 64;
-		int y = Math.max(
-			Math.max(tileHeights[plane][tileExX][tileExY], tileHeights[plane][tileExX][tileExY + 1]),
-			Math.max(tileHeights[plane][tileExX + 1][tileExY], tileHeights[plane][tileExX + 1][tileExY + 1])
+		int maxY = Math.max(
+			Math.max(tileHeights[tileZ][tileExX][tileExY], tileHeights[tileZ][tileExX][tileExY + 1]),
+			Math.max(tileHeights[tileZ][tileExX + 1][tileExY], tileHeights[tileZ][tileExX + 1][tileExY + 1])
 		) + GROUND_MIN_Y;
 
-		if (sceneContext.scene == scene) {
-			int depthLevel = sceneContext.underwaterDepthLevels[plane][tileExX][tileExY];
-			if (depthLevel > 0)
-				y += ProceduralGenerator.DEPTH_LEVEL_SLOPE[depthLevel - 1] - GROUND_MIN_Y;
+		int depthLevel = sceneContext.underwaterDepthLevels[tileZ][tileExX][tileExY];
+		if (depthLevel > 0)
+			maxY += ProceduralGenerator.DEPTH_LEVEL_SLOPE[depthLevel - 1] - GROUND_MIN_Y;
+
+		int y =
+			(
+				tileHeights[tileZ][tileExX][tileExY] +
+				tileHeights[tileZ][tileExX][tileExY + 1] +
+				tileHeights[tileZ][tileExX + 1][tileExY] +
+				tileHeights[tileZ][tileExX + 1][tileExY + 1]
+			) / 4;
+
+		float[] pos = { x, y, z, 1 };
+		float[] proj = new float[4];
+//		final float EPS = 1.5f;
+//
+//		Mat4.projectVec(proj, projectionMatrix, pos);
+//		if (proj[0] > -EPS && proj[0] < EPS && proj[1] > -EPS && proj[1] < EPS && proj[2] < 1)
+//			return true;
+
+		final int tileRadius = (int) Math.sqrt(64 * 64 * 3);
+
+		// Don't bother checking the far plane
+		for (int i = 0; i < 6; i++) {
+			// ax + by + cz + d = 0
+			var plane = projectionFrustumPlanes[i];
+			if (HDUtils.dotVec3(plane, pos) + plane[3] < -111) {
+				// The tile itself lies outside the viewport, but its shadow might still be visible
+				if (configShadowsEnabled) {
+					// For each plane facing the light, project a shadow onto it, and check if that is visible
+					shadowProjectionChecks:
+					for (int j = 0; j < 7; j++) { // Include the ground plane
+						// We can reuse the variable, since we'll return after this anyway
+						plane = projectionFrustumPlanes[j];
+
+						// Skip plane if lightDir doesn't face it
+						float NdotV = HDUtils.dotVec3(plane, lightDir);
+						if (NdotV >= 0)
+							continue;
+
+						// solve for t to get the point where the center of the tile's shadow intersects with the frustum plane
+						// n = plane normal
+						// d = plane offset
+						// p = tile center point
+						// v = light direction
+						// dot(n, (p + v * t)) + d = 0
+						// dot(n, p) + dot(n, v) * t + d = 0
+						// t * dot(n, v) = -d - dot(n, p)
+						// t = -1 * (d + dot(n, p)) / dot(n, v)
+
+						float t = -(plane[3] + HDUtils.dotVec3(plane, pos)) / NdotV;
+						for (int k = 0; k < 3; k++)
+							proj[k] = pos[k] + lightDir[k] * t;
+
+						// Check if the projected shadow is within the rest of the frustum
+						for (int k = 0; k < 7; k++) {
+							// Minor optimization to skip checking guaranteed planes
+							if (j / 2 == k / 2)
+								continue;
+
+							var p = projectionFrustumPlanes[k];
+							if (HDUtils.dotVec3(p, proj) + (k == 5 ? 10000 : p[3]) < -111)
+								continue shadowProjectionChecks; // The projected shadow is outside the frustum
+						}
+
+						// The shadow projected onto the current plane is contained in the frustum
+						return true;
+					}
+				}
+
+				// Not visible
+				return false;
+			}
 		}
 
-		x -= cameraPosition[0];
-		y -= cameraPosition[1];
-		z -= cameraPosition[2];
+		if (true)
+			return true;
 
-		int radius = 96; // ~ 64 * sqrt(2)
+		x -= (int) cameraPosition[0];
+		maxY -= (int) cameraPosition[1];
+		z -= (int) cameraPosition[2];
 
 		int zoom = (configShadowsEnabled && configExpandShadowDraw) ? client.get3dZoom() / 2 : client.get3dZoom();
 		int Rasterizer3D_clipMidX2 = client.getRasterizer3D_clipMidX2();
@@ -2611,17 +2739,17 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		int Rasterizer3D_clipNegativeMidY = client.getRasterizer3D_clipNegativeMidY();
 
 		int var11 = yawCos * z - yawSin * x >> 16;
-		int var12 = pitchSin * y + pitchCos * var11 >> 16;
-		int var13 = pitchCos * radius >> 16;
+		int var12 = pitchSin * maxY + pitchCos * var11 >> 16;
+		int var13 = pitchCos * tileRadius >> 16;
 		int depth = var12 + var13;
 		if (depth > NEAR_PLANE) {
 			int rx = z * yawSin + yawCos * x >> 16;
-			int var16 = (rx - radius) * zoom;
-			int var17 = (rx + radius) * zoom;
+			int var16 = (rx - tileRadius) * zoom;
+			int var17 = (rx + tileRadius) * zoom;
 			// left && right
 			if (var16 < Rasterizer3D_clipMidX2 * depth && var17 > Rasterizer3D_clipNegativeMidX * depth) {
-				int ry = pitchCos * y - var11 * pitchSin >> 16;
-				int ybottom = pitchSin * radius >> 16;
+				int ry = pitchCos * maxY - var11 * pitchSin >> 16;
+				int ybottom = pitchSin * tileRadius >> 16;
 				int var20 = (ry + ybottom) * zoom;
 				// top
 				// we don't test the bottom so we don't have to find the height of all the models on the tile
@@ -2737,8 +2865,10 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		if (model != renderable)
 			renderable.setModelHeight(model.getModelHeight());
 
-		if (isOutsideViewport(model, pitchSin, pitchCos, yawSin, yawCos, x, y, z))
-			return;
+		model.calculateBoundsCylinder();
+		// TODO: Remove in favour of tileInFrustum
+//		if (isOutsideViewport(model, pitchSin, pitchCos, yawSin, yawCos, x, y, z))
+//			return;
 
 		client.checkClickbox(model, orientation, pitchSin, pitchCos, yawSin, yawCos, x, y, z, hash);
 
