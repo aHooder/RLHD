@@ -25,6 +25,7 @@ public enum Timer {
 	RENDER_SCENE(true),
 	RENDER_UI(true, "Render UI"),
 	SWAP_BUFFERS,
+	MINIMAP_DRAW
 	;
 
 	public final boolean isGpuTimer;

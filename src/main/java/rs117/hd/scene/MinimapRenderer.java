@@ -8,6 +8,8 @@ import rs117.hd.config.MinimapStyle;
 import rs117.hd.data.WaterType;
 import rs117.hd.data.materials.Overlay;
 import rs117.hd.data.materials.Underlay;
+import rs117.hd.overlays.FrameTimer;
+import rs117.hd.overlays.Timer;
 import rs117.hd.utils.ColorUtils;
 import rs117.hd.utils.HDUtils;
 
@@ -43,6 +45,9 @@ public class MinimapRenderer {
 
 	private final int[] tmpScreenX = new int[6];
 	private final int[] tmpScreenY = new int[6];
+
+	@Inject
+	private FrameTimer frameTimer;
 
 	public void prepareScene(SceneContext sceneContext) {
 		final Scene scene = sceneContext.scene;
@@ -86,6 +91,20 @@ public class MinimapRenderer {
 							z * EXTENDED_SCENE_SIZE * EXTENDED_SCENE_SIZE * 4 +
 							x * EXTENDED_SCENE_SIZE * 4 +
 							y * 4;
+
+						if (!classicLighting) {
+							swColor = environmentalLighting(swColor);
+							seColor = environmentalLighting(seColor);
+							nwColor = environmentalLighting(nwColor);
+							neColor = environmentalLighting(neColor);
+
+							// Ensure hue and saturation are identical
+							seColor = swColor & 0xFF80 | seColor & 0x7F;
+							nwColor = swColor & 0xFF80 | nwColor & 0x7F;
+							neColor = swColor & 0xFF80 | neColor & 0x7F;
+						}
+
+
 						sceneContext.minimapTilePaintColors[offset] = swColor;
 						sceneContext.minimapTilePaintColors[offset + 1] = seColor;
 						sceneContext.minimapTilePaintColors[offset + 2] = nwColor;
@@ -130,6 +149,18 @@ public class MinimapRenderer {
 								x * EXTENDED_SCENE_SIZE * 6 * 3 +
 								y * 6 * 3 +
 								face * 3;
+
+
+							if (!classicLighting) {
+								colorA = environmentalLighting(colorA);
+								colorB = environmentalLighting(colorB);
+								colorC = environmentalLighting(colorC);
+
+								// Ensure hue and saturation are identical
+								colorB = colorA & 0xFF80 | colorB & 0x7F;
+								colorC = colorA & 0xFF80 | colorC & 0x7F;
+							}
+
 							sceneContext.minimapTileModelColors[offset] = colorA;
 							sceneContext.minimapTileModelColors[offset + 1] = colorB;
 							sceneContext.minimapTileModelColors[offset + 2] = colorC;
@@ -159,11 +190,13 @@ public class MinimapRenderer {
 	}
 
 	public void drawTile(Tile tile, int tx, int ty, int px0, int py0, int px1, int py1) {
+		frameTimer.begin(Timer.MINIMAP_DRAW);
 		if (config.minimapType() == MinimapStyle.DEFAULT || config.minimapType() == MinimapStyle.HD2008) {
-			drawMinimapShaded(tile, tx, ty, px0, py0, px1, py1, config.minimapType() == MinimapStyle.HD2008);
+			drawMinimapShaded(tile, tx, ty, px0, py0, px1, py1);
 		} else {
 			drawMinimapOSRS(tile, tx, ty, px0, py0, px1, py1);
 		}
+		frameTimer.end(Timer.MINIMAP_DRAW);
 	}
 
 	private int environmentalLighting(int packedHsl) {
@@ -230,7 +263,7 @@ public class MinimapRenderer {
 		}
 	}
 
-	private void drawMinimapShaded(Tile tile, int tx, int ty, int px0, int py0, int px1, int py1, boolean classicLighting) {
+	private void drawMinimapShaded(Tile tile, int tx, int ty, int px0, int py0, int px1, int py1) {
 		var sceneContext = plugin.getSceneContext();
 		if (sceneContext == null)
 			return;
@@ -249,18 +282,6 @@ public class MinimapRenderer {
 			int seColor = sceneContext.minimapTilePaintColors[offset + 1];
 			int nwColor = sceneContext.minimapTilePaintColors[offset + 2];
 			int neColor = sceneContext.minimapTilePaintColors[offset + 3];
-
-			if (!classicLighting) {
-				swColor = environmentalLighting(swColor);
-				seColor = environmentalLighting(seColor);
-				nwColor = environmentalLighting(nwColor);
-				neColor = environmentalLighting(neColor);
-
-				// Ensure hue and saturation are identical
-				seColor = swColor & 0xFF80 | seColor & 0x7F;
-				nwColor = swColor & 0xFF80 | nwColor & 0x7F;
-				neColor = swColor & 0xFF80 | neColor & 0x7F;
-			}
 
 			int tex = paint.getTexture();
 			if (tex == -1) {
@@ -311,16 +332,6 @@ public class MinimapRenderer {
 				int c1 = sceneContext.minimapTileModelColors[offset];
 				int c2 = sceneContext.minimapTileModelColors[offset + 1];
 				int c3 = sceneContext.minimapTileModelColors[offset + 2];
-
-				if (!classicLighting) {
-					c1 = environmentalLighting(c1);
-					c2 = environmentalLighting(c2);
-					c3 = environmentalLighting(c3);
-
-					// Ensure hue and saturation are identical
-					c2 = c1 & 0xFF80 | c2 & 0x7F;
-					c3 = c1 & 0xFF80 | c3 & 0x7F;
-				}
 
 				if (textures != null && textures[face] != -1) {
 					int hsl = client.getTextureProvider().getDefaultColor(textures[face]);
