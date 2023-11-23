@@ -24,6 +24,7 @@
  */
 package rs117.hd.utils;
 
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Random;
 import javax.inject.Singleton;
@@ -52,7 +53,6 @@ public class HDUtils {
 
 	// The epsilon for floating point values used by jogl
 	public static final float EPSILON = 1.1920929E-7f;
-
 	public static final float PI = (float) Math.PI;
 	public static final float TWO_PI = PI * 2;
 	public static final float HALF_PI = PI / 2;
@@ -76,11 +76,32 @@ public class HDUtils {
 		return out;
 	}
 
+	public static float dot(float[] a, float[] b) {
+		assert a.length <= b.length : "Only the second vector may have more elements";
+		float v = 0;
+		for (int i = 0; i < a.length; i++)
+			v += a[i] * b[i];
+		return v;
+	}
+
+	public static float dotVec3(float[] a, float[] b) {
+		return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+	}
+
 	public static float[] cross(float[] out, float[] a, float[] b) {
 		out[0] = a[1] * b[2] - a[2] * b[1];
 		out[1] = a[2] * b[0] - a[0] * b[2];
 		out[2] = a[0] * b[1] - a[1] * b[0];
 		return out;
+	}
+
+	public static void normalize(float[] vec) {
+		float mag = 0;
+		for (var v : vec)
+			mag += v * v;
+		mag = (float) (1 / Math.sqrt(mag));
+		for (int i = 0; i < vec.length; i++)
+			vec[i] *= mag;
 	}
 
 	public static float[] abs(float[] out, float[] v) {
@@ -469,5 +490,115 @@ public class HDUtils {
 		}
 
 		return null;
+	}
+
+	public static float[] intersectPlanes(float[] plane1, float[] plane2, float[] plane3) {
+		// solve the system using Cramer's rule by computing Dx/Dy/Dz and dividing by the determinant
+
+		// [ a_1 b_1 c_1 | d_1 ]   [ x ]   [ a_1*x + b_1*y + c_1*z = d_1 ]
+		// [ a_2 b_2 c_2 | d_2 ] * [ y ] = [ a_2*x + b_2*y + c_2*z = d_2 ]
+		// [ a_3 b_3 c_3 | d_2 ]   [ z ]   [ a_3*x + b_3*y + c_3*z = d_2 ]
+
+		// extract column vectors of the linear system of equations
+		float[][] columnVectors = new float[4][3];
+		for (int i = 0; i < 4; i++) {
+			columnVectors[i][0] = plane1[i];
+			columnVectors[i][1] = plane2[i];
+			columnVectors[i][2] = plane3[i];
+		}
+
+		// compute determinant of the coefficient matrix
+		float[] v = new float[3];
+		// [ b_2*c_3 - b_3*c_2 ]
+		// [ b_3*c_1 - b_1*c_3 ]
+		// [ b_1*c_2 - b_2*c_1 ]
+		cross(v, columnVectors[1], columnVectors[2]);
+		// [ a_1 * (b_2*c_3 - b_3*c_2) ]
+		// [ a_2 * (b_3*c_1 - b_1*c_3) ]
+		// [ a_3 * (b_1*c_2 - b_2*c_1) ]
+		float determinant = dot(columnVectors[0], v);
+		if (Math.abs(determinant) < EPSILON) {
+			// none or more than one solution to the linear system
+			return null;
+		}
+
+		float[] point = new float[3];
+
+		float determinantReciprocal = 1 / determinant;
+		// [ d_1 * (b_2*c_3 - b_3*c_2) ]
+		// [ d_2 * (b_3*c_1 - b_1*c_3) ]
+		// [ d_3 * (b_1*c_2 - b_2*c_1) ]
+		point[0] = dot(columnVectors[3], v) * determinantReciprocal;
+
+		// [ a_2*d_3 - a_3*d_2 ]
+		// [ a_3*d_1 - a_1*d_3 ]
+		// [ a_1*d_2 - a_2*d_1 ]
+		cross(v, columnVectors[0], columnVectors[3]);
+		// [ c_1 * (a_2*d_3 - a_3*d_2) ]
+		// [ c_2 * (a_3*d_1 - a_1*d_3) ]
+		// [ c_3 * (a_1*d_2 - a_2*d_1) ]
+		point[1] = dot(columnVectors[2], v) * determinantReciprocal;
+		// [ b_1 * (a_2*d_3 - a_3*d_2) ]
+		// [ b_2 * (a_3*d_1 - a_1*d_3) ]
+		// [ b_3 * (a_1*d_2 - a_2*d_1) ]
+		point[2] = -dot(columnVectors[1], v) * determinantReciprocal;
+
+		return point;
+
+		// [ a b c ] is the X basis vector in world space
+		// [ e f g ] is the Y basis vector in world space
+		// [ i j k ] is the Z basis vector in world space
+		// [ d h l ] is the translation vector from the new origin to the old
+
+		// for our purposes, m + n + o + p is just the perspective divide,
+		// typically either 1 or some multiple of Z
+	}
+
+	public static int[] convexHull2D(float[][] points) {
+		// https://en.wikipedia.org/wiki/Gift_wrapping_algorithm
+
+		int numValidPoints = 0;
+		int leftMostIndex = -1;
+		float leftMostX = Float.POSITIVE_INFINITY;
+		for (int i = 0; i < points.length; i++) {
+			if (points[i] == null)
+				continue;
+
+			numValidPoints++;
+			if (points[i][0] < leftMostX) {
+				leftMostX = points[i][0];
+				leftMostIndex = i;
+			}
+		}
+
+		if (leftMostIndex == -1 || numValidPoints < 3)
+			return null;
+
+		int[] hullIndices = new int[numValidPoints];
+		int pointOnHull = leftMostIndex;
+		int endpoint = leftMostIndex;
+		int i = 0;
+		do {
+			hullIndices[i] = pointOnHull;
+			float ABx = points[endpoint][0] - points[pointOnHull][0];
+			float ABy = points[endpoint][1] - points[pointOnHull][1];
+			for (int j = 0; j < points.length; j++) {
+				if (points[j] == null)
+					continue;
+
+				float AJx = points[j][0] - points[pointOnHull][0];
+				float AJy = points[j][1] - points[pointOnHull][1];
+				float det = ABx * AJy - ABy * AJx;
+				if (det > 0 || endpoint == pointOnHull) {
+					endpoint = j;
+					ABx = points[endpoint][0] - points[pointOnHull][0];
+					ABy = points[endpoint][1] - points[pointOnHull][1];
+				}
+			}
+			i++;
+			pointOnHull = endpoint;
+		} while (endpoint != leftMostIndex);
+
+		return Arrays.copyOf(hullIndices, i);
 	}
 }

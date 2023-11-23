@@ -46,6 +46,8 @@ import rs117.hd.scene.model_overrides.ObjectType;
 import rs117.hd.utils.HDUtils;
 
 import static net.runelite.api.Perspective.*;
+import static rs117.hd.HdPlugin.GROUND_LOWEST_Y;
+import static rs117.hd.HdPlugin.MAX_MODEL_HEIGHT;
 import static rs117.hd.HdPlugin.NORMAL_SIZE;
 import static rs117.hd.HdPlugin.SCALAR_BYTES;
 import static rs117.hd.HdPlugin.UV_SIZE;
@@ -83,12 +85,52 @@ class SceneUploader {
 	public void upload(SceneContext sceneContext) {
 		Stopwatch stopwatch = Stopwatch.createStarted();
 
+		var tiles = sceneContext.scene.getExtendedTiles();
+		var tileHeights = sceneContext.scene.getTileHeights();
 		for (int z = 0; z < Constants.MAX_Z; ++z) {
 			for (int x = 0; x < Constants.EXTENDED_SCENE_SIZE; ++x) {
 				for (int y = 0; y < Constants.EXTENDED_SCENE_SIZE; ++y) {
-					Tile tile = sceneContext.scene.getExtendedTiles()[z][x][y];
-					if (tile != null)
-						upload(sceneContext, tile, x, y);
+					Tile tile = tiles[z][x][y];
+					if (tile == null)
+						continue;
+
+					upload(sceneContext, tile, x, y, z);
+
+					int lowestHeight = Math.max(
+						Math.max(tileHeights[z][x][y], tileHeights[z][x][y + 1]),
+						Math.max(tileHeights[z][x + 1][y], tileHeights[z][x + 1][y + 1])
+					);
+					int extraDepth = GROUND_LOWEST_Y;
+					int depthLevel = sceneContext.underwaterDepthLevels[z][x][y];
+					if (depthLevel > 0) {
+						int depth = ProceduralGenerator.DEPTH_LEVEL_SLOPE[depthLevel - 1];
+						extraDepth = Math.max(depth, extraDepth);
+					}
+					lowestHeight += extraDepth;
+
+					int tallestHeight = Math.min(
+						Math.min(tileHeights[z][x][y], tileHeights[z][x][y + 1]),
+						Math.min(tileHeights[z][x + 1][y], tileHeights[z][x + 1][y + 1])
+					) + MAX_MODEL_HEIGHT;
+
+					int averageHeight =
+						(
+							tileHeights[z][x][y] +
+							tileHeights[z][x][y + 1] +
+							tileHeights[z][x + 1][y] +
+							tileHeights[z][x + 1][y + 1]
+						) / 4;
+
+					sceneContext.minMaxAvgTileHeights[z][x][y][0] = lowestHeight;
+					sceneContext.minMaxAvgTileHeights[z][x][y][1] = tallestHeight;
+					sceneContext.minMaxAvgTileHeights[z][x][y][2] = averageHeight;
+
+					sceneContext.bounds[0] = Math.min(sceneContext.bounds[0], (x - SCENE_OFFSET) * LOCAL_TILE_SIZE);
+					sceneContext.bounds[1] = Math.max(sceneContext.bounds[1], lowestHeight);
+					sceneContext.bounds[2] = Math.min(sceneContext.bounds[2], (y - SCENE_OFFSET) * LOCAL_TILE_SIZE);
+					sceneContext.bounds[3] = Math.max(sceneContext.bounds[3], (x - SCENE_OFFSET + 1) * LOCAL_TILE_SIZE);
+					sceneContext.bounds[4] = Math.min(sceneContext.bounds[4], tallestHeight);
+					sceneContext.bounds[5] = Math.max(sceneContext.bounds[5], (y - SCENE_OFFSET + 1) * LOCAL_TILE_SIZE);
 				}
 			}
 		}

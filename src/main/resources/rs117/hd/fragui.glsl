@@ -65,16 +65,6 @@ vec4 alphaBlend(vec4 src, vec4 dst) {
 }
 
 void main() {
-    #if SHADOW_MAP_OVERLAY
-    {
-        vec2 uv = (gl_FragCoord.xy - shadowMapOverlayDimensions.xy) / shadowMapOverlayDimensions.zw;
-        if (0 <= uv.x && uv.x <= 1 && 0 <= uv.y && uv.y <= 1) {
-            FragColor = texture(shadowMap, uv);
-            return;
-        }
-    }
-    #endif
-
     #if UI_SCALING_MODE == SAMPLING_MITCHELL || UI_SCALING_MODE == SAMPLING_CATROM
     vec4 c = textureCubic(uiTexture, TexCoord);
     #elif UI_SCALING_MODE == SAMPLING_XBR
@@ -85,6 +75,14 @@ void main() {
 
     c = alphaBlend(c, alphaOverlay);
     c.rgb = colorBlindnessCompensation(c.rgb);
+
+    #if SHADOW_MAP_OVERLAY
+    {
+        vec2 uv = (gl_FragCoord.xy - shadowMapOverlayDimensions.xy) / shadowMapOverlayDimensions.zw;
+        if (0 <= uv.x && uv.x <= 1 && 0 <= uv.y && uv.y <= 1)
+            c = alphaBlend(c, texture(shadowMap, uv));
+    }
+    #endif
 
     FragColor = c;
 }

@@ -27,9 +27,9 @@ package rs117.hd.utils;
 
 public class Mat4
 {
-	private Mat4()
-	{
-	}
+	/**
+	 * Utility class to work with column-major 4x4 matrices.
+	 */
 
 	public static float[] identity()
 	{
@@ -92,30 +92,97 @@ public class Mat4
 			};
 	}
 
-	public static float[] projection(float w, float h, float n)
+	public static float determinant(float[] m) {
+		return
+			m[0] * (
+				m[5] * (m[10] * m[15] - m[11] * m[14])
+				- m[6] * (m[9] * m[15] - m[11] * m[13])
+				+ m[7] * (m[9] * m[14] - m[10] * m[13])
+			)
+			- m[1] * (
+				m[4] * (m[10] * m[15] - m[11] * m[14])
+				- m[6] * (m[8] * m[15] - m[11] * m[12])
+				+ m[7] * (m[8] * m[14] - m[10] * m[12])
+			)
+			+ m[2] * (
+				m[4] * (m[9] * m[15] - m[11] * m[13])
+				- m[5] * (m[8] * m[15] - m[11] * m[12])
+				+ m[7] * (m[8] * m[13] - m[9] * m[12])
+			)
+			- m[3] * (
+				m[4] * (m[9] * m[14] - m[10] * m[13])
+				- m[5] * (m[8] * m[14] - m[10] * m[12])
+				+ m[6] * (m[8] * m[13] - m[9] * m[12])
+			);
+	}
+
+	/**
+	 * Create a perspective projection matrix matching vanilla OSRS projection, with an infinite far plane.
+	 *
+	 * @param w viewport width
+	 * @param h viewport height
+	 * @param n near plane
+	 * @return 4x4 column-major matrix
+	 */
+	public static float[] osrsPerspective(float w, float h, float n) {
+		w = 2 / w;
+		h = 2 / h;
+		float a = -1;
+		float b = -2 * n;
+		float c = -1; // perspective divide by -z
+		return new float[]
+			{
+				w, 0, 0, 0,
+				0, h, 0, 0,
+				0, 0, a, c,
+				0, 0, b, 0
+			};
+	}
+
+	/**
+	 * Create a perspective projection matrix matching vanilla OSRS projection, with a finite far plane.
+	 *
+	 * @param w viewport width
+	 * @param h viewport height
+	 * @param n near plane
+	 * @param f far plane
+	 * @return 4x4 column-major matrix
+	 */
+	public static float[] osrsPerspective(float w, float h, float n, float f) {
+		// Same projection as vanilla, except with slightly more depth precision, and a usable far plane for clipping calculations
+		w = 2 / w;
+		h = 2 / h;
+		float a = (1 + n / f) / (n / f - 1);
+		float b = a * n - n;
+		float c = -1; // perspective divide by -z
+		return new float[]
+			{
+				w, 0, 0, 0,
+				0, h, 0, 0,
+				0, 0, a, c,
+				0, 0, b, 0
+			};
+	}
+
+	public static float[] ortho(float w, float h, float n, float f)
 	{
 		return new float[]
 			{
 				2 / w, 0, 0, 0,
 				0, 2 / h, 0, 0,
-				0, 0, -1, -1,
-				0, 0, -2 * n, 0
+				0, 0, -2 / (f - n), 0,
+				0, 0, -(f + n) / (f - n), 1
 			};
 	}
 
-	public static float[] ortho(float w, float h, float n)
-	{
-		return new float[]
-			{
-				2 / w, 0, 0, 0,
-				0, 2 / h, 0, 0,
-				0, 0, -2 / n, 0,
-				0, 0, 0, 1
-			};
-	}
-
+	/**
+	 * Multiplies matrices a and b, storing the result in matrix a.
+	 *
+	 * @param a column-major 4x4 matrix
+	 * @param b column-major 4x4 matrix
+	 */
 	@SuppressWarnings("PointlessArithmeticExpression")
-	public static void mul(final float[] a, final float[] b)
+	public static void mul(float[] a, float[] b)
 	{
 		final float b00 = b[0 + 0 * 4];
 		final float b10 = b[1 + 0 * 4];
@@ -169,5 +236,107 @@ public class Mat4
 		a[3 + 1 * 4] = ai0 * b01 + ai1 * b11 + ai2 * b21 + ai3 * b31;
 		a[3 + 2 * 4] = ai0 * b02 + ai1 * b12 + ai2 * b22 + ai3 * b32;
 		a[3 + 3 * 4] = ai0 * b03 + ai1 * b13 + ai2 * b23 + ai3 * b33;
+	}
+
+	/**
+	 * Multiplies a 4x4 matrix with a 4x1 vector, storing the result in the output vector.
+	 *
+	 * @param out  where the result should be stored
+	 * @param mat4 4x4 column-major matrix
+	 * @param vec4 4x1 vector
+	 */
+	@SuppressWarnings("PointlessArithmeticExpression")
+	public static void mulVec(float[] out, float[] mat4, float[] vec4) {
+		float a =
+			mat4[0 * 4 + 0] * vec4[0] +
+			mat4[1 * 4 + 0] * vec4[1] +
+			mat4[2 * 4 + 0] * vec4[2] +
+			mat4[3 * 4 + 0] * vec4[3];
+		float b =
+			mat4[0 * 4 + 1] * vec4[0] +
+			mat4[1 * 4 + 1] * vec4[1] +
+			mat4[2 * 4 + 1] * vec4[2] +
+			mat4[3 * 4 + 1] * vec4[3];
+		float c =
+			mat4[0 * 4 + 2] * vec4[0] +
+			mat4[1 * 4 + 2] * vec4[1] +
+			mat4[2 * 4 + 2] * vec4[2] +
+			mat4[3 * 4 + 2] * vec4[3];
+		float d =
+			mat4[0 * 4 + 3] * vec4[0] +
+			mat4[1 * 4 + 3] * vec4[1] +
+			mat4[2 * 4 + 3] * vec4[2] +
+			mat4[3 * 4 + 3] * vec4[3];
+		out[0] = a;
+		out[1] = b;
+		out[2] = c;
+		out[3] = d;
+	}
+
+	/**
+	 * Transforms the vector by the matrix, and does a perspective divide.
+	 *
+	 * @param out  where the result should be stored
+	 * @param mat4 4x4 column-major matrix
+	 * @param vec4 4x1 vector
+	 */
+	public static void projectVec(float[] out, float[] mat4, float[] vec4) {
+		mulVec(out, mat4, vec4);
+		float reciprocal = 1 / out[3];
+		for (int i = 0; i < 3; i++)
+			out[i] *= reciprocal;
+		out[3] = 1;
+	}
+
+	/**
+	 * Extracts 6 normalized clipping planes from the matrix, in the form "ax + by + cz = d",
+	 * where the normal is pointing inward. Order: left, right, bottom, top, near, far.
+	 *
+	 * @see <a href="https://www8.cs.umu.se/kurser/5DV051/HT12/lab/plane_extraction.pdf">Gribb & Hartmann</a>
+	 *
+	 * @param out  6x4 arrays where the result should be stored
+	 * @param mat4 4x4 column-major matrix
+	 */
+	@SuppressWarnings("PointlessArithmeticExpression")
+	public static void extractFrustumPlanes(float[][] out, float[] mat4) {
+		for (int i = 0; i < 4; i++) {
+			float basisVector, translation = mat4[4 * i + 3];
+
+			basisVector = mat4[4 * i + 0]; // row 1
+			out[0][i] = translation + basisVector; // left plane
+			out[1][i] = translation - basisVector; // right plane
+
+			basisVector = mat4[4 * i + 1]; // row 2
+			out[2][i] = translation + basisVector; // bottom plane
+			out[3][i] = translation - basisVector; // top plane
+
+			basisVector = mat4[4 * i + 2]; // row 3
+			out[4][i] = translation + basisVector; // near plane
+			out[5][i] = translation - basisVector; // far plane
+		}
+
+		for (int i = 0; i < 6; i++) {
+			// Change form from "ax + by + cz + d = 0" to "ax + by + cz = d" by negating d
+			out[i][3] *= -1;
+
+			// Normalize plane vectors
+			float x, mag = 0;
+			for (int j = 0; j < 3; j++) {
+				x = out[i][j];
+				mag += x * x;
+			}
+			mag = (float) (1 / Math.sqrt(mag));
+			for (int j = 0; j < 4; j++)
+				out[i][j] *= mag;
+		}
+	}
+
+	public static void extractRow(float[] out, float[] mat4, int rowIndex) {
+		System.arraycopy(mat4, 4 * rowIndex, out, 0, out.length);
+	}
+
+	public static void extractColumn(float[] out, float[] mat4, int columnIndex) {
+		for (int i = 0; i < out.length; i++)
+			out[i] = mat4[4 * i + columnIndex];
 	}
 }

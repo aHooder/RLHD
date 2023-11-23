@@ -94,6 +94,25 @@ public class AABB {
 		maxZ = Math.max(z1, z2);
 	}
 
+	public static AABB fromArray(int[] ints) {
+		switch (ints.length) {
+			case 1:
+				return new AABB(ints[0]);
+			case 2:
+				return new AABB(ints[0], ints[1]);
+			case 3:
+				return new AABB(ints[0], ints[1], ints[2]);
+			case 4:
+				return new AABB(ints[0], ints[1], ints[2], ints[3]);
+			case 5:
+				return new AABB(ints[0], ints[1], ints[2], ints[3], ints[4]);
+			case 6:
+				return new AABB(ints[0], ints[1], ints[2], ints[3], ints[4], ints[5]);
+		}
+
+		throw new IllegalArgumentException("No matching constructor for " + ints.length + " ints");
+	}
+
 	public static AABB[] regions(int... regionIds) {
 		return Arrays.stream(regionIds)
 			.mapToObj(AABB::new)
@@ -239,30 +258,10 @@ public class AABB {
 					}
 				}
 				in.endArray();
-
-				switch (i) {
-					case 1:
-						list.add(new AABB(ints[0]));
-						break;
-					case 2:
-						list.add(new AABB(ints[0], ints[1]));
-						break;
-					case 3:
-						list.add(new AABB(ints[0], ints[1], ints[2]));
-						break;
-					case 4:
-						list.add(new AABB(ints[0], ints[1], ints[2], ints[3]));
-						break;
-					case 5:
-						list.add(new AABB(ints[0], ints[2], ints[1], ints[3], ints[4]));
-						break;
-					case 6:
-						list.add(new AABB(ints[0], ints[1], ints[2], ints[3], ints[4], ints[5]));
-						break;
-				}
+				list.add(fromArray(ints));
 			}
 			in.endArray();
-			return list.toArray(new AABB[0]);
+			return list.toArray(AABB[]::new);
 		}
 
 		@Override

@@ -19,6 +19,7 @@ import rs117.hd.utils.HDUtils;
 import rs117.hd.utils.buffer.GpuFloatBuffer;
 import rs117.hd.utils.buffer.GpuIntBuffer;
 
+import static net.runelite.api.Constants.*;
 import static net.runelite.api.Perspective.*;
 import static rs117.hd.HdPlugin.UV_SIZE;
 import static rs117.hd.HdPlugin.VERTEX_SIZE;
@@ -65,6 +66,12 @@ public class SceneContext {
 	public final float[] modelFaceNormals = new float[12];
 	public final int[] modelPusherResults = new int[2];
 
+	public int[][][][] minMaxAvgTileHeights;
+	public int[] bounds = {
+		Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MAX_VALUE,
+		Integer.MIN_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE
+	};
+
 	public SceneContext(Scene scene, int expandedMapLoadingChunks, boolean reuseBuffers, @Nullable SceneContext previous) {
 		this.scene = scene;
 		this.regionIds = HDUtils.getSceneRegionIds(scene);
@@ -75,21 +82,29 @@ public class SceneContext {
 			stagingBufferVertices = new GpuIntBuffer();
 			stagingBufferUvs = new GpuFloatBuffer();
 			stagingBufferNormals = new GpuFloatBuffer();
-		} else if (reuseBuffers) {
-			// Avoid reallocating buffers whenever possible
-			staticUnorderedModelBuffer = previous.staticUnorderedModelBuffer.clear();
-			stagingBufferVertices = previous.stagingBufferVertices.clear();
-			stagingBufferUvs = previous.stagingBufferUvs.clear();
-			stagingBufferNormals = previous.stagingBufferNormals.clear();
-			previous.staticUnorderedModelBuffer = null;
-			previous.stagingBufferVertices = null;
-			previous.stagingBufferUvs = null;
-			previous.stagingBufferNormals = null;
 		} else {
-			staticUnorderedModelBuffer = new GpuIntBuffer(previous.staticUnorderedModelBuffer.capacity());
-			stagingBufferVertices = new GpuIntBuffer(previous.stagingBufferVertices.capacity());
-			stagingBufferUvs = new GpuFloatBuffer(previous.stagingBufferUvs.capacity());
-			stagingBufferNormals = new GpuFloatBuffer(previous.stagingBufferNormals.capacity());
+			if (reuseBuffers) {
+				// Avoid reallocating buffers whenever possible
+				staticUnorderedModelBuffer = previous.staticUnorderedModelBuffer.clear();
+				stagingBufferVertices = previous.stagingBufferVertices.clear();
+				stagingBufferUvs = previous.stagingBufferUvs.clear();
+				stagingBufferNormals = previous.stagingBufferNormals.clear();
+				previous.staticUnorderedModelBuffer = null;
+				previous.stagingBufferVertices = null;
+				previous.stagingBufferUvs = null;
+				previous.stagingBufferNormals = null;
+			} else {
+				staticUnorderedModelBuffer = new GpuIntBuffer(previous.staticUnorderedModelBuffer.capacity());
+				stagingBufferVertices = new GpuIntBuffer(previous.stagingBufferVertices.capacity());
+				stagingBufferUvs = new GpuFloatBuffer(previous.stagingBufferUvs.capacity());
+				stagingBufferNormals = new GpuFloatBuffer(previous.stagingBufferNormals.capacity());
+			}
+		}
+
+		if (previous != null && reuseBuffers) {
+			minMaxAvgTileHeights = previous.minMaxAvgTileHeights;
+		} else {
+			minMaxAvgTileHeights = new int[MAX_Z][EXTENDED_SCENE_SIZE][EXTENDED_SCENE_SIZE][3];
 		}
 	}
 

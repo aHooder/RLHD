@@ -53,7 +53,6 @@ import rs117.hd.scene.lights.Alignment;
 import rs117.hd.scene.lights.Light;
 import rs117.hd.scene.lights.LightDefinition;
 import rs117.hd.scene.lights.LightType;
-import rs117.hd.utils.HDUtils;
 import rs117.hd.utils.ModelHash;
 import rs117.hd.utils.Props;
 import rs117.hd.utils.ResourcePath;
@@ -64,6 +63,9 @@ import static java.lang.Math.pow;
 import static net.runelite.api.Constants.*;
 import static net.runelite.api.Perspective.*;
 import static rs117.hd.utils.HDUtils.TWO_PI;
+import static rs117.hd.utils.HDUtils.clamp;
+import static rs117.hd.utils.HDUtils.convertWallObjectOrientation;
+import static rs117.hd.utils.HDUtils.lerp;
 import static rs117.hd.utils.HDUtils.fract;
 import static rs117.hd.utils.HDUtils.mod;
 import static rs117.hd.utils.ResourcePath.path;
@@ -283,17 +285,17 @@ public class LightManager {
 					float lerpY = (light.y % LOCAL_TILE_SIZE) / (float) LOCAL_TILE_SIZE;
 					int baseTileX = (int) Math.floor(light.x / (float) LOCAL_TILE_SIZE) + SceneUploader.SCENE_OFFSET;
 					int baseTileY = (int) Math.floor(light.y / (float) LOCAL_TILE_SIZE) + SceneUploader.SCENE_OFFSET;
-					float heightNorth = HDUtils.lerp(
+					float heightNorth = lerp(
 						tileHeights[plane][baseTileX][baseTileY + 1],
 						tileHeights[plane][baseTileX + 1][baseTileY + 1],
 						lerpX
 					);
-					float heightSouth = HDUtils.lerp(
+					float heightSouth = lerp(
 						tileHeights[plane][baseTileX][baseTileY],
 						tileHeights[plane][baseTileX + 1][baseTileY],
 						lerpX
 					);
-					float tileHeight = HDUtils.lerp(heightSouth, heightNorth, lerpY);
+					float tileHeight = lerp(heightSouth, heightNorth, lerpY);
 					light.z = (int) tileHeight - 1 - light.def.height;
 
 					light.visible = npcLightVisible(light.npc);
@@ -455,7 +457,7 @@ public class LightManager {
 
 					WallObject wallObject = tile.getWallObject();
 					if (wallObject != null && wallObject.getRenderable1() != null) {
-						int orientation = HDUtils.convertWallObjectOrientation(wallObject.getOrientationA());
+						int orientation = convertWallObjectOrientation(wallObject.getOrientationA());
 						addObjectLight(sceneContext, wallObject, tile.getRenderLevel(), 1, 1, orientation);
 					}
 
@@ -681,23 +683,23 @@ public class LightManager {
 			int tileMinY = (int) Math.floor(tileY);
 			int tileMaxX = tileMinX + 1;
 			int tileMaxY = tileMinY + 1;
-			tileMinX = HDUtils.clamp(tileMinX, 0, EXTENDED_SCENE_SIZE - 1);
-			tileMinY = HDUtils.clamp(tileMinY, 0, EXTENDED_SCENE_SIZE - 1);
-			tileMaxX = HDUtils.clamp(tileMaxX, 0, EXTENDED_SCENE_SIZE - 1);
-			tileMaxY = HDUtils.clamp(tileMaxY, 0, EXTENDED_SCENE_SIZE - 1);
+			tileMinX = clamp(tileMinX, 0, EXTENDED_SCENE_SIZE - 1);
+			tileMinY = clamp(tileMinY, 0, EXTENDED_SCENE_SIZE - 1);
+			tileMaxX = clamp(tileMaxX, 0, EXTENDED_SCENE_SIZE - 1);
+			tileMaxY = clamp(tileMaxY, 0, EXTENDED_SCENE_SIZE - 1);
 
 			int[][][] tileHeights = sceneContext.scene.getTileHeights();
-			float heightNorth = HDUtils.lerp(
+			float heightNorth = lerp(
 				tileHeights[plane][tileMinX][tileMaxY],
 				tileHeights[plane][tileMaxX][tileMaxY],
 				lerpX
 			);
-			float heightSouth = HDUtils.lerp(
+			float heightSouth = lerp(
 				tileHeights[plane][tileMinX][tileMinY],
 				tileHeights[plane][tileMaxX][tileMinY],
 				lerpX
 			);
-			float tileHeight = HDUtils.lerp(heightSouth, heightNorth, lerpY);
+			float tileHeight = lerp(heightSouth, heightNorth, lerpY);
 
 			light.x = lightX;
 			light.y = lightY;

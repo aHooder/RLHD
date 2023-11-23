@@ -6,6 +6,7 @@ import net.runelite.client.util.Text;
 @RequiredArgsConstructor
 public enum Timer {
 	DRAW_SCENE,
+	FRUSTUM_CHECKS,
 	DRAW_RENDERABLE,
 	GET_MODEL,
 	VISIBILITY_CHECK,

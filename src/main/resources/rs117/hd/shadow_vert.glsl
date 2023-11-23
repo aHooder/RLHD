@@ -68,6 +68,7 @@ void main() {
         isTransparent;
 
     int shouldCastShadow = isShadowDisabled ? 0 : 1;
+    shouldCastShadow = 1;
 
     #if SHADOW_MODE == SHADOW_MODE_DETAILED
         gPosition = vec3(vPosition);

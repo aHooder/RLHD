@@ -175,5 +175,13 @@ void main() {
     postProcessImage(outputColor.rgb);
     applyFog(outputColor, ctx, IN.position, cameraPos, groundFogStart, groundFogEnd, groundFogOpacity);
 
+    if (gl_FragCoord.x < 512 && gl_FragCoord.y < 512) {
+        vec2 uv = gl_FragCoord.xy / 512.f;
+//        outputColor.rgb *= texture(shadowMap, uv).r * 1 + .5;
+//        outputColor.rgb = texture(shadowMap, uv).rrr;
+    }
+
+//    FragColor = vec4(gl_FragCoord.zz * vec2(1, -1), 0, 1); return;
+
     FragColor = outputColor;
 }

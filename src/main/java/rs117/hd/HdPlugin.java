@@ -105,10 +105,10 @@ import rs117.hd.scene.TextureManager;
 import rs117.hd.scene.lights.Light;
 import rs117.hd.scene.model_overrides.ModelOverride;
 import rs117.hd.scene.model_overrides.ObjectType;
+import rs117.hd.utils.AABB;
 import rs117.hd.utils.ColorUtils;
 import rs117.hd.utils.DeveloperTools;
 import rs117.hd.utils.FileWatcher;
-import rs117.hd.utils.HDUtils;
 import rs117.hd.utils.Mat4;
 import rs117.hd.utils.ModelHash;
 import rs117.hd.utils.PopupUtils;
@@ -117,12 +117,14 @@ import rs117.hd.utils.ResourcePath;
 import rs117.hd.utils.buffer.GLBuffer;
 import rs117.hd.utils.buffer.GpuIntBuffer;
 
+import static net.runelite.api.Constants.*;
+import static net.runelite.api.Perspective.SCENE_SIZE;
 import static net.runelite.api.Perspective.*;
 import static org.lwjgl.opencl.CL10.*;
 import static org.lwjgl.opengl.GL43C.*;
 import static rs117.hd.HdPluginConfig.*;
 import static rs117.hd.scene.SceneUploader.SCENE_OFFSET;
-import static rs117.hd.utils.HDUtils.PI;
+import static rs117.hd.utils.HDUtils.*;
 import static rs117.hd.utils.ResourcePath.path;
 
 @PluginDescriptor(
@@ -152,8 +154,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	public static final int UNIFORM_BLOCK_LIGHTS = 3;
 
 	public static final int MAX_FACE_COUNT = 6144;
-	public static final int MAX_DISTANCE = Constants.EXTENDED_SCENE_SIZE;
-	public static final int GROUND_MIN_Y = 350; // how far below the ground models extend
+	public static final int MAX_DISTANCE = EXTENDED_SCENE_SIZE;
+	public static final int GROUND_LOWEST_Y = 350; // how far below the ground models extend
 	public static final int MAX_FOG_DEPTH = 100;
 	public static final int SCALAR_BYTES = 4;
 	public static final int VERTEX_SIZE = 4; // 4 ints per vertex
@@ -162,7 +164,11 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 	public static float BUFFER_GROWTH_MULTIPLIER = 2; // can be less than 2 if trying to conserve memory
 
-	private static final float NEAR_PLANE = 1;
+	public static final float NEAR_PLANE = 1;
+	public static final int LOCAL_SCENE_OFFSET_PLUS_HALF_TILE = 64 - (SCENE_OFFSET << LOCAL_COORD_BITS);
+	public static final int TILE_RADIUS = 91;
+	public static final int LOWEST_SCENE_HEIGHT = ProceduralGenerator.DEPTH_LEVEL_SLOPE[ProceduralGenerator.DEPTH_LEVEL_SLOPE.length - 1];
+	public static final int MAX_MODEL_HEIGHT = -128 * 10; // might have to be increased
 
 	private static final int[] eightIntWrite = new int[8];
 
@@ -432,6 +438,24 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	private float lastFrameClientTime;
 	private int gameTicksUntilSceneReload = 0;
 	public int visibleLightCount;
+
+	public float[] projectionMatrix = Mat4.identity();
+	public float[] lightViewMatrix = Mat4.identity();
+	public float[] lightProjectionMatrix = Mat4.identity();
+	public float[] viewDir = new float[3];
+	public float[] lightDir = new float[3];
+	public float[][] projectionFrustumPlanes = new float[7][4];
+	public float[][] shadowFrustumPlanes = new float[10][4];
+	public float[][] frustumCornersWorldSpace;
+	public int[] shadowFrustumHull;
+	public int numShadowFrustumPlanes;
+
+	private int viewportWidth, viewportHeight;
+	private int cameraZoom;
+	private int cameraClipLeft;
+	private int cameraClipRight;
+	private int cameraClipTop;
+	private int cameraClipBottom;
 
 	@Provides
 	HdPluginConfig provideConfig(ConfigManager configManager) {
@@ -1322,16 +1346,16 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	}
 
 	private void initTileHeightMap(Scene scene) {
-		final int TILE_HEIGHT_BUFFER_SIZE = Constants.MAX_Z * Constants.EXTENDED_SCENE_SIZE * Constants.EXTENDED_SCENE_SIZE * Short.BYTES;
+		final int TILE_HEIGHT_BUFFER_SIZE = MAX_Z * EXTENDED_SCENE_SIZE * EXTENDED_SCENE_SIZE * Short.BYTES;
 		ShortBuffer tileBuffer = ByteBuffer
 			.allocateDirect(TILE_HEIGHT_BUFFER_SIZE)
 			.order(ByteOrder.nativeOrder())
 			.asShortBuffer();
 
 		int[][][] tileHeights = scene.getTileHeights();
-		for (int z = 0; z < Constants.MAX_Z; ++z) {
-			for (int y = 0; y < Constants.EXTENDED_SCENE_SIZE; ++y) {
-				for (int x = 0; x < Constants.EXTENDED_SCENE_SIZE; ++x) {
+		for (int z = 0; z < MAX_Z; ++z) {
+			for (int y = 0; y < EXTENDED_SCENE_SIZE; ++y) {
+				for (int x = 0; x < EXTENDED_SCENE_SIZE; ++x) {
 					int h = tileHeights[z][x][y];
 					assert (h & 0b111) == 0;
 					h >>= 3;
@@ -1350,7 +1374,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 		glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 		glTexImage3D(GL_TEXTURE_3D, 0, GL_R16I,
-			Constants.EXTENDED_SCENE_SIZE, Constants.EXTENDED_SCENE_SIZE, Constants.MAX_Z,
+			EXTENDED_SCENE_SIZE, EXTENDED_SCENE_SIZE, MAX_Z,
 			0, GL_RED_INTEGER, GL_SHORT, tileBuffer
 		);
 
@@ -1419,6 +1443,14 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			cameraPosition[2] += cameraShift[1];
 		}
 
+		cameraZoom = client.get3dZoom();
+		if (configShadowsEnabled && configExpandShadowDraw)
+			cameraZoom /= 2;
+		cameraClipRight = client.getRasterizer3D_clipMidX2();
+		cameraClipBottom = client.getRasterizer3D_clipMidY2();
+		cameraClipLeft = client.getRasterizer3D_clipNegativeMidX();
+		cameraClipTop = client.getRasterizer3D_clipNegativeMidY();
+
 		uniformBufferCamera
 			.clear()
 			.putFloat(cameraOrientation[0])
@@ -1454,6 +1486,213 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				glBufferSubData(GL_UNIFORM_BUFFER, 0, uniformBufferLights);
 				glBindBuffer(GL_UNIFORM_BUFFER, 0);
 			}
+		}
+
+		// Calculate projection matrix
+		viewportWidth = client.getViewportWidth();
+		viewportHeight = client.getViewportHeight();
+		float[] viewMatrix = Mat4.rotateX(cameraOrientation[1] - (float) Math.PI);
+		Mat4.mul(viewMatrix, Mat4.rotateY(cameraOrientation[0]));
+		Mat4.mul(viewMatrix, Mat4.translate(
+			-cameraPosition[0],
+			-cameraPosition[1],
+			-cameraPosition[2]
+		));
+		// Extract normalized direction vector pointing towards the camera in world space
+		Mat4.extractColumn(viewDir, viewMatrix, 2);
+
+		int extraSceneSize = sceneContext.expandedMapLoadingChunks * CHUNK_SIZE * LOCAL_TILE_SIZE;
+		float[][] sceneCorners = {
+			{ -extraSceneSize, LOWEST_SCENE_HEIGHT, -extraSceneSize },
+			{ -extraSceneSize, LOWEST_SCENE_HEIGHT, SCENE_SIZE * LOCAL_TILE_SIZE + extraSceneSize },
+			{ SCENE_SIZE * LOCAL_TILE_SIZE + extraSceneSize, LOWEST_SCENE_HEIGHT, SCENE_SIZE * LOCAL_TILE_SIZE + extraSceneSize },
+			{ SCENE_SIZE * LOCAL_TILE_SIZE + extraSceneSize, LOWEST_SCENE_HEIGHT, -extraSceneSize },
+		};
+		float furthestDistance = 0;
+		for (var corner : sceneCorners) {
+			// ax + by + cz = d
+			float d = dot(viewDir, corner);
+			// dot(cam - viewDir * t, viewDir) == d
+			// t = dot(cam, viewDir) - d
+			float t = dot(cameraPosition, viewDir) - d;
+			if (t > furthestDistance)
+				furthestDistance = t;
+		}
+
+		projectionMatrix = Mat4.scale(client.getScale(), client.getScale(), 1);
+//		Mat4.mul(projectionMatrix, Mat4.osrsPerspective(viewportWidth, viewportHeight, 50));
+		Mat4.mul(projectionMatrix, Mat4.osrsPerspective(
+			viewportWidth,
+			viewportHeight,
+			NEAR_PLANE,
+			furthestDistance
+		));
+//		Mat4.mul(projectionMatrix, Mat4.scale(.002f, .002f, .002f));
+//		Mat4.mul(projectionMatrix, Mat4.ortho(viewportWidth, viewportHeight, -10000));
+		Mat4.mul(projectionMatrix, viewMatrix);
+
+		Mat4.extractFrustumPlanes(projectionFrustumPlanes, projectionMatrix);
+		// Add an extra plane for the ground plane, since nothing is ever below it
+		projectionFrustumPlanes[6][0] = 0;
+		projectionFrustumPlanes[6][1] = -1;
+		projectionFrustumPlanes[6][2] = 0;
+		projectionFrustumPlanes[6][3] = GROUND_LOWEST_Y;
+
+		float[] lightViewMatrix = Mat4.rotateX(PI + environmentManager.currentSunAngles[0]);
+		Mat4.mul(lightViewMatrix, Mat4.rotateY(PI - environmentManager.currentSunAngles[1]));
+
+		lightProjectionMatrix = Mat4.identity();
+		if (configShadowsEnabled) {
+			// Extract the 3rd column from the light view matrix
+			// This produces a normalized direction vector pointing towards the light in world space
+			Mat4.extractColumn(lightDir, lightViewMatrix, 2);
+
+			// Extract 1 to 3 planes facing the sun for use with frustum culling
+			numShadowFrustumPlanes = 0;
+			for (int i = 0; i < 6; i++) {
+				var p = projectionFrustumPlanes[i];
+				// Choose planes facing the light
+				if (dotVec3(p, lightDir) > 0) {
+//					log.debug("choosing plane {}: lightDir = {}, plane = {}", i, lightDir, p);
+					shadowFrustumPlanes[numShadowFrustumPlanes++] = p;
+				}
+			}
+
+			// Extract all corner points of the scene projection
+			frustumCornersWorldSpace = new float[][] {
+				// left bottom near
+				intersectPlanes(projectionFrustumPlanes[0], projectionFrustumPlanes[2], projectionFrustumPlanes[4]),
+				// left top near
+				intersectPlanes(projectionFrustumPlanes[0], projectionFrustumPlanes[3], projectionFrustumPlanes[4]),
+				// right top near
+				intersectPlanes(projectionFrustumPlanes[1], projectionFrustumPlanes[3], projectionFrustumPlanes[4]),
+				// right bottom near
+				intersectPlanes(projectionFrustumPlanes[1], projectionFrustumPlanes[2], projectionFrustumPlanes[4]),
+				// left bottom far
+				intersectPlanes(projectionFrustumPlanes[0], projectionFrustumPlanes[2], projectionFrustumPlanes[5]),
+				// left top far
+				intersectPlanes(projectionFrustumPlanes[0], projectionFrustumPlanes[3], projectionFrustumPlanes[5]),
+				// right top far
+				intersectPlanes(projectionFrustumPlanes[1], projectionFrustumPlanes[3], projectionFrustumPlanes[5]),
+				// right bottom far
+				intersectPlanes(projectionFrustumPlanes[1], projectionFrustumPlanes[2], projectionFrustumPlanes[5]),
+			};
+
+			var frustumCornersShadowView = new float[frustumCornersWorldSpace.length][2];
+			float[] proj = { 0, 0, 0, 1 };
+			for (int i = 0; i < frustumCornersWorldSpace.length; i++) {
+				if (frustumCornersWorldSpace[i] == null) {
+					frustumCornersShadowView[i] = null;
+					continue;
+				}
+
+				System.arraycopy(frustumCornersWorldSpace[i], 0, proj, 0, 3);
+				Mat4.projectVec(proj, lightViewMatrix, proj);
+
+				frustumCornersShadowView[i][0] = proj[0];
+				frustumCornersShadowView[i][1] = proj[1];
+			}
+
+			shadowFrustumHull = convexHull2D(frustumCornersShadowView);
+			if (shadowFrustumHull != null) {
+				float minX = Float.POSITIVE_INFINITY;
+				float minY = Float.POSITIVE_INFINITY;
+				float maxX = Float.NEGATIVE_INFINITY;
+				float maxY = Float.NEGATIVE_INFINITY;
+				for (int i : shadowFrustumHull) {
+					float x = frustumCornersShadowView[i][0];
+					float y = frustumCornersShadowView[i][1];
+					if (x < minX)
+						minX = x;
+					if (y < minY)
+						minY = y;
+					if (x > maxX)
+						maxX = x;
+					if (y > maxY)
+						maxY = y;
+				}
+
+				var bounds = AABB.fromArray(sceneContext.bounds);
+				float[][] corners = {
+					{ bounds.minX, bounds.minY, bounds.minZ, 1 },
+					{ bounds.minX, bounds.minY, bounds.maxZ, 1 },
+					{ bounds.maxX, bounds.minY, bounds.maxZ, 1 },
+					{ bounds.maxX, bounds.minY, bounds.minZ, 1 },
+					{ bounds.minX, bounds.maxY, bounds.minZ, 1 },
+					{ bounds.minX, bounds.maxY, bounds.maxZ, 1 },
+					{ bounds.maxX, bounds.maxY, bounds.maxZ, 1 },
+					{ bounds.maxX, bounds.maxY, bounds.minZ, 1 },
+				};
+				float sceneMinX = Float.POSITIVE_INFINITY;
+				float sceneMinY = Float.POSITIVE_INFINITY;
+				float sceneMaxX = Float.NEGATIVE_INFINITY;
+				float sceneMaxY = Float.NEGATIVE_INFINITY;
+				for (int i = 0; i < 8; i++) {
+					float[] c = corners[i];
+					Mat4.projectVec(c, lightViewMatrix, c);
+					sceneMinX = Math.min(sceneMinX, c[0]);
+					sceneMinY = Math.min(sceneMinY, c[1]);
+					sceneMaxX = Math.max(sceneMaxX, c[0]);
+					sceneMaxY = Math.max(sceneMaxY, c[1]);
+				}
+				minX = Math.max(minX, sceneMinX);
+				minY = Math.max(minY, sceneMinY);
+				maxX = Math.min(maxX, sceneMaxX);
+				maxY = Math.min(maxY, sceneMaxY);
+
+
+				float width = maxX - minX;
+				float height = maxY - minY;
+				float centerX = (minX + maxX) / 2;
+				float centerY = (minY + maxY) / 2;
+
+				// Slightly increase the width and height enough to make room for up to half a texel shift in any direction
+				// w = w + w * a + w * a^2
+				// S = 1 + a + a^2 + a^3 ...
+				// Sa = a + a^2 + a^3 ...
+				// S = 1 + Sa
+				// S*(1 - a) = 1
+				// S = 1 / (1 - a)
+				float extraHalfTexelFactor = 1 / (1 - .5f / shadowMapResolution);
+//				width *= extraHalfTexelFactor;
+//				height *= extraHalfTexelFactor;
+
+				// Clamp center position to the nearest texel center
+				float texelWidth = width / shadowMapResolution;
+				float texelHeight = height / shadowMapResolution;
+//				centerX += texelWidth * (.5f - mod(centerX / texelWidth, 1));
+//				centerY += texelHeight * (.5f - mod(centerY / texelHeight, 1));
+
+//				Mat4.mul(lightProjectionMatrix, Mat4.scale(.8f, .8f, 1));
+//				Mat4.mul(lightProjectionMatrix, Mat4.translate(-.5f, -.5f, 0));
+//				Mat4.mul(lightProjectionMatrix, Mat4.translate(0, 0, 0));
+				Mat4.mul(lightProjectionMatrix, Mat4.ortho(width, height, -20000, 20000));
+				Mat4.mul(lightProjectionMatrix, Mat4.translate(-centerX, -centerY, 0));
+				Mat4.mul(lightProjectionMatrix, lightViewMatrix);
+
+//				projectionMatrix = lightProjectionMatrix;
+			}
+
+//			final int drawDistanceSceneUnits = Math.min(config.shadowDistance().getValue(), getDrawDistance()) * LOCAL_TILE_SIZE / 2;
+//			final int camX = cameraFocalPoint[0];
+//			final int camY = cameraFocalPoint[1];
+//			final int east = Math.min(camX + drawDistanceSceneUnits, LOCAL_TILE_SIZE * SCENE_SIZE);
+//			final int west = Math.max(camX - drawDistanceSceneUnits, 0);
+//			final int north = Math.min(camY + drawDistanceSceneUnits, LOCAL_TILE_SIZE * SCENE_SIZE);
+//			final int south = Math.max(camY - drawDistanceSceneUnits, 0);
+//			final int width = east - west;
+//			final int height = north - south;
+//			final int near = 10000;
+//
+//			final int maxDrawDistance = 90;
+//			final float maxScale = 0.7f;
+//			final float minScale = 0.4f;
+//			final float scaleMultiplier = 1.0f - (getDrawDistance() / (maxDrawDistance * maxScale));
+//			float scale = HDUtils.lerp(maxScale, minScale, scaleMultiplier);
+//			Mat4.mul(lightProjectionMatrix, Mat4.scale(scale, scale, scale));
+//			Mat4.mul(lightProjectionMatrix, Mat4.ortho(width, height, near));
+//			Mat4.mul(lightProjectionMatrix, lightViewMatrix);
+//			Mat4.mul(lightProjectionMatrix, Mat4.translate(-(width / 2f + west), 0, -(height / 2f + south)));
 		}
 	}
 
@@ -1777,14 +2016,11 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			textureProvider != null &&
 			client.getGameState().getState() >= GameState.LOADING.getState()
 		) {
-			final int viewportHeight = client.getViewportHeight();
-			final int viewportWidth = client.getViewportWidth();
-
 			int renderWidthOff = viewportOffsetX;
 			int renderHeightOff = viewportOffsetY;
 			int renderCanvasHeight = canvasHeight;
-			int renderViewportHeight = viewportHeight;
 			int renderViewportWidth = viewportWidth;
+			int renderViewportHeight = viewportHeight;
 
 			if (client.isStretchedEnabled()) {
 				Dimension dim = client.getStretchedDimensions();
@@ -1814,10 +2050,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 			glBindVertexArray(vaoSceneHandle);
 
-			float[] lightViewMatrix = Mat4.rotateX(PI + environmentManager.currentSunAngles[0]);
-			Mat4.mul(lightViewMatrix, Mat4.rotateY(PI - environmentManager.currentSunAngles[1]));
-
-			float[] lightProjectionMatrix = Mat4.identity();
 			if (configShadowsEnabled && fboShadowMap != 0 && environmentManager.currentDirectionalStrength > 0) {
 				frameTimer.begin(Timer.RENDER_SHADOWS);
 
@@ -1830,27 +2062,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 				glUseProgram(glShadowProgram);
 
-				final int camX = cameraFocalPoint[0];
-				final int camY = cameraFocalPoint[1];
-
-				final int drawDistanceSceneUnits = Math.min(config.shadowDistance().getValue(), getDrawDistance()) * LOCAL_TILE_SIZE / 2;
-				final int east = Math.min(camX + drawDistanceSceneUnits, LOCAL_TILE_SIZE * SCENE_SIZE);
-				final int west = Math.max(camX - drawDistanceSceneUnits, 0);
-				final int north = Math.min(camY + drawDistanceSceneUnits, LOCAL_TILE_SIZE * SCENE_SIZE);
-				final int south = Math.max(camY - drawDistanceSceneUnits, 0);
-				final int width = east - west;
-				final int height = north - south;
-				final int near = 10000;
-
-				final int maxDrawDistance = 90;
-				final float maxScale = 0.7f;
-				final float minScale = 0.4f;
-				final float scaleMultiplier = 1.0f - (getDrawDistance() / (maxDrawDistance * maxScale));
-				float scale = HDUtils.lerp(maxScale, minScale, scaleMultiplier);
-				Mat4.mul(lightProjectionMatrix, Mat4.scale(scale, scale, scale));
-				Mat4.mul(lightProjectionMatrix, Mat4.ortho(width, height, near));
-				Mat4.mul(lightProjectionMatrix, lightViewMatrix);
-				Mat4.mul(lightProjectionMatrix, Mat4.translate(-(width / 2f + west), 0, -(height / 2f + south)));
 				glUniformMatrix4fv(uniShadowLightProjectionMatrix, false, lightProjectionMatrix);
 
 				// bind uniforms
@@ -1910,7 +2121,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 					final int samples = forcedAASamples != 0 ? forcedAASamples :
 						Math.min(antiAliasingMode.getSamples(), maxSamples);
 
-					log.debug("AA samples: {}, max samples: {}, forced samples: {}", samples, maxSamples, forcedAASamples);
+					if (lastAntiAliasingMode != antiAliasingMode)
+						log.debug("AA samples: {}, max samples: {}, forced samples: {}", samples, maxSamples, forcedAASamples);
 
 					initAAFbo(stretchedCanvasWidth, stretchedCanvasHeight, samples);
 
@@ -2003,9 +2215,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			glUniform1f(uniElapsedTime, elapsedTime);
 			glUniform3fv(uniCameraPos, cameraPosition);
 
-			// Extract the 3rd column from the light view matrix (the float array is column-major)
-			// This produces the light's forward direction vector in world space
-			glUniform3f(uniLightDir, lightViewMatrix[2], lightViewMatrix[6], lightViewMatrix[10]);
+			glUniform3fv(uniLightDir, lightDir);
 
 			// use a curve to calculate max bias value based on the density of the shadow map
 			float shadowPixelsPerTile = (float) shadowMapResolution / config.shadowDistance().getValue();
@@ -2014,19 +2224,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 			glUniform1i(uniShadowsEnabled, configShadowsEnabled ? 1 : 0);
 
-			// Calculate projection matrix
-			float[] projectionMatrix = Mat4.scale(client.getScale(), client.getScale(), 1);
-			Mat4.mul(projectionMatrix, Mat4.projection(viewportWidth, viewportHeight, NEAR_PLANE));
-			Mat4.mul(projectionMatrix, Mat4.rotateX(cameraOrientation[1] - (float) Math.PI));
-			Mat4.mul(projectionMatrix, Mat4.rotateY(cameraOrientation[0]));
-			Mat4.mul(projectionMatrix, Mat4.translate(
-				-cameraPosition[0],
-				-cameraPosition[1],
-				-cameraPosition[2]
-			));
+			// Bind projection matrices
 			glUniformMatrix4fv(uniProjectionMatrix, false, projectionMatrix);
-
-			// Bind directional light projection matrix
 			glUniformMatrix4fv(uniLightProjectionMatrix, false, lightProjectionMatrix);
 
 			// Bind uniforms
@@ -2237,7 +2436,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		if (!isActive)
 			return;
 
-		if (skipScene != scene && HDUtils.sceneIntersects(scene, getExpandedMapLoadingChunks(), Area.THE_GAUNTLET)) {
+		if (skipScene != scene && sceneIntersects(scene, getExpandedMapLoadingChunks(), Area.THE_GAUNTLET)) {
 			// Some game objects in The Gauntlet are spawned in too late for the initial scene load,
 			// so we skip the first scene load and trigger another scene load the next game tick
 			reloadSceneNextGameTick();
@@ -2271,7 +2470,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			}
 		} catch (OutOfMemoryError oom) {
 			log.error("Ran out of memory while loading scene (32-bit: {}, low memory mode: {})",
-				HDUtils.is32Bit(), useLowMemoryMode, oom
+				is32Bit(), useLowMemoryMode, oom
 			);
 			displayOutOfMemoryMessage();
 			stopPlugin();
@@ -2600,57 +2799,105 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		int cameraX,
 		int cameraY,
 		int cameraZ,
-		int plane,
+		int tileZ,
 		int tileExX,
 		int tileExY
 	) {
 		if (sceneContext == null)
 			return false;
 
-		int[][][] tileHeights = scene.getTileHeights();
-		int x = ((tileExX - SCENE_OFFSET) << Perspective.LOCAL_COORD_BITS) + 64;
-		int z = ((tileExY - SCENE_OFFSET) << Perspective.LOCAL_COORD_BITS) + 64;
-		int y = Math.max(
-			Math.max(tileHeights[plane][tileExX][tileExY], tileHeights[plane][tileExX][tileExY + 1]),
-			Math.max(tileHeights[plane][tileExX + 1][tileExY], tileHeights[plane][tileExX + 1][tileExY + 1])
-		) + GROUND_MIN_Y;
+		try {
+			frameTimer.begin(Timer.FRUSTUM_CHECKS);
 
-		if (sceneContext.scene == scene) {
-			int depthLevel = sceneContext.underwaterDepthLevels[plane][tileExX][tileExY];
-			if (depthLevel > 0)
-				y += ProceduralGenerator.DEPTH_LEVEL_SLOPE[depthLevel - 1] - GROUND_MIN_Y;
-		}
+			int x = (tileExX << LOCAL_COORD_BITS) + LOCAL_SCENE_OFFSET_PLUS_HALF_TILE - cameraX;
+			int z = (tileExY << LOCAL_COORD_BITS) + LOCAL_SCENE_OFFSET_PLUS_HALF_TILE - cameraZ;
+			int[] minMaxHeight = sceneContext.minMaxAvgTileHeights[tileZ][tileExX][tileExY];
+			int minHeight = minMaxHeight[0] - cameraY;
 
-		x -= (int) cameraPosition[0];
-		y -= (int) cameraPosition[1];
-		z -= (int) cameraPosition[2];
+			// The following checks view the tile as a stretched out cube with infinite height starting some distance below the tile,
+			// which accounts for any models that may be present on the tile without requiring explicit checks
 
-		int radius = 96; // ~ 64 * sqrt(2)
-
-		int zoom = (configShadowsEnabled && configExpandShadowDraw) ? client.get3dZoom() / 2 : client.get3dZoom();
-		int Rasterizer3D_clipMidX2 = client.getRasterizer3D_clipMidX2();
-		int Rasterizer3D_clipNegativeMidX = client.getRasterizer3D_clipNegativeMidX();
-		int Rasterizer3D_clipNegativeMidY = client.getRasterizer3D_clipNegativeMidY();
-
-		int var11 = yawCos * z - yawSin * x >> 16;
-		int var12 = pitchSin * y + pitchCos * var11 >> 16;
-		int var13 = pitchCos * radius >> 16;
-		int depth = var12 + var13;
-		if (depth > NEAR_PLANE) {
-			int rx = z * yawSin + yawCos * x >> 16;
-			int var16 = (rx - radius) * zoom;
-			int var17 = (rx + radius) * zoom;
-			// left && right
-			if (var16 < Rasterizer3D_clipMidX2 * depth && var17 > Rasterizer3D_clipNegativeMidX * depth) {
-				int ry = pitchCos * y - var11 * pitchSin >> 16;
-				int ybottom = pitchSin * radius >> 16;
-				int var20 = (ry + ybottom) * zoom;
-				// top
-				// we don't test the bottom so we don't have to find the height of all the models on the tile
-				return var20 > Rasterizer3D_clipNegativeMidY * depth;
+			int distanceFromCameraXZ = yawCos * z - yawSin * x >> 16;
+			int distanceFromCamera = pitchSin * minHeight + pitchCos * (distanceFromCameraXZ + TILE_RADIUS) >> 16;
+			// check near clipping plane
+			if (distanceFromCamera > NEAR_PLANE) {
+				int viewX = yawSin * z + yawCos * x >> 16;
+				int leftX = (viewX - TILE_RADIUS) * cameraZoom;
+				int rightX = (viewX + TILE_RADIUS) * cameraZoom;
+				// check right and left clipping planes
+				if (cameraClipLeft * distanceFromCamera < rightX && leftX < cameraClipRight * distanceFromCamera) {
+					int viewBottomY = (pitchCos * minHeight - pitchSin * (distanceFromCameraXZ - TILE_RADIUS) >> 16) * cameraZoom;
+					int maxHeight = minMaxHeight[2] + MAX_MODEL_HEIGHT - cameraY;
+					int viewTopY = (pitchCos * maxHeight - pitchSin * (distanceFromCameraXZ + TILE_RADIUS) >> 16) * cameraZoom;
+					// check top and bottom clipping planes
+					if (cameraClipTop * distanceFromCamera < viewBottomY && viewTopY < cameraClipBottom * distanceFromCamera)
+						return true;
+				}
 			}
+
+			// The tile or a model on it may still cast a shadow into the view frustum
+			if (configShadowsEnabled) {
+				float[] from = { x, minMaxHeight[0], z, 1 };
+				float[] to = { x, minMaxHeight[1], z, 1 };
+				Mat4.projectVec(from, lightProjectionMatrix, from);
+				Mat4.projectVec(to, lightProjectionMatrix, to);
+
+				if (
+					!((from[0] < -1 && to[0] < -1) || (from[0] > 1 && to[0] > 1)) ||
+					!((from[1] < -1 && to[1] < -1) || (from[1] > 1 && to[1] > 1))
+				) {
+					return true;
+				}
+
+
+//				float lightYawCos = lightViewMatrix[0];
+//				float lightYawSin = lightViewMatrix[2];
+//				float lightPitchCos = lightViewMatrix[5];
+//				float lightPitchSin = lightViewMatrix[9];
+//
+//				// Line from center of tile to infinity directly upwards
+//				// Extrude it in the shadow view direction through the scene view frustum
+//				// If the plane intersects the scene view frustum with a margin of a tile's radius,
+//				// the tile may cast a visible shadow into the scene
+//
+//				// y - lightDir[1] * t = GROUND_LOWEST_Y
+//				float lightDirYReciprocal = 1 / lightDir[1];
+//				float t = (y - GROUND_LOWEST_Y) * lightDirYReciprocal;
+//				int startX = (int) (x - lightDir[0] * t);
+//				int startZ = (int) (z - lightDir[2] * t);
+//
+//				t = (y - maxModelHeight - GROUND_LOWEST_Y) * lightDirYReciprocal;
+//				int endX = (int) (x - lightDir[0] * t);
+//				int endZ = (int) (z - lightDir[2] * t);
+//
+//				// The following checks view the tile as a stretched out cube with infinite height starting some distance below the tile,
+//				// which accounts for any models that may be present on the tile without requiring explicit checks
+//
+//				int startDistanceFromCameraXZ = yawCos * startZ - yawSin * startX >> 16;
+//				int startDistanceFromCamera = pitchSin * GROUND_LOWEST_Y + pitchCos * (startDistanceFromCameraXZ + tileRadius) >> 16;
+//				int endDistanceFromCameraXZ = yawCos * endZ - yawSin * endX >> 16;
+//				int endDistanceFromCamera = pitchSin * GROUND_LOWEST_Y + pitchCos * (endDistanceFromCameraXZ + tileRadius) >> 16;
+//				// check near clipping plane
+//				if (startDistanceFromCamera > NEAR_PLANE || endDistanceFromCamera > NEAR_PLANE) {
+//					int startViewX = yawSin * startZ + yawCos * startX >> 16;
+//					int startLeftX = (startViewX - tileRadius) * cameraZoom;
+//					int startRightX = (startViewX + tileRadius) * cameraZoom;
+//					// check right and left clipping planes
+//					if (cameraClipLeft * startDistanceFromCamera < startRightX && startLeftX < cameraClipRight * startDistanceFromCamera) {
+//						int viewBottomY = (pitchCos * y - pitchSin * (startDistanceFromCameraXZ - tileRadius) >> 16) * cameraZoom;
+//						int viewTopY =
+//							(pitchCos * (y - maxModelHeight) - pitchSin * (startDistanceFromCameraXZ + tileRadius) >> 16) * cameraZoom;
+//						// check bottom and top clipping planes
+//						if (cameraClipTop * startDistanceFromCamera < viewBottomY && viewTopY < cameraClipBottom * startDistanceFromCamera)
+//							return true;
+//					}
+//				}
+			}
+
+			return false;
+		} finally {
+			frameTimer.end(Timer.FRUSTUM_CHECKS);
 		}
-		return false;
 	}
 
 	/**
@@ -2664,13 +2911,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 		final int XYZMag = model.getXYZMag();
 		final int bottomY = model.getBottomY();
-		final int zoom = (configShadowsEnabled && configExpandShadowDraw) ? client.get3dZoom() / 2 : client.get3dZoom();
 		final int modelHeight = model.getModelHeight();
-
-		int Rasterizer3D_clipMidX2 = client.getRasterizer3D_clipMidX2();
-		int Rasterizer3D_clipNegativeMidX = client.getRasterizer3D_clipNegativeMidX();
-		int Rasterizer3D_clipNegativeMidY = client.getRasterizer3D_clipNegativeMidY();
-		int Rasterizer3D_clipMidY2 = client.getRasterizer3D_clipMidY2();
 
 		int var11 = yawCos * z - yawSin * x >> 16;
 		int var12 = pitchSin * y + pitchCos * var11 >> 16;
@@ -2678,18 +2919,18 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		int depth = var12 + var13;
 		if (depth > NEAR_PLANE) {
 			int rx = z * yawSin + yawCos * x >> 16;
-			int var16 = (rx - XYZMag) * zoom;
-			if (var16 / depth < Rasterizer3D_clipMidX2) {
-				int var17 = (rx + XYZMag) * zoom;
-				if (var17 / depth > Rasterizer3D_clipNegativeMidX) {
+			int var16 = (rx - XYZMag) * cameraZoom;
+			if (var16 / depth < cameraClipRight) {
+				int var17 = (rx + XYZMag) * cameraZoom;
+				if (var17 / depth > cameraClipLeft) {
 					int ry = pitchCos * y - var11 * pitchSin >> 16;
 					int yheight = pitchSin * XYZMag >> 16;
 					int ybottom = (pitchCos * bottomY >> 16) + yheight;
-					int var20 = (ry + ybottom) * zoom;
-					if (var20 / depth > Rasterizer3D_clipNegativeMidY) {
+					int var20 = (ry + ybottom) * cameraZoom;
+					if (var20 / depth > cameraClipTop) {
 						int ytop = (pitchCos * modelHeight >> 16) + yheight;
-						int var22 = (ry - ytop) * zoom;
-						return var22 / depth >= Rasterizer3D_clipMidY2;
+						int var22 = (ry - ytop) * cameraZoom;
+						return var22 / depth >= cameraClipBottom;
 					}
 				}
 			}
@@ -2759,8 +3000,10 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		if (model != renderable)
 			renderable.setModelHeight(model.getModelHeight());
 
-		if (isOutsideViewport(model, pitchSin, pitchCos, yawSin, yawCos, x, y, z))
-			return;
+		model.calculateBoundsCylinder();
+		// TODO: Remove in favour of tileInFrustum
+//		if (isOutsideViewport(model, pitchSin, pitchCos, yawSin, yawCos, x, y, z))
+//			return;
 
 		client.checkClickbox(model, orientation, pitchSin, pitchCos, yawSin, yawCos, x, y, z, hash);
 
@@ -2829,7 +3072,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 				int vertexOffset = dynamicOffsetVertices + sceneContext.getVertexOffset();
 				int uvOffset = dynamicOffsetUvs + sceneContext.getUvOffset();
-				ModelOverride modelOverride = modelOverrideManager.getOverride(hash, HDUtils.cameraSpaceToWorldPoint(client, x, z));
+				ModelOverride modelOverride = modelOverrideManager.getOverride(hash, cameraSpaceToWorldPoint(client, x, z));
 				if (modelOverride.hide) {
 					vertexOffset = -1;
 				} else {
@@ -2907,7 +3150,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	}
 
 	public int getDrawDistance() {
-		return HDUtils.clamp(config.drawDistance(), 0, MAX_DISTANCE);
+		return clamp(config.drawDistance(), 0, MAX_DISTANCE);
 	}
 
 	private int getExpandedMapLoadingChunks() {
@@ -2927,7 +3170,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		glBindBuffer(target, glBuffer.glBufferId);
 		long size = data.remaining();
 		if (size > glBuffer.size) {
-			size = HDUtils.ceilPow2(size);
+			size = ceilPow2(size);
 			logBufferResize(glBuffer, size);
 
 			glBuffer.size = size;
@@ -2948,7 +3191,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	{
 		long size = 4L * (offset + data.remaining());
 		if (size > glBuffer.size) {
-			size = HDUtils.ceilPow2(size);
+			size = ceilPow2(size);
 			logBufferResize(glBuffer, size);
 
 			if (offset > 0) {
@@ -2986,7 +3229,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	{
 		long size = 4L * (offset + data.remaining());
 		if (size > glBuffer.size) {
-			size = HDUtils.ceilPow2(size);
+			size = ceilPow2(size);
 			logBufferResize(glBuffer, size);
 
 			if (offset > 0) {
@@ -3015,7 +3258,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 	private void updateBuffer(@Nonnull GLBuffer glBuffer, int target, long size, int usage, long clFlags) {
 		if (size > glBuffer.size) {
-			size = HDUtils.ceilPow2(size);
+			size = ceilPow2(size);
 			logBufferResize(glBuffer, size);
 
 			glBuffer.size = size;
@@ -3117,7 +3360,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 	private void displayUnsupportedGpuMessage(boolean isGenericGpu, String glRenderer) {
 		String hint32Bit = "";
-		if (HDUtils.is32Bit()) {
+		if (is32Bit()) {
 			hint32Bit =
 				"&nbsp;• Install the 64-bit version of RuneLite from " +
 				"<a href=\"" + HdPlugin.RUNELITE_URL + "\">the official website</a>. You are currently using 32-bit.<br>";
@@ -3171,7 +3414,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 	private void displayOutOfMemoryMessage() {
 		String errorMessage;
-		if (HDUtils.is32Bit()) {
+		if (is32Bit()) {
 			String lowMemoryModeHint = useLowMemoryMode ? "" : (
 				"If you are unable to install 64-bit RuneLite, you can instead turn on <b>Low Memory Mode</b> in the<br>" +
 				"Miscellaneous section of 117 HD settings.<br>"
