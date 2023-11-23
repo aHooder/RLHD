@@ -39,6 +39,8 @@ import rs117.hd.config.FogDepthMode;
 import rs117.hd.config.MaxDynamicLights;
 import rs117.hd.config.MinimapStyle;
 import rs117.hd.config.Saturation;
+import rs117.hd.config.SeasonalTheme;
+import rs117.hd.config.ShadingMode;
 import rs117.hd.config.ShadowDistance;
 import rs117.hd.config.ShadowMode;
 import rs117.hd.config.ShadowResolution;
@@ -497,6 +499,18 @@ public interface HdPluginConfig extends Config
 	)
 	String environmentSettings = "environmentSettings";
 
+	String KEY_SEASONAL_THEME = "seasonalThemePreAuto1";
+	@ConfigItem(
+		keyName = KEY_SEASONAL_THEME,
+		name = "Seasonal Theme",
+		description = "Festive themes for Gielinor.",
+		position = 0,
+		section = environmentSettings
+	)
+	default SeasonalTheme seasonalTheme() {
+		return SeasonalTheme.AUTUMN;
+	}
+
 	@ConfigItem(
 		keyName = "fogDepthMode",
 		name = "Fog Depth Mode",
@@ -545,6 +559,7 @@ public interface HdPluginConfig extends Config
 		name = "Default Sky",
 		description =
 			"Specify a sky color to use when the current area doesn't have a sky color defined.<br>" +
+			"This only applies when the default summer seasonal theme is active.<br>" +
 			"If set to 'RuneLite Skybox', the sky color from RuneLite's Skybox plugin will be used.<br>" +
 			"If set to 'Old School Black', the sky will be black and water will remain blue, but for any<br>" +
 			"other option, the water color will be influenced by the sky color.",
@@ -738,22 +753,8 @@ public interface HdPluginConfig extends Config
 		position = 2,
 		section = miscellaneousSettings
 	)
-	default boolean hdInfernalTexture()
-	{
+	default boolean hdInfernalTexture() {
 		return true;
-	}
-
-	String KEY_WINTER_THEME = "winterTheme0";
-	@ConfigItem(
-		keyName = KEY_WINTER_THEME,
-		name = "Winter Theme",
-		description = "Covers the Gielinor overworld with a layer of snow!",
-		position = 3,
-		section = miscellaneousSettings
-	)
-	default boolean winterTheme()
-	{
-		return false;
 	}
 
 	String KEY_LEGACY_GREY_COLORS = "reduceOverExposure";
@@ -851,6 +852,41 @@ public interface HdPluginConfig extends Config
 		section = experimentalSettings
 	)
 	default boolean preserveVanillaNormals() {
+		return false;
+	}
+
+	String KEY_SHADING_MODE = "experimentalShadingMode";
+	@ConfigItem(
+		keyName = KEY_SHADING_MODE,
+		name = "Shading mode",
+		description =
+			"If you prefer playing without shadows, maybe you'll prefer vanilla or no shading as well.<br>" +
+			"Keep in mind, with vanilla shading used alongside shadows, you can end up with double shading.",
+		section = experimentalSettings
+	)
+	default ShadingMode shadingMode() {
+		return ShadingMode.DEFAULT;
+	}
+
+	String KEY_FLAT_SHADING = "experimentalFlatShading";
+	@ConfigItem(
+		keyName = KEY_FLAT_SHADING,
+		name = "Flat shading",
+		description = "Gives a more low-poly look to the game.",
+		section = experimentalSettings
+	)
+	default boolean flatShading() {
+		return false;
+	}
+
+	String KEY_DECOUPLE_WATER_FROM_SKY_COLOR = "experimentalDecoupleWaterFromSkyColor";
+	@ConfigItem(
+		keyName = KEY_DECOUPLE_WATER_FROM_SKY_COLOR,
+		name = "Decouple water from sky color",
+		description = "Some people prefer the water staying blue even with a different sky color active.",
+		section = experimentalSettings
+	)
+	default boolean decoupleSkyAndWaterColor() {
 		return false;
 	}
 

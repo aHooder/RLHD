@@ -23,7 +23,6 @@ import rs117.hd.data.materials.Underlay;
 import rs117.hd.data.materials.UvType;
 import rs117.hd.overlays.FrameTimer;
 import rs117.hd.overlays.Timer;
-import rs117.hd.scene.ModelOverrideManager;
 import rs117.hd.scene.ProceduralGenerator;
 import rs117.hd.scene.SceneContext;
 import rs117.hd.scene.SceneUploader;
@@ -64,13 +63,10 @@ public class ModelPusher {
 	private ModelHasher modelHasher;
 
 	@Inject
-	private ModelOverrideManager modelOverrideManager;
-
-	@Inject
 	private FrameTimer frameTimer;
 
 	public static final int DATUM_PER_FACE = 12;
-	public static final int MAX_MATERIAL_COUNT = (1 << 10) - 1;
+	public static final int MAX_MATERIAL_COUNT = (1 << 12) - 1;
 	// subtracts the X lowest lightness levels from the formula.
 	// helps keep darker colors appropriately dark
 	private static final int IGNORE_LOW_LIGHTNESS = 3;
@@ -176,6 +172,7 @@ public class ModelPusher {
 	 * @param tile           that the model is associated with, if any
 	 * @param hash           of the model
 	 * @param model          to push data from
+	 * @param modelOverride  the active model override
 	 * @param objectType     of the specified model. Used for TzHaar recolor
 	 * @param preOrientation which the vertices have already been rotated by
 	 * @param shouldCache    whether the model should be cached for future reuse, if enabled
@@ -185,20 +182,18 @@ public class ModelPusher {
 		@Nullable Tile tile,
 		long hash,
 		Model model,
+		ModelOverride modelOverride,
 		ObjectType objectType,
 		int preOrientation,
 		boolean shouldCache
 	) {
-		if (modelCache == null) {
+		if (modelCache == null)
 			shouldCache = false;
-		}
 
 		final int faceCount = Math.min(model.getFaceCount(), MAX_FACE_COUNT);
 		final int bufferSize = faceCount * DATUM_PER_FACE;
 		int texturedFaceCount = 0;
 
-		ModelOverride modelOverride = modelOverrideManager.getOverride(hash);
-		boolean useMaterialOverrides = plugin.configModelTextures || modelOverride.forceOverride;
 		final short[] faceTextures = model.getFaceTextures();
 		final byte[] textureFaces = model.getTextureFaces();
 		boolean isVanillaTextured = faceTextures != null;
@@ -208,23 +203,23 @@ public class ModelPusher {
 			model.getTexIndices2() != null &&
 			model.getTexIndices3() != null &&
 			model.getTextureFaces() != null;
-		Material baseMaterial = Material.NONE;
-		Material textureMaterial = Material.NONE;
-		if (useMaterialOverrides) {
-			baseMaterial = modelOverride.baseMaterial;
-			textureMaterial = modelOverride.textureMaterial;
+		Material baseMaterial = modelOverride.baseMaterial;
+		Material textureMaterial = modelOverride.textureMaterial;
+		if (!plugin.configModelTextures && !modelOverride.forceMaterialChanges) {
+			if (baseMaterial.hasTexture)
+				baseMaterial = Material.NONE;
+			if (textureMaterial.hasTexture)
+				textureMaterial = Material.NONE;
 		}
 		boolean skipUVs =
 			!isVanillaTextured &&
-			baseMaterial == Material.NONE &&
-			packMaterialData(Material.NONE, -1, modelOverride, UvType.GEOMETRY, false) == 0;
+			packMaterialData(baseMaterial, -1, modelOverride, UvType.GEOMETRY, false) == 0;
 
 		// ensure capacity upfront
 		sceneContext.stagingBufferVertices.ensureCapacity(bufferSize);
 		sceneContext.stagingBufferNormals.ensureCapacity(bufferSize);
-		if (!skipUVs) {
+		if (!skipUVs)
 			sceneContext.stagingBufferUvs.ensureCapacity(bufferSize);
-		}
 
 		boolean foundCachedVertexData = false;
 		boolean foundCachedNormalData = false;
@@ -236,7 +231,7 @@ public class ModelPusher {
 		if (shouldCache) {
 			assert client.isClientThread() : "Model caching isn't thread-safe";
 
-			vertexHash = modelHasher.calculateVertexCacheHash();
+			vertexHash = modelHasher.calculateVertexCacheHash(modelOverride);
 			IntBuffer vertexData = this.modelCache.getIntBuffer(vertexHash);
 			foundCachedVertexData = vertexData != null && vertexData.remaining() == bufferSize;
 			if (foundCachedVertexData) {
@@ -311,12 +306,14 @@ public class ModelPusher {
 			if (plugin.enableDetailedTimers)
 				frameTimer.begin(Timer.MODEL_PUSHING_VERTEX);
 
+			modelOverride.applyRotation(model);
 			for (int face = 0; face < faceCount; face++) {
 				int[] data = getFaceVertices(sceneContext, tile, hash, model, modelOverride, objectType, face);
 				sceneContext.stagingBufferVertices.put(data);
 				if (shouldCacheVertexData)
 					fullVertexData.put(data);
 			}
+			modelOverride.revertRotation(model);
 
 			if (plugin.enableDetailedTimers)
 				frameTimer.end(Timer.MODEL_PUSHING_VERTEX);
@@ -342,24 +339,39 @@ public class ModelPusher {
 				frameTimer.begin(Timer.MODEL_PUSHING_UV);
 
 			for (int face = 0; face < faceCount; face++) {
+				UvType uvType = UvType.GEOMETRY;
 				Material material = baseMaterial;
+
 				short textureId = isVanillaTextured ? faceTextures[face] : -1;
 				if (textureId != -1) {
+					uvType = UvType.VANILLA;
 					material = textureMaterial;
 					if (material == Material.NONE)
 						material = Material.fromVanillaTexture(textureId);
 				}
-				UvType uvType = modelOverride.uvType;
-				if (uvType == UvType.VANILLA || (textureId != -1 && modelOverride.retainVanillaUvs))
-					uvType = isVanillaUVMapped && textureFaces[face] != -1 ? UvType.VANILLA : UvType.GEOMETRY;
 
-				int materialData = packMaterialData(material, textureId, modelOverride, uvType, false);
+				ModelOverride materialOverride = modelOverride;
+				if (modelOverride.materialOverrides != null) {
+					var override = modelOverride.materialOverrides.get(material);
+					if (override != null) {
+						materialOverride = override;
+						material = materialOverride.textureMaterial;
+					}
+				}
+
+				if (material != Material.NONE) {
+					uvType = materialOverride.uvType;
+					if (uvType == UvType.VANILLA || (textureId != -1 && materialOverride.retainVanillaUvs))
+						uvType = isVanillaUVMapped && textureFaces[face] != -1 ? UvType.VANILLA : UvType.GEOMETRY;
+				}
+
+				int materialData = packMaterialData(material, textureId, materialOverride, uvType, false);
 
 				final float[] uvData = sceneContext.modelFaceNormals;
 				if (materialData == 0) {
 					Arrays.fill(uvData, 0);
 				} else {
-					modelOverride.fillUvsForFace(uvData, model, preOrientation, uvType, face);
+					materialOverride.fillUvsForFace(uvData, model, preOrientation, uvType, face);
 					uvData[3] = uvData[7] = uvData[11] = materialData;
 				}
 
@@ -514,21 +526,26 @@ public class ModelPusher {
 		int color3S = color3 >> 7 & 0x7;
 		int color3L = color3 & 0x7F;
 
-		int packedAlphaPriority = 0;
+		int packedAlphaPriorityFlags = 0;
 		if (faceTransparencies != null && !isTextured)
-			packedAlphaPriority |= (faceTransparencies[face] & 0xFF) << 24;
+			packedAlphaPriorityFlags |= (faceTransparencies[face] & 0xFF) << 24;
 		if (facePriorities != null)
-			packedAlphaPriority |= (facePriorities[face] & 0xff) << 16;
+			packedAlphaPriorityFlags |= (facePriorities[face] & 0xF) << 16;
 
 		if (isTextured) {
 			// Without overriding the color for textured faces, vanilla shading remains pretty noticeable even after
 			// the approximate reversal above. Ardougne rooftops is a good example, where vanilla shading results in a
 			// weird-looking tint. The brightness clamp afterward is required to reduce the over-exposure introduced.
-			color1H = color2H = color3H = 0;
-			color1S = color2S = color3S = 0;
-			color1L = color2L = color3L = 90;
+			if (!plugin.configRetainVanillaShading) {
+				color1H = color2H = color3H = 0;
+				color1S = color2S = color3S = 0;
+				color1L = color2L = color3L = 90;
+				
+				// Let the shader know vanilla shading reversal should be skipped for this face
+				packedAlphaPriorityFlags |= 1 << 20;
+			}
 		} else {
-			if (!plugin.configUndoVanillaShadingInCompute) {
+			if (plugin.configUndoVanillaShadingOnCpu) {
 				// Approximately invert vanilla shading by brightening vertices that were likely darkened by vanilla based on
 				// vertex normals. This process is error-prone, as not all models are lit by vanilla with the same light
 				// direction, and some models even have baked lighting built into the model itself. In some cases, increasing
@@ -568,10 +585,10 @@ public class ModelPusher {
 
 					lightDotNormal = nx * L[0] + ny * L[1] + nz * L[2];
 					if (lightDotNormal > 0) {
-						lightDotNormal /= Math.sqrt(nx * nx + ny * ny + nz * nz);
-						color1L += lightDotNormal * color1Adjust;
-						color2L += lightDotNormal * color2Adjust;
-						color3L += lightDotNormal * color3Adjust;
+						lightDotNormal /= (float) Math.sqrt(nx * nx + ny * ny + nz * nz);
+						color1L += (int) (lightDotNormal * color1Adjust);
+						color2L += (int) (lightDotNormal * color2Adjust);
+						color3L += (int) (lightDotNormal * color3Adjust);
 					}
 				} else {
 					nx = xVertexNormals[triA];
@@ -579,8 +596,8 @@ public class ModelPusher {
 					nz = zVertexNormals[triA];
 					lightDotNormal = nx * L[0] + ny * L[1] + nz * L[2];
 					if (lightDotNormal > 0) {
-						lightDotNormal /= Math.sqrt(nx * nx + ny * ny + nz * nz);
-						color1L += lightDotNormal * color1Adjust;
+						lightDotNormal /= (float) Math.sqrt(nx * nx + ny * ny + nz * nz);
+						color1L += (int) (lightDotNormal * color1Adjust);
 					}
 
 					nx = xVertexNormals[triB];
@@ -588,8 +605,8 @@ public class ModelPusher {
 					nz = zVertexNormals[triB];
 					lightDotNormal = nx * L[0] + ny * L[1] + nz * L[2];
 					if (lightDotNormal > 0) {
-						lightDotNormal /= Math.sqrt(nx * nx + ny * ny + nz * nz);
-						color2L += lightDotNormal * color2Adjust;
+						lightDotNormal /= (float) Math.sqrt(nx * nx + ny * ny + nz * nz);
+						color2L += (int) (lightDotNormal * color2Adjust);
 					}
 
 					nx = xVertexNormals[triC];
@@ -597,8 +614,8 @@ public class ModelPusher {
 					nz = zVertexNormals[triC];
 					lightDotNormal = nx * L[0] + ny * L[1] + nz * L[2];
 					if (lightDotNormal > 0) {
-						lightDotNormal /= Math.sqrt(nx * nx + ny * ny + nz * nz);
-						color3L += lightDotNormal * color3Adjust;
+						lightDotNormal /= (float) Math.sqrt(nx * nx + ny * ny + nz * nz);
+						color3L += (int) (lightDotNormal * color3Adjust);
 					}
 				}
 			}
@@ -673,6 +690,8 @@ public class ModelPusher {
 							color1S = color2S = color3S = tileColorHSL[1];
 							color1L = color2L = color3L = tileColorHSL[2];
 
+							// Let the shader know vanilla shading reversal should be skipped for this face
+							packedAlphaPriorityFlags |= 1 << 20;
 						} else if (tileModel != null && tileModel.getTriangleTextureId() == null) {
 							int faceColorIndex = -1;
 							for (int i = 0; i < tileModel.getTriangleColorA().length; i++) {
@@ -706,6 +725,9 @@ public class ModelPusher {
 									color1H = color2H = color3H = tileColorHSL[0];
 									color1S = color2S = color3S = tileColorHSL[1];
 									color1L = color2L = color3L = tileColorHSL[2];
+
+									// Let the shader know vanilla shading reversal should be skipped for this face
+									packedAlphaPriorityFlags |= 1 << 20;
 								}
 							}
 						}
@@ -717,7 +739,7 @@ public class ModelPusher {
 						modelOverride,
 						model,
 						face,
-						packedAlphaPriority,
+						packedAlphaPriorityFlags,
 						objectType,
 						color1S,
 						color1L,
@@ -735,11 +757,11 @@ public class ModelPusher {
 					color3H = tzHaarRecolored[2][0];
 					color3S = tzHaarRecolored[2][1];
 					color3L = tzHaarRecolored[2][2];
-					packedAlphaPriority = tzHaarRecolored[3][0];
+					packedAlphaPriorityFlags = tzHaarRecolored[3][0];
 				}
 			}
 
-			if (!plugin.configUndoVanillaShadingInCompute) {
+			if (plugin.configUndoVanillaShadingOnCpu) {
 				int maxBrightness1 = 55;
 				int maxBrightness2 = 55;
 				int maxBrightness3 = 55;
@@ -756,9 +778,9 @@ public class ModelPusher {
 			}
 		}
 
-		color1 = packedAlphaPriority | color1H << 10 | color1S << 7 | color1L;
-		color2 = packedAlphaPriority | color2H << 10 | color2S << 7 | color2L;
-		color3 = packedAlphaPriority | color3H << 10 | color3S << 7 | color3L;
+		color1 = packedAlphaPriorityFlags | color1H << 10 | color1S << 7 | color1L;
+		color2 = packedAlphaPriorityFlags | color2H << 10 | color2S << 7 | color2L;
+		color3 = packedAlphaPriorityFlags | color3H << 10 | color3S << 7 | color3L;
 
 		int[] data = sceneContext.modelFaceVertices;
 		data[0] = xVertices[triA];

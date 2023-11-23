@@ -30,8 +30,8 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
-import net.runelite.api.coords.*;
 import rs117.hd.HdPlugin;
+import rs117.hd.config.SeasonalTheme;
 import rs117.hd.data.WaterType;
 import rs117.hd.data.materials.Material;
 import rs117.hd.data.materials.Overlay;
@@ -48,8 +48,8 @@ import static net.runelite.api.Constants.*;
 public class ProceduralGenerator {
 	public static final int[] DEPTH_LEVEL_SLOPE = new int[] { 150, 300, 470, 610, 700, 750, 820, 920, 1080, 1300, 1350, 1380 };
 
-	private static final int VERTICES_PER_FACE = 3;
-	private static final boolean[][] TILE_OVERLAY_TRIS = new boolean[][]
+	public static final int VERTICES_PER_FACE = 3;
+	public static final boolean[][] TILE_OVERLAY_TRIS = new boolean[][]
 		{
 			/*  0 */ { true, true, true, true }, // Used by tilemodels of varying tri counts?
 			/*  1 */ { false, true },
@@ -148,7 +148,7 @@ public class ProceduralGenerator {
 
 		int tileExX = tile.getSceneLocation().getX() + SceneUploader.SCENE_OFFSET;
 		int tileExY = tile.getSceneLocation().getY() + SceneUploader.SCENE_OFFSET;
-		WorldPoint worldPos = sceneContext.localToWorld(tile.getLocalLocation(), tile.getRenderLevel());
+		int[] worldPos = sceneContext.localToWorld(tile.getLocalLocation(), tile.getRenderLevel());
 
 		Scene scene = sceneContext.scene;
 		if (tile.getSceneTilePaint() != null) {
@@ -280,12 +280,12 @@ public class ProceduralGenerator {
 			Material material = Material.DIRT_1;
 			Overlay overlay = vertexOverlays[vertex];
 			if (overlay != Overlay.NONE) {
-				material = overlay.groundMaterial.getRandomMaterial(worldPos.getPlane(), worldPos.getX(), worldPos.getY());
+				material = overlay.groundMaterial.getRandomMaterial(worldPos[2], worldPos[0], worldPos[1]);
 				isOverlay = !overlay.blendedAsUnderlay;
 				overlay.modifyColor(colorHSL);
 			} else if (vertexUnderlays[vertex] != Underlay.NONE) {
 				Underlay underlay = vertexUnderlays[vertex];
-				material = underlay.groundMaterial.getRandomMaterial(worldPos.getPlane(), worldPos.getX(), worldPos.getY());
+				material = underlay.groundMaterial.getRandomMaterial(worldPos[2], worldPos[0], worldPos[1]);
 				isOverlay = underlay.blendedAsOverlay;
 				underlay.modifyColor(colorHSL);
 			}
@@ -827,7 +827,9 @@ public class ProceduralGenerator {
 
 	private WaterType getSeasonalWaterType(WaterType waterType)
 	{
-		return plugin.configWinterTheme && waterType == WaterType.WATER ? WaterType.ICE : waterType;
+		if (waterType == WaterType.WATER && plugin.configSeasonalTheme == SeasonalTheme.WINTER)
+			return WaterType.ICE;
+		return waterType;
 	}
 
 	/**
