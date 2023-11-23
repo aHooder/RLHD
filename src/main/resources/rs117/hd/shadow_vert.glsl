@@ -55,7 +55,10 @@ void main() {
     float opacity = 1 - (vPosition.w >> 24 & 0xFF) / float(0xFF);
 
     float opacityThreshold = float(materialData >> MATERIAL_SHADOW_OPACITY_THRESHOLD_SHIFT & 0x3F) / 0x3F;
-    if (opacityThreshold == 0)
+    if (opacityThreshold == 1)
+        opacity = .5f;
+
+//    if (opacityThreshold == 0)
         opacityThreshold = SHADOW_DEFAULT_OPACITY_THRESHOLD;
 
     bool isTransparent = opacity <= opacityThreshold;

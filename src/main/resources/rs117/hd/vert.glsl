@@ -69,6 +69,10 @@ void main() {
     int materialData = int(vUv.w);
     int terrainData = int(vNormal.w);
 
+    float opacityThreshold = float(materialData >> MATERIAL_SHADOW_OPACITY_THRESHOLD_SHIFT & 0x3F) / 0x3F;
+    if (opacityThreshold == 1)
+        color.a = .5f;
+
     gPosition = position;
     gUv = vec3(vUv);
     gNormal = vNormal.xyz;
