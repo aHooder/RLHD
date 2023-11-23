@@ -748,7 +748,6 @@ public enum Underlay {
 		colorHSL[2] += includeMinimap ? shiftMinimapLightness : 0;
 		colorHSL[2] = HDUtils.clamp(colorHSL[2], 0, 127);
 
-
 		return colorHSL;
 	}
 

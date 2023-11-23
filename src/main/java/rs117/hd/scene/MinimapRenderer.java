@@ -15,6 +15,7 @@ import rs117.hd.utils.HDUtils;
 
 import static net.runelite.api.Constants.*;
 import static rs117.hd.scene.SceneUploader.SCENE_OFFSET;
+import static rs117.hd.utils.HDUtils.clamp;
 
 public class MinimapRenderer {
 	public static SceneTileModel[] tileModels = new SceneTileModel[52];
@@ -87,11 +88,6 @@ public class MinimapRenderer {
 							swColor = seColor = nwColor = neColor = 127;
 						}
 
-						int offset =
-							z * EXTENDED_SCENE_SIZE * EXTENDED_SCENE_SIZE * 4 +
-							x * EXTENDED_SCENE_SIZE * 4 +
-							y * 4;
-
 						if (!classicLighting) {
 							swColor = environmentalLighting(swColor);
 							seColor = environmentalLighting(seColor);
@@ -104,17 +100,14 @@ public class MinimapRenderer {
 							neColor = swColor & 0xFF80 | neColor & 0x7F;
 						}
 
-
-						sceneContext.minimapTilePaintColors[offset] = swColor;
-						sceneContext.minimapTilePaintColors[offset + 1] = seColor;
-						sceneContext.minimapTilePaintColors[offset + 2] = nwColor;
-						sceneContext.minimapTilePaintColors[offset + 3] = neColor;
+						sceneContext.minimapTilePaintColors[z][x][y][0] = swColor;
+						sceneContext.minimapTilePaintColors[z][x][y][1] = seColor;
+						sceneContext.minimapTilePaintColors[z][x][y][2] = nwColor;
+						sceneContext.minimapTilePaintColors[z][x][y][3] = neColor;
 					}
-
 
 					var model = tile.getSceneTileModel();
 					if (model != null) {
-
 						final int[] faceColorA = model.getTriangleColorA();
 						final int[] faceColorB = model.getTriangleColorB();
 						final int[] faceColorC = model.getTriangleColorC();
@@ -144,13 +137,6 @@ public class MinimapRenderer {
 								colorA = colorB = colorC = 127;
 							}
 
-							int offset =
-								z * EXTENDED_SCENE_SIZE * EXTENDED_SCENE_SIZE * 6 * 3 +
-								x * EXTENDED_SCENE_SIZE * 6 * 3 +
-								y * 6 * 3 +
-								face * 3;
-
-
 							if (!classicLighting) {
 								colorA = environmentalLighting(colorA);
 								colorB = environmentalLighting(colorB);
@@ -161,9 +147,9 @@ public class MinimapRenderer {
 								colorC = colorA & 0xFF80 | colorC & 0x7F;
 							}
 
-							sceneContext.minimapTileModelColors[offset] = colorA;
-							sceneContext.minimapTileModelColors[offset + 1] = colorB;
-							sceneContext.minimapTileModelColors[offset + 2] = colorC;
+							sceneContext.minimapTileModelColors[z][x][y][face][0] = colorA;
+							sceneContext.minimapTileModelColors[z][x][y][face][1] = colorB;
+							sceneContext.minimapTileModelColors[z][x][y][face][2] = colorC;
 						}
 					}
 				}
@@ -171,22 +157,9 @@ public class MinimapRenderer {
 		}
 	}
 
-	/**
-	 * Blends two integer values.
-	 *
-	 * @param baseValue   The base value to be blended.
-	 * @param blendFactor The factor by which the base value will be blended.
-	 * @return The resulting blended value.
-	 */
-	private static int blend(int baseValue, int blendFactor) {
-		// Extract the lower 7 bits of the base value and multiply it with the blend factor
-		int blendedValue = (baseValue & 0x7F) * blendFactor >> 7;
-
-		// Clamp the blended value between 2 and 126
-		blendedValue = Math.max(2, Math.min(126, blendedValue));
-
-		// Combine the upper 9 bits of the base value with the blended value
-		return (baseValue & 0xFF80) + blendedValue;
+	private static int blend(int baseHsl, int brightnessFactorHsl) {
+		int lightness = (baseHsl & 0x7F) * (brightnessFactorHsl & 0x7F) >> 7;
+		return (baseHsl & ~0x7F) | clamp(lightness, 0, 0x7F);
 	}
 
 	public void drawTile(Tile tile, int tx, int ty, int px0, int py0, int px1, int py1) {
@@ -205,7 +178,7 @@ public class MinimapRenderer {
 			rgb[i] *=
 				environmentManager.currentAmbientColor[i] * environmentManager.currentAmbientStrength +
 				environmentManager.currentDirectionalColor[i] * environmentManager.currentDirectionalStrength;
-			rgb[i] = HDUtils.clamp(rgb[i], 0, 1);
+			rgb[i] = clamp(rgb[i], 0, 1);
 		}
 		return ColorUtils.srgbToPackedHsl(ColorUtils.linearToSrgb(rgb));
 	}
@@ -223,7 +196,7 @@ public class MinimapRenderer {
 				SceneTileModel model = tile.getSceneTileModel();
 				if (model != null) {
 					SceneTileModel stm = tileModels[(model.getShape() << 2) | model.getRotation() & 3];
-					;
+
 					int[] vertexX = stm.getVertexX();
 					int[] vertexZ = stm.getVertexZ();
 
@@ -274,14 +247,10 @@ public class MinimapRenderer {
 
 		var paint = tile.getSceneTilePaint();
 		if (paint != null) {
-			int offset =
-				plane * EXTENDED_SCENE_SIZE * EXTENDED_SCENE_SIZE * 4 +
-				tileExX * EXTENDED_SCENE_SIZE * 4 +
-				tileExY * 4;
-			int swColor = sceneContext.minimapTilePaintColors[offset];
-			int seColor = sceneContext.minimapTilePaintColors[offset + 1];
-			int nwColor = sceneContext.minimapTilePaintColors[offset + 2];
-			int neColor = sceneContext.minimapTilePaintColors[offset + 3];
+			int swColor = sceneContext.minimapTilePaintColors[plane][tileExX][tileExY][0];
+			int seColor = sceneContext.minimapTilePaintColors[plane][tileExX][tileExY][1];
+			int nwColor = sceneContext.minimapTilePaintColors[plane][tileExX][tileExY][2];
+			int neColor = sceneContext.minimapTilePaintColors[plane][tileExX][tileExY][3];
 
 			int tex = paint.getTexture();
 			if (tex == -1) {
@@ -324,14 +293,9 @@ public class MinimapRenderer {
 				int idx2 = indicies2[face];
 				int idx3 = indicies3[face];
 
-				int offset =
-					plane * EXTENDED_SCENE_SIZE * EXTENDED_SCENE_SIZE * 6 * 3 +
-					tileExX * EXTENDED_SCENE_SIZE * 6 * 3 +
-					tileExY * 6 * 3 +
-					face * 3;
-				int c1 = sceneContext.minimapTileModelColors[offset];
-				int c2 = sceneContext.minimapTileModelColors[offset + 1];
-				int c3 = sceneContext.minimapTileModelColors[offset + 2];
+				int c1 = sceneContext.minimapTileModelColors[plane][tileExX][tileExY][face][0];
+				int c2 = sceneContext.minimapTileModelColors[plane][tileExX][tileExY][face][1];
+				int c3 = sceneContext.minimapTileModelColors[plane][tileExX][tileExY][face][2];
 
 				if (textures != null && textures[face] != -1) {
 					int hsl = client.getTextureProvider().getDefaultColor(textures[face]);

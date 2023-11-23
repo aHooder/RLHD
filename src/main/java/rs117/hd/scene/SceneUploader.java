@@ -32,7 +32,6 @@ import javax.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import rs117.hd.HdPlugin;
-import rs117.hd.HdPluginConfig;
 import rs117.hd.data.WaterType;
 import rs117.hd.data.environments.Area;
 import rs117.hd.data.materials.GroundMaterial;
@@ -67,12 +66,6 @@ class SceneUploader {
 
 	@Inject
 	private HdPlugin plugin;
-
-	@Inject
-	private EnvironmentManager environmentManager;
-
-	@Inject
-	private HdPluginConfig config;
 
 	@Inject
 	public ProceduralGenerator proceduralGenerator;
@@ -598,6 +591,7 @@ class SceneUploader {
 
 			uvBufferLength += 6;
 		}
+
 		return new int[]{bufferLength, uvBufferLength, underwaterTerrain};
 	}
 
@@ -914,7 +908,6 @@ class SceneUploader {
 			sceneContext.stagingBufferVertices.put(localVertices[0][0], localVertices[0][2], localVertices[0][1], colorA);
 			sceneContext.stagingBufferVertices.put(localVertices[1][0], localVertices[1][2], localVertices[1][1], colorB);
 			sceneContext.stagingBufferVertices.put(localVertices[2][0], localVertices[2][2], localVertices[2][1], colorC);
-
 
 			bufferLength += 3;
 
