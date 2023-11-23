@@ -60,7 +60,6 @@ import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
-import net.runelite.client.events.PluginChanged;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDependency;
 import net.runelite.client.plugins.PluginDescriptor;
@@ -77,9 +76,9 @@ import org.lwjgl.opengl.*;
 import org.lwjgl.system.Callback;
 import org.lwjgl.system.Configuration;
 import rs117.hd.config.AntiAliasingMode;
+import rs117.hd.config.MinimapStyle;
 import rs117.hd.config.SeasonalTheme;
 import rs117.hd.config.ShadingMode;
-import rs117.hd.config.MinimapStyle;
 import rs117.hd.config.ShadowMode;
 import rs117.hd.config.UIScalingMode;
 import rs117.hd.data.WaterType;
@@ -2440,16 +2439,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				boolean modelPusherClearModelCache = false;
 				boolean modelPusherReallocate = false;
 				boolean reuploadScene = false;
-
-				System.out.println(event.getNewValue());
-				switch (event.getNewValue()) {
-					case "HD2008":
-					case "DEFAULT":
-						if(sceneContext != null) {
-							minimapRenderer.prepareScene(sceneContext);
-						}
-						break;
-				}
+				boolean reprepareMinimap = false;
 
 				for (var key : pendingConfigChanges) {
 					switch (key) {
@@ -2457,6 +2447,9 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 							client.setExpandedMapLoading(getExpandedMapLoadingChunks());
 							if (client.getGameState() == GameState.LOGGED_IN)
 								client.setGameState(GameState.LOADING);
+							break;
+						case KEY_MINIMAP_STYLE:
+							reprepareMinimap = true;
 							break;
 						case KEY_COLOR_BLINDNESS:
 						case KEY_MACOS_INTEL_WORKAROUND:
@@ -2545,6 +2538,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 				if (reuploadScene)
 					reuploadScene();
+				else if (reprepareMinimap && sceneContext != null)
+					minimapRenderer.prepareScene(sceneContext);
 
 				if (recreateShadowMapFbo) {
 					destroyShadowMapFbo();

@@ -96,8 +96,9 @@ public interface HdPluginConfig extends Config
 		return 3;
 	}
 
+	String KEY_MINIMAP_STYLE = "minimapStyle";
 	@ConfigItem(
-		keyName = "minimapStyle",
+		keyName = KEY_MINIMAP_STYLE,
 		name = "Improved Minimap",
 		description =
 			"Edits the minimap style.<br>" +
