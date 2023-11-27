@@ -2563,9 +2563,9 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		client.setUnlockedFps(unlockFps);
 
 		// Without unlocked fps, the client manages sync on its 20ms timer
-		HdPluginConfig.SyncMode syncMode = unlockFps
+		SyncMode syncMode = unlockFps
 				? this.config.syncMode()
-				: HdPluginConfig.SyncMode.OFF;
+			: SyncMode.OFF;
 
 		int swapInterval;
 		switch (syncMode)
