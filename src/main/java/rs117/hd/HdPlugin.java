@@ -1646,6 +1646,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				float centerX = (minX + maxX) / 2;
 				float centerY = (minY + maxY) / 2;
 
+				width = height = Math.max(width, height);
+
 				// Slightly increase the width and height enough to make room for up to half a texel shift in any direction
 				// w = w + w * a + w * a^2
 				// S = 1 + a + a^2 + a^3 ...
