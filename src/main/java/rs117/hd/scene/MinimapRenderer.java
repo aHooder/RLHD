@@ -171,6 +171,14 @@ public class MinimapRenderer {
 							}
 						}
 
+						if (paint.getNwColor() == 12345678) {
+							int packedCol = ColorUtils.srgbToPackedHsl(ColorUtils.unpackARGB(paint.getRBG()));
+							swColor = packedCol;
+							seColor = packedCol;
+							nwColor = packedCol;
+							neColor = packedCol;
+						}
+
 						if (!classicLighting) {
 							swColor = environmentalLighting(swColor);
 							seColor = environmentalLighting(seColor);
@@ -197,6 +205,14 @@ public class MinimapRenderer {
 						int mseColor = multiplyAndPackColors(seTextureColor, seColorRBG);
 						int mnwColor = multiplyAndPackColors(nwTextureColor, nwColorRBG);
 						int mneColor = multiplyAndPackColors(neTextureColor, neColorRBG);
+
+						if (paint.getNwColor() == 12345678) {
+							int packedCol = ColorUtils.srgbToPackedHsl(ColorUtils.unpackARGB(paint.getRBG()));
+							swTexture = packedCol;
+							mseColor = packedCol;
+							mnwColor = packedCol;
+							mneColor = packedCol;
+						}
 
 						mseColor = swTexture & 0xFF80 | mseColor & 0x7F;
 						mnwColor = swTexture & 0xFF80 | mnwColor & 0x7F;
@@ -496,8 +512,18 @@ public class MinimapRenderer {
 			int nwTexture = sceneContext.minimapTilePaintColorsTextures[plane][tileExX][tileExY][2];
 			int neTexture = sceneContext.minimapTilePaintColorsTextures[plane][tileExX][tileExY][3];
 
+			boolean hasTexture = nwTexture != 0;
 
-			fillGradient(px0, py0, px1, py1, nwTexture, neTexture, swTexture, seTexture);
+			fillGradient(
+				px0,
+				py0,
+				px1,
+				py1,
+				hasTexture ? nwTexture : nwColor,
+				hasTexture ? neTexture : neColor,
+				hasTexture ? swTexture : swColor,
+				hasTexture ? seTexture : seColor
+			);
 
 
 		}
@@ -539,12 +565,7 @@ public class MinimapRenderer {
 				int mc2 = sceneContext.minimapTileModelColorsTextures[plane][tileExX][tileExY][face][1];
 				int mc3 = sceneContext.minimapTileModelColorsTextures[plane][tileExX][tileExY][face][2];
 
-				boolean textured = !(mc1 != 0 || mc2 != 0 || mc3 != 0);
-				if (textured) {
-					textured = (textures != null && textures[face] != -1);
-				}
-
-				if (textured) {
+				if ((textures != null && textures[face] != -1)) {
 					client.getRasterizer().rasterGouraud(
 						tmpScreenY[idx1], tmpScreenY[idx2], tmpScreenY[idx3],
 						tmpScreenX[idx1], tmpScreenX[idx2], tmpScreenX[idx3],
