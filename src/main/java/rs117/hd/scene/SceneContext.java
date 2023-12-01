@@ -60,8 +60,6 @@ public class SceneContext {
 	public int[][][][] minimapTilePaintColors = new int[MAX_Z][EXTENDED_SCENE_SIZE][EXTENDED_SCENE_SIZE][8];
 	public int[][][][][] minimapTileModelColors = new int[MAX_Z][EXTENDED_SCENE_SIZE][EXTENDED_SCENE_SIZE][6][6];
 
-	public int[][][][] minimapTilePaintColorsTextures = new int[MAX_Z][EXTENDED_SCENE_SIZE][EXTENDED_SCENE_SIZE][4];
-	public int[][][][][] minimapTileModelColorsTextures = new int[MAX_Z][EXTENDED_SCENE_SIZE][EXTENDED_SCENE_SIZE][6][3];
 
 	public final ArrayList<SceneLight> lights = new ArrayList<>();
 	public final HashSet<Projectile> projectiles = new HashSet<>();
