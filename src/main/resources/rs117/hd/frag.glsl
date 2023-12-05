@@ -102,7 +102,6 @@ vec2 worldUvs(float scale) {
 #include utils/lighting.glsl
 
 void main() {
-    Context ctx;
     ctx.viewDir = normalize(cameraPos - IN.position);
     ctx.fragPos = IN.position;
     ctx.texBlend = IN.texBlend;
@@ -125,32 +124,32 @@ void main() {
         ctx.texBlend[1] * vUv[1] +
         ctx.texBlend[2] * vUv[2];
 
-    populateSceneTerrainInformation(ctx);
+    populateSceneTerrainInformation();
 
     vec4 outputColor = vec4(1);
     if (ctx.isWater) {
-        outputColor = sampleWater(ctx);
+        outputColor = sampleWater();
     } else {
-        populateUvs(ctx);
-        applyUvFlow(ctx);
-        populateTangentSpaceMatrix(ctx);
-        applyUvDisplacement(ctx);
-        populateAlbedo(ctx);
-        populateNormals(ctx);
-        populateSmoothnessAndReflectivity(ctx);
-        populateContextDotProducts(ctx);
+        populateUvs();
+        applyUvFlow();
+        populateTangentSpaceMatrix();
+        applyUvDisplacement();
+        populateAlbedo();
+        populateNormals();
+        populateSmoothnessAndReflectivity();
+        populateContextDotProducts();
         populateLightVectors(ctx.sun, lightDir, ctx.normals);
-        populateLightDotProducts(ctx.sun, ctx);
-        applyWaterCaustics(ctx, underwaterCaustics, underwaterEnvironment);
+        populateLightDotProducts(ctx.sun);
+        applyWaterCaustics(underwaterCaustics, underwaterEnvironment);
 
-        float sunAttenuation = lightAttenuation(ctx.sun, ctx, vec2(0));
-        vec3 ambientTerm = ambientTerm(ctx, fogColor, ambientStrength);
+        float sunAttenuation = lightAttenuation(ctx.sun, vec2(0));
+        vec3 ambientTerm = ambientTerm(fogColor, ambientStrength);
         vec3 diffuseTerm = ctx.sun.ndl * ctx.sun.color * sunAttenuation;
         vec3 specularTerm = ctx.sun.color * getSpecular(ctx.viewDir, ctx.sun.reflection, ctx.smoothness, ctx.reflectivity) * sunAttenuation;
 
         vec3 lightsDiffuse = vec3(0);
         vec3 lightsSpecular = vec3(0);
-        gatherLights(lightsDiffuse, lightsSpecular, ctx);
+        gatherLights(lightsDiffuse, lightsSpecular);
 
         vec3 lightningEffect = ctx.udn * vec3(.25) * lightningBrightness;
 
@@ -166,14 +165,14 @@ void main() {
             lightningEffect;
 
         outputColor = ctx.albedo;
-        outputColor.rgb *= mix(compositeLight, vec3(1), isMaterialUnlit(ctx));
+        outputColor.rgb *= mix(compositeLight, vec3(1), isMaterialUnlit());
         outputColor.rgb = linearToSrgb(outputColor.rgb);
 
-        sampleUnderwater(outputColor.rgb, ctx);
+        sampleUnderwater(outputColor.rgb);
     }
 
     postProcessImage(outputColor.rgb);
-    applyFog(outputColor, ctx, IN.position, cameraPos, groundFogStart, groundFogEnd, groundFogOpacity);
+    applyFog(outputColor, IN.position, cameraPos, groundFogStart, groundFogEnd, groundFogOpacity);
 
     FragColor = outputColor;
 }

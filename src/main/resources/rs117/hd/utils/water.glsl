@@ -27,7 +27,7 @@
 #include utils/helpers.glsl
 #include utils/lighting.glsl
 
-vec4 sampleWater(inout Context ctx) {
+vec4 sampleWater() {
     WaterType waterType = getWaterType(ctx.waterTypeIndex);
 
     vec2 uv1 = worldUvs(3).yx - animationFrame(28 * waterType.duration);
@@ -50,22 +50,22 @@ vec4 sampleWater(inout Context ctx) {
     n1 = -vec3((n1.x * 2 - 1) * waterType.normalStrength, n1.z, (n1.y * 2 - 1) * waterType.normalStrength);
     n2 = -vec3((n2.x * 2 - 1) * waterType.normalStrength, n2.z, (n2.y * 2 - 1) * waterType.normalStrength);
     ctx.normals = normalize(n1 + n2);
-    populateContextDotProducts(ctx);
+    populateContextDotProducts();
     populateLightVectors(ctx.sun, lightDir, ctx.normals);
-    populateLightDotProducts(ctx.sun, ctx);
+    populateLightDotProducts(ctx.sun);
 
     ctx.smoothness = vec3(waterType.specularGloss);
     ctx.reflectivity = vec3(waterType.specularStrength);
 
-    float sunAttenuation = lightAttenuation(ctx.sun, ctx, uvFlow * .00075);
-    vec3 ambientTerm = ambientTerm(ctx, fogColor, ambientStrength);
+    float sunAttenuation = lightAttenuation(ctx.sun, uvFlow * .00075);
+    vec3 ambientTerm = ambientTerm(fogColor, ambientStrength);
     vec3 diffuseTerm = ctx.sun.ndl * ctx.sun.color * sunAttenuation;
     vec3 specularTerm = ctx.sun.color * getSpecular(ctx.viewDir, ctx.sun.reflection, ctx.smoothness, ctx.reflectivity) * sunAttenuation;
 
     // point lights
     vec3 lightsDiffuse = vec3(0);
     vec3 lightsSpecular = vec3(0);
-    gatherLights(lightsDiffuse, lightsSpecular, ctx);
+    gatherLights(lightsDiffuse, lightsSpecular);
 
     // lightning
     vec3 lightningEffect = ctx.udn * vec3(.25) * lightningBrightness;
@@ -123,7 +123,7 @@ vec4 sampleWater(inout Context ctx) {
     return vec4(baseColor, alpha);
 }
 
-void sampleUnderwater(inout vec3 outputColor, const Context ctx) {
+void sampleUnderwater(inout vec3 outputColor) {
     if (!ctx.isUnderwater)
         return;
 
@@ -162,7 +162,7 @@ void sampleUnderwater(inout vec3 outputColor, const Context ctx) {
     }
 }
 
-void applyWaterCaustics(inout Context ctx, bool underwaterCaustics, bool underwaterEnvironment) {
+void applyWaterCaustics(bool underwaterCaustics, bool underwaterEnvironment) {
     // underwater caustics based on directional light
     if (underwaterCaustics && underwaterEnvironment) {
         float scale = 12.8;

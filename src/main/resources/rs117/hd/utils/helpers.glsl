@@ -5,16 +5,16 @@ void populateLightVectors(inout Light light, vec3 dir, vec3 normals) {
     light.reflection = reflect(-dir, normals);
 }
 
-void populateLightDotProducts(inout Light light, const Context ctx) {
+void populateLightDotProducts(inout Light light) {
     light.ndl = max(dot(ctx.normals, light.direction), 0);
 }
 
-void populateContextDotProducts(inout Context ctx) {
+void populateContextDotProducts() {
     ctx.vdn = max(dot(ctx.viewDir, ctx.normals), 0);
     ctx.udn = max(-ctx.normals.y, 0);
 }
 
-void populateSceneTerrainInformation(inout Context ctx) {
+void populateSceneTerrainInformation() {
     // Water data
     bool isTerrain = (vTerrainData[0] & 1) != 0; // 1 = 0b1
     int waterDepth1 = vTerrainData[0] >> 8 & 0x7FF;
@@ -34,7 +34,7 @@ void populateSceneTerrainInformation(inout Context ctx) {
     ctx.waterDepth = waterDepth;
 }
 
-void populateUvs(inout Context ctx) {
+void populateUvs() {
     // Vanilla tree textures rely on UVs being clamped horizontally,
     // which HD doesn't do, so we instead opt to hide these fragments
     if ((ctx.materialData >> MATERIAL_FLAG_VANILLA_UVS & 1) == 1) {
@@ -61,7 +61,7 @@ void populateUvs(inout Context ctx) {
     ctx.uvs[2] = (ctx.uvs[2] - 0.5) * ctx.materials[2].textureScale + 0.5;
 }
 
-void applyUvFlow(inout Context ctx) {
+void applyUvFlow() {
     vec2 flowMapUv = ctx.uvs[0] - animationFrame(ctx.materials[0].flowMapDuration);
     float flowMapStrength = ctx.materials[0].flowMapStrength;
     if (ctx.isUnderwater) {
@@ -99,7 +99,7 @@ void postProcessImage(inout vec3 color) {
     color.rgb = colorBlindnessCompensation(color.rgb);
 }
 
-void applyFog(inout vec4 color, const Context ctx, vec3 pos, vec3 camPos, float fogStart, float fogEnd, float fogOpacity) {
+void applyFog(inout vec4 color, vec3 pos, vec3 camPos, float fogStart, float fogEnd, float fogOpacity) {
     if (ctx.isUnderwater)
         return;
 
@@ -242,7 +242,7 @@ void adjustVertexColors(inout vec4 baseColor1, inout vec4 baseColor2, inout vec4
     #endif
 }
 
-void populateAlbedo(inout Context ctx) {
+void populateAlbedo() {
     // get vertex colors
     vec4 baseColor1 = vColor[0];
     vec4 baseColor2 = vColor[1];
@@ -268,12 +268,12 @@ void populateAlbedo(inout Context ctx) {
     ctx.albedo = mix(underlayColor, overlayColor, overlayMix);
 }
 
-void populateTangentSpaceMatrix(inout Context ctx) {
+void populateTangentSpaceMatrix() {
     vec3 N = normalize(IN.normal);
     ctx.TBN = mat3(T, B, N * min(length(T), length(B)));
 }
 
-void populateNormals(inout Context ctx) {
+void populateNormals() {
     if ((ctx.materialData >> MATERIAL_FLAG_UPWARDS_NORMALS & 1) == 1) {
         ctx.normals = vec3(0.0, -1.0, 0.0);
     } else {
@@ -290,7 +290,7 @@ float sampleRoughness(const Material mat, const vec2 uv) {
     return linearToSrgb(texture(textureArray, vec3(uv, mat.roughnessMap)).r);
 }
 
-void populateSmoothnessAndReflectivity(inout Context ctx) {
+void populateSmoothnessAndReflectivity() {
     vec3 smoothness = vec3(ctx.materials[0].specularGloss, ctx.materials[1].specularGloss, ctx.materials[2].specularGloss);
     vec3 reflectivity = vec3(ctx.materials[0].specularStrength, ctx.materials[1].specularStrength, ctx.materials[2].specularStrength);
     reflectivity *= vec3(
@@ -314,7 +314,7 @@ void populateSmoothnessAndReflectivity(inout Context ctx) {
     ctx.reflectivity = reflectivity;
 }
 
-float isMaterialUnlit(Context ctx) {
+float isMaterialUnlit() {
     float unlit = dot(ctx.texBlend, vec3(
         getMaterialIsUnlit(ctx.materials[0]),
         getMaterialIsUnlit(ctx.materials[1]),

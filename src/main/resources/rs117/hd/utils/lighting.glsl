@@ -8,14 +8,14 @@ float sampleAmbientOcclusion(const Material mat, const vec2 uv) {
     return texture(textureArray, vec3(uv, mat.ambientOcclusionMap)).r;
 }
 
-float getAmbientOcclusion(Context ctx) {
+float getAmbientOcclusion() {
     return
         ctx.texBlend[0] * sampleAmbientOcclusion(ctx.materials[0], ctx.uvs[0]) +
         ctx.texBlend[1] * sampleAmbientOcclusion(ctx.materials[1], ctx.uvs[1]) +
         ctx.texBlend[2] * sampleAmbientOcclusion(ctx.materials[2], ctx.uvs[2]);
 }
 
-vec3 ambientTerm(Context ctx, vec3 fogColor, float strength) {
+vec3 ambientTerm(vec3 fogColor, float strength) {
     vec3 ambient = ambientColor * strength;
     vec3 skyLight = ctx.udn * fogColor * 0.5;
     return ambient + skyLight;
@@ -23,7 +23,7 @@ vec3 ambientTerm(Context ctx, vec3 fogColor, float strength) {
 
 // Generally in most engines, attenuation ends up being the shadowmap and the falloff, depending on the light type.
 // So we're going to do the same thing here to make it easy to access / modify
-float lightAttenuation(inout Light light, const Context ctx, const vec2 distortion) {
+float lightAttenuation(inout Light light, const vec2 distortion) {
     float atten = 1.0f;
 
     switch(light.type) {
@@ -48,7 +48,7 @@ float lightAttenuation(inout Light light, const Context ctx, const vec2 distorti
     return atten;
 }
 
-void gatherLights(inout vec3 diffuse, inout vec3 specular, const Context ctx) {
+void gatherLights(inout vec3 diffuse, inout vec3 specular) {
     for (int i = 0; i < pointLightsCount; i++) {
         Light light;
         light.position = PointLightArray[i].position.xyz;
@@ -65,9 +65,9 @@ void gatherLights(inout vec3 diffuse, inout vec3 specular, const Context ctx) {
 
             vec3 pointLightDir = normalize(lightToFrag);
             populateLightVectors(light, pointLightDir, ctx.normals);
-            populateLightDotProducts(light, ctx);
+            populateLightDotProducts(light);
 
-            float attenuation = lightAttenuation(light, ctx, vec2(0));
+            float attenuation = lightAttenuation(light, vec2(0));
 
             diffuse += light.color * attenuation * light.ndl;
             specular += light.color * attenuation * getSpecular(ctx.viewDir, light.reflection, ctx.smoothness, ctx.reflectivity);

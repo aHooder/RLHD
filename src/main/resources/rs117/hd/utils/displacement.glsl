@@ -116,7 +116,7 @@ void sampleDisplacementMap(
 }
 #endif
 
-void applyUvDisplacement(inout Context ctx) {
+void applyUvDisplacement() {
     #if PARALLAX_OCCLUSION_MAPPING
         mat3 invTBN = inverse(ctx.TBN);
         vec3 tsViewDir = invTBN * ctx.viewDir;
