@@ -49,8 +49,8 @@ float lightAttenuation(inout Light light, const Context ctx, const vec2 distorti
 }
 
 void gatherLights(inout vec3 diffuse, inout vec3 specular, const Context ctx) {
+    Light light;
     for (int i = 0; i < pointLightsCount; i++) {
-        Light light;
         light.position = PointLightArray[i].position.xyz;
         light.radius = PointLightArray[i].position.w;
 
