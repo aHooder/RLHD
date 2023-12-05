@@ -5,7 +5,7 @@ void populateLightVectors(inout Light light, vec3 dir, vec3 normals) {
     light.reflection = reflect(-dir, normals);
 }
 
-void populateLightDotProducts(inout Light light, Context ctx) {
+void populateLightDotProducts(inout Light light, const Context ctx) {
     light.ndl = max(dot(ctx.normals, light.direction), 0);
 }
 
@@ -99,7 +99,7 @@ void postProcessImage(inout vec3 color) {
     color.rgb = colorBlindnessCompensation(color.rgb);
 }
 
-void applyFog(inout vec4 color, Context ctx, vec3 pos, vec3 camPos, float fogStart, float fogEnd, float fogOpacity) {
+void applyFog(inout vec4 color, const Context ctx, vec3 pos, vec3 camPos, float fogStart, float fogEnd, float fogOpacity) {
     if (ctx.isUnderwater)
         return;
 

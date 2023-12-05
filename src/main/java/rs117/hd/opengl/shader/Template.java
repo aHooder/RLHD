@@ -159,6 +159,8 @@ public class Template
 				for (var s : ctx)
 					line = line.replaceAll("ctx." + s, "global" + s);
 
+				line = line.replaceAll("const Context", "inout Context");
+
 				sb.append(line).append('\n');
 			}
 		}

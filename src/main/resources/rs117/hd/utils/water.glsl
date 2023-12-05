@@ -123,7 +123,7 @@ vec4 sampleWater(inout Context ctx) {
     return vec4(baseColor, alpha);
 }
 
-void sampleUnderwater(inout vec3 outputColor, Context ctx) {
+void sampleUnderwater(inout vec3 outputColor, const Context ctx) {
     if (!ctx.isUnderwater)
         return;
 
