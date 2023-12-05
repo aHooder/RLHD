@@ -35,14 +35,18 @@ import java.awt.Image;
 import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferInt;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.nio.ShortBuffer;
+import java.nio.file.Paths;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -75,6 +79,7 @@ import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.*;
 import org.lwjgl.system.Callback;
 import org.lwjgl.system.Configuration;
+import org.lwjgl.system.MemoryUtil;
 import rs117.hd.config.AntiAliasingMode;
 import rs117.hd.config.SeasonalTheme;
 import rs117.hd.config.ShadingMode;
@@ -808,7 +813,42 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		glUseProgram(glUiProgram);
 		glUniform1i(uniUiTexture, TEXTURE_UNIT_UI - TEXTURE_UNIT_BASE);
 
+		SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH-mm-ss");
+		ResourcePath dir = path("shader-dumps", dateFormat.format(new Date()));
+		dir.resolve("file").mkdirs();
+		dumpBinary(glSceneProgram, dir.resolve("scene-program.bin").toString());
+		dumpBinary(glUiProgram, dir.resolve("ui-program.bin").toString());
+		dumpBinary(glShadowProgram, dir.resolve("shadow-program.bin").toString());
+		dumpBinary(glModelPassthroughComputeProgram, dir.resolve("passthrough-program.bin").toString());
+		for (int i = 0; i < glModelSortingComputePrograms.length; i++) {
+			dumpBinary(
+				glModelSortingComputePrograms[i],
+				dir.resolve("sorting-program-" + modelSortingBinFaceCounts[i] + ".bin").toString()
+			);
+		}
+
 		glUseProgram(0);
+	}
+
+	private void dumpBinary(int program, String outputPath) {
+		ByteBuffer binary = MemoryUtil.memAlloc((int) 500e6);
+		try {
+			int[] length = { 0 };
+			int[] format = { 0 };
+			glGetProgramBinary(program, length, format, binary);
+
+			String path = Paths.get(outputPath).toAbsolutePath().toString();
+			log.info("Dumping binary with format {} to {}", format[0], path);
+			try (FileOutputStream os = new FileOutputStream(path)) {
+				binary.limit(length[0]);
+				while (binary.hasRemaining())
+					os.getChannel().write(binary);
+			} catch (Exception ex) {
+				ex.printStackTrace();
+			}
+		} finally {
+			MemoryUtil.memFree(binary);
+		}
 	}
 
 	private void initUniforms() {
