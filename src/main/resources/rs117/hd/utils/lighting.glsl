@@ -49,28 +49,28 @@ float lightAttenuation(inout Light light, const vec2 distortion) {
 }
 
 void gatherLights(inout vec3 diffuse, inout vec3 specular) {
-    for (int i = 0; i < pointLightsCount; i++) {
-        Light light;
-        light.position = PointLightArray[i].position.xyz;
-        light.radius = PointLightArray[i].position.w;
-
-        vec3 lightToFrag = light.position - ctx.fragPos;
-        light.distance = dot(lightToFrag, lightToFrag); // compute distance squared
-
-        if (light.distance <= light.radius) {
-            // Hardcoding point light type here for now.
-            // We will need a better way to define light type in the future if we ever add spot lights or something.
-            light.type = LIGHT_POINT;
-            light.color = PointLightArray[i].color;
-
-            vec3 pointLightDir = normalize(lightToFrag);
-            populateLightVectors(light, pointLightDir, ctx.normals);
-            populateLightDotProducts(light);
-
-            float attenuation = lightAttenuation(light, vec2(0));
-
-            diffuse += light.color * attenuation * light.ndl;
-            specular += light.color * attenuation * getSpecular(ctx.viewDir, light.reflection, ctx.smoothness, ctx.reflectivity);
-        }
-    }
+//    for (int i = 0; i < pointLightsCount; i++) {
+//        Light light;
+//        light.position = PointLightArray[i].position.xyz;
+//        light.radius = PointLightArray[i].position.w;
+//
+//        vec3 lightToFrag = light.position - ctx.fragPos;
+//        light.distance = dot(lightToFrag, lightToFrag); // compute distance squared
+//
+//        if (light.distance <= light.radius) {
+//            // Hardcoding point light type here for now.
+//            // We will need a better way to define light type in the future if we ever add spot lights or something.
+//            light.type = LIGHT_POINT;
+//            light.color = PointLightArray[i].color;
+//
+//            vec3 pointLightDir = normalize(lightToFrag);
+//            populateLightVectors(light, pointLightDir, ctx.normals);
+//            populateLightDotProducts(light);
+//
+//            float attenuation = lightAttenuation(light, vec2(0));
+//
+//            diffuse += light.color * attenuation * light.ndl;
+//            specular += light.color * attenuation * getSpecular(ctx.viewDir, light.reflection, ctx.smoothness, ctx.reflectivity);
+//        }
+//    }
 }
