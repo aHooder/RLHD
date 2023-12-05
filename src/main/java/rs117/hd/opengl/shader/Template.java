@@ -134,6 +134,31 @@ public class Template
 			}
 			else
 			{
+				String[] ctx = {
+					"sun",
+					"viewDir",
+					"udn",
+					"vdn",
+					"materialData",
+					"texBlend",
+					"mipBias",
+					"fragPos",
+					"TBN",
+					"albedo",
+					"normals",
+					"smoothness",
+					"reflectivity",
+					"isWater",
+					"isUnderwater",
+					"waterType",
+					"waterTypeIndex",
+					"waterDepth",
+					"materials",
+					"uvs",
+				};
+				for (var s : ctx)
+					line = line.replaceAll("ctx." + s, "global" + s);
+
 				sb.append(line).append('\n');
 			}
 		}
