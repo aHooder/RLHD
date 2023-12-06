@@ -141,11 +141,7 @@ public class MinimapRenderer {
 		for (int i = 0; i < 4; i++) {
 			if (hiddenTile) {
 				colors[i] = hiddenRBG;
-			} else if (!classicLighting) {
-				colors[i] = environmentalLighting(colors[i]);
 			}
-
-			colors[i] = colors[0] & 0xFF80 | colors[i] & 0x7F; // Hue and saturation consistency
 
 			textureColors[i] = textureManager.getTextureAverageColor(materials[i]);
 			float[] colorRGB = ColorUtils.srgbToLinear(ColorUtils.packedHslToSrgb(colors[i]));
@@ -242,16 +238,6 @@ public class MinimapRenderer {
 				Arrays.fill(materials, Material.WATER_FLAT);
 			}
 
-			if (!classicLighting) {
-				for (int i = 0; i < colors.length; i++) {
-					colors[i] = environmentalLighting(colors[i]);
-				}
-			}
-
-			for (int i = 1; i < colors.length; i++) {
-				colors[i] = colors[0] & 0xFF80 | colors[i] & 0x7F;
-			}
-
 			float[][] linearColors = new float[colors.length][];
 			for (int i = 0; i < colors.length; i++) {
 				linearColors[i] = ColorUtils.srgbToLinear(ColorUtils.packedHslToSrgb(colors[i]));
@@ -296,7 +282,7 @@ public class MinimapRenderer {
 		frameTimer.begin(Timer.MINIMAP_DRAW);
 		try {
 			if (config.minimapType() == MinimapStyle.DEFAULT || config.minimapType() == MinimapStyle.HD2008) {
-				drawMinimapShaded(tile, tx, ty, px0, py0, px1, py1);
+				drawMinimapShaded(tile, tx, ty, px0, py0, px1, py1, config.minimapType() == MinimapStyle.HD2008);
 			} else {
 				drawMinimapOSRS(tile, tx, ty, px0, py0, px1, py1);
 			}
@@ -372,7 +358,7 @@ public class MinimapRenderer {
 		}
 	}
 
-	private void drawMinimapShaded(Tile tile, int tx, int ty, int px0, int py0, int px1, int py1) {
+	private void drawMinimapShaded(Tile tile, int tx, int ty, int px0, int py0, int px1, int py1, boolean classicLighting) {
 		var sceneContext = plugin.getSceneContext();
 		if (sceneContext == null)
 			return;
@@ -392,6 +378,26 @@ public class MinimapRenderer {
 			int seTexture = sceneContext.minimapTilePaintColors[plane][tileExX][tileExY][5];
 			int nwTexture = sceneContext.minimapTilePaintColors[plane][tileExX][tileExY][6];
 			int neTexture = sceneContext.minimapTilePaintColors[plane][tileExX][tileExY][7];
+
+			if (!classicLighting) {
+				swColor = environmentalLighting(swColor);
+				seColor = environmentalLighting(seColor);
+				nwColor = environmentalLighting(nwColor);
+				neColor = environmentalLighting(neColor);
+				swTexture = environmentalLighting(swTexture);
+				seTexture = environmentalLighting(seTexture);
+				nwTexture = environmentalLighting(nwTexture);
+				neTexture = environmentalLighting(neTexture);
+
+				seColor = swColor & 0xFF80 | seColor & 0x7F;
+				nwColor = swColor & 0xFF80 | nwColor & 0x7F;
+				neColor = swColor & 0xFF80 | neColor & 0x7F;
+
+				seTexture = swTexture & 0xFF80 | seTexture & 0x7F;
+				nwTexture = swTexture & 0xFF80 | nwTexture & 0x7F;
+				neTexture = swTexture & 0xFF80 | neTexture & 0x7F;
+			}
+
 
 			boolean hasTexture = nwTexture != 0;
 
@@ -445,6 +451,23 @@ public class MinimapRenderer {
 				int mc1 = sceneContext.minimapTileModelColors[plane][tileExX][tileExY][face][3];
 				int mc2 = sceneContext.minimapTileModelColors[plane][tileExX][tileExY][face][4];
 				int mc3 = sceneContext.minimapTileModelColors[plane][tileExX][tileExY][face][5];
+
+				if (!classicLighting) {
+					c1 = environmentalLighting(c1);
+					c2 = environmentalLighting(c2);
+					c3 = environmentalLighting(c3);
+					mc1 = environmentalLighting(mc1);
+					mc2 = environmentalLighting(mc2);
+					mc3 = environmentalLighting(mc3);
+
+					c2 = c1 & 0xFF80 | c2 & 0x7F;
+					c3 = c1 & 0xFF80 | c3 & 0x7F;
+
+					mc2 = mc1 & 0xFF80 | mc2 & 0x7F;
+					mc3 = mc1 & 0xFF80 | mc3 & 0x7F;
+
+				}
+
 
 				if ((textures != null && textures[face] != -1)) {
 					client.getRasterizer().rasterGouraud(

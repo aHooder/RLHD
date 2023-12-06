@@ -55,8 +55,13 @@ public class EnvironmentManager {
 	@Inject
 	private HdPluginConfig config;
 
+	public boolean updatingEnviroment = true;
+
 	@Nonnull
 	private Environment currentEnvironment = Environment.NONE;
+
+	@Inject
+	private MinimapRenderer minimapRenderer;
 
 	// transition time
 	private static final int TRANSITION_DURATION = 3000;
@@ -148,7 +153,6 @@ public class EnvironmentManager {
 		forceNextTransition = true;
 	}
 
-
 	/**
 	 * Updates variables used in transition effects
 	 *
@@ -190,6 +194,7 @@ public class EnvironmentManager {
 		// interpolate between start and target values
 		long currentTime = System.currentTimeMillis();
 		float t = clamp((currentTime - startTime) / (float) TRANSITION_DURATION, 0, 1);
+		updatingEnviroment = t != 1;
 		currentFogColor = hermite(startFogColor, targetFogColor, t);
 		currentWaterColor = hermite(startWaterColor, targetWaterColor, t);
 		currentFogDepth = hermite(startFogDepth, targetFogDepth, t);
@@ -231,6 +236,7 @@ public class EnvironmentManager {
 		}
 
 		log.debug("changing environment from {} to {} (instant: {})", currentEnvironment, newEnvironment, skipTransition);
+		updatingEnviroment = true;
 		currentEnvironment = newEnvironment;
 
 		// set previous variables to current ones
