@@ -180,9 +180,9 @@ public class TextureManager {
 		return true;
 	}
 
-	private boolean ensureMaterialsAreLoaded() {
+	private void ensureMaterialsAreLoaded() {
 		if (textureArray != 0)
-			return true;
+			return;
 
 		assert vanillaTexturesAvailable();
 		var textureProvider = client.getTextureProvider();
@@ -349,8 +349,6 @@ public class TextureManager {
 		vanillaTextureIndexToTextureLayer = null;
 		textureProvider.setBrightness(vanillaBrightness);
 		glActiveTexture(TEXTURE_UNIT_UI);
-
-		return true;
 	}
 
 	private BufferedImage loadTextureImage(Material material) {
@@ -509,8 +507,8 @@ public class TextureManager {
 			.putFloat(m.flowMapDuration[1])
 			.putFloat(scrollSpeedX)
 			.putFloat(scrollSpeedY)
-			.putFloat(m.textureScale[0])
-			.putFloat(m.textureScale[1])
+			.putFloat(1 / m.textureScale[0])
+			.putFloat(1 / m.textureScale[1])
 			.putFloat(0).putFloat(0); // align vec4
 	}
 

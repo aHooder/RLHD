@@ -24414,6 +24414,24 @@
     ]
   },
   {
+    "description": "TEMPOROSS_FIRE",
+    "height": 40,
+    "alignment": "CENTER",
+    "radius": 450,
+    "strength": 10.0,
+    "color": [
+      252,
+      148,
+      3
+    ],
+    "type": "FLICKER",
+    "duration": 0,
+    "range": 20,
+    "objectIds": [
+      37582
+    ]
+  },
+  {
     "description": "ELECTRIFIED_HARPOONFISH_CANNON",
     "height": 50,
     "alignment": "CENTER",
@@ -30114,10 +30132,7 @@
     "type": "STATIC",
     "duration": 600,
     "range": 3,
-    "objectIds": [
-      44826,
-      44934
-    ]
+    "objectIds": [ ]
   },
   {
     "description": "CAVE_WALL_LANTERN",

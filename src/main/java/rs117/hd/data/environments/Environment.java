@@ -453,7 +453,6 @@ public enum Environment
 		.setDirectionalColor("#FFFFFF")
 		.setDirectionalStrength(1.0f)
 		.setLightDirection(260f, 10f)
-		.setWaterColor(70, 146, 223)
 	),
 
 	GAMES_ROOM(Area.GAMES_ROOM, new Properties()
@@ -654,6 +653,7 @@ public enum Environment
 	PRIFDDINAS(Area.PRIFDDINAS, new Properties()
 		.setFogColor("#99D8C8")
 		.setFogDepth(15)
+		.setLightDirection(-128, 55)
 	),
 	ZALCANO(Area.ZALCANO, new Properties()
 		.setFogColor(0.8f, 0.6f, 0.6f)
@@ -760,7 +760,6 @@ public enum Environment
 		.setAmbientStrength(1.0f)
 		.setDirectionalColor(78, 238, 255)
 		.setDirectionalStrength(2.5f)
-		.setLightDirection(-128, 55)
 	),
 	ZEAH_SNOWY_NORTHERN_REGION(Area.ZEAH_SNOWY_NORTHERN_REGION, new Properties()
 		.setFogColor("#AEBDE0")
@@ -834,34 +833,6 @@ public enum Environment
 		.setDirectionalColor(245, 214, 122)
 		.setDirectionalStrength(1.3f)
 		.setLightDirection(260f, 10f)
-	),
-
-	// Dragon Slayer II
-	DS2_FLASHBACK_PLATFORM(Area.DS2_FLASHBACK_PLATFORM, new Properties()
-		.setFogColor(0, 0, 0)
-		.setFogDepth(20)
-		.setAmbientStrength(1.2f)
-		.setAmbientColor(255, 255, 255)
-		.setDirectionalStrength(0.0f)
-		.setAllowSkyOverride(false)
-	),
-	DS2_FLEET_ATTACKED(Area.DS2_FLEET_ATTACKED, new Properties()
-		.setFogColor("#FFD3C7")
-		.setFogDepth(20)
-		.setAmbientColor("#68ACFF")
-		.setAmbientStrength(0.8f)
-		.setDirectionalColor("#FF8700")
-		.setDirectionalStrength(4.0f)
-		.setWaterColor(102, 234, 255)
-	),
-	DS2_SHIPS(Area.DS2_SHIPS, new Properties()
-		.setFogColor("#FFD3C7")
-		.setFogDepth(20)
-		.setAmbientColor("#68ACFF")
-		.setAmbientStrength(0.8f)
-		.setDirectionalColor("#FF8700")
-		.setDirectionalStrength(4.0f)
-		.setWaterColor(102, 234, 255)
 	),
 
 	// The Gauntlet
@@ -1053,7 +1024,6 @@ public enum Environment
 	TRUE_BLOOD_ALTAR(Area.TRUE_BLOOD_ALTAR, new Properties()
 		.setFogColor("#000000")
 		.setFogDepth(25)
-		.setLightDirection(-128, 55)
 	),
 
 	TARNS_LAIR(Area.TARNS_LAIR, new Properties()

@@ -211,6 +211,12 @@ public enum Overlay {
 	// Al Kharid
 	OVERRIDE_SOPHANEM_CHURCH_FLOOR_FIX_1(21, Area.SOPHANEM_FLOORS, GroundMaterial.TILES_2X2_2_SEMIGLOSS, p -> p.blended(false)),
 	OVERRIDE_SOPHANEM_CHURCH_FLOOR_FIX_2(26, Area.SOPHANEM_FLOORS, GroundMaterial.TILES_2X2_2_SEMIGLOSS, p -> p.blended(false)),
+	SOPHANEM_SUNTRAP(p -> p
+		.ids(1)
+		.groundMaterial(GroundMaterial.MARBLE_2)
+		.area(Area.KHARID_DESERT_REGION)
+		.blended(false)
+		.shiftLightness(10)),
 	MAGE_TRAINING_ARENA_FLOOR(-122, Area.MAGE_TRAINING_ARENA, GroundMaterial.TILES_2X2_2_GLOSS, p -> p.blended(false)),
 	AL_KHARID_WELL_FIX(21, Area.AL_KHARID_WELL, GroundMaterial.DIRT, p -> p.blended(false)),
 	AL_KHARID_FLOOR_1(26, Area.AL_KHARID_BUILDINGS, GroundMaterial.TILES_2X2_2_SEMIGLOSS, p -> p
@@ -404,6 +410,7 @@ public enum Overlay {
 	SEERS_BANK_TILE_2(4, Area.SEERS_BANK, GroundMaterial.MARBLE_2_GLOSS, p -> p.blended(false)),
 	SEERS_BANK_TILE_3(8, Area.SEERS_BANK, GroundMaterial.MARBLE_1_GLOSS, p -> p.blended(false)),
 	SEERS_HOUSE_FLOORS(22, Area.SEERS_HOUSES, GroundMaterial.WOOD_PLANKS_1, p -> p
+		.replaceWithIf(null, pl -> !pl.configGroundTextures)
 		.blended(false)
 		.lightness(45)
 		.saturation(2)
@@ -860,7 +867,7 @@ public enum Overlay {
 
 	// Dragon Slayer II
 	DS2_SHIPS_WATER(6, Area.DS2_SHIPS, WaterType.WATER_FLAT),
-	DS2_FLEET_ATTACKED(6, Area.DS2_FLEET_ATTACKED, WaterType.WATER_FLAT),
+	DREAM_WORLD_GROUND(160, Area.LUNAR_DREAM_WORLD, GroundMaterial.NONE),
 
 	// Camdozaal (Below Ice Mountain)
 	CAMDOZAAL_WATER(-75, Area.CAMDOZAAL, WaterType.WATER),
@@ -937,7 +944,11 @@ public enum Overlay {
 		.blended(false)),
 	LUNAR_ISLAND_HOUSES_WOOD_FLOOR(81, Area.LUNAR_VILLAGE_HOUSE_INTERIORS_FIRST, GroundMaterial.HD_WOOD_PLANKS_1, p -> p
 		.blended(true)),
+	LUNAR_ESSENCE_MINE_WATER(p -> p.ids(151).area(Area.LUNAR_ESSENCE_MINE).waterType(WaterType.WATER)),
 	KELDAGRIM_PATHS(117, GroundMaterial.FALADOR_PATHS),
+
+	CERBERUS_WATER(128, Area.CERBERUS, WaterType.SWAMP_WATER_FLAT),
+	SHIP_SAILING_WATER(p -> p.area(Area.SHIP_SAILING).ids(6).waterType(WaterType.WATER_FLAT)),
 
 	// Default overlays
 	OVERLAY_WATER(p -> p.area(Area.OVERWORLD).ids(-128, -105, -98, 6, 41, 104, 196).waterType(WaterType.WATER)),
@@ -952,7 +963,7 @@ public enum Overlay {
 		p -> p.ids(-124, -84, -83, 14, 15, 16, 21, 22, 23, 60, 77, 81, 82, 88, 89, 101, 102, 107, 108, 110, 115, 123, 227)
 	),
 	OVERLAY_GRAVEL(GroundMaterial.GRAVEL, p -> p.ids(-76, 2, 3, 4, 6, 8, 9, 10, 119, 127)),
-	OVERLAY_VARROCK_PATHS(GroundMaterial.VARROCK_PATHS, p -> p
+	OVERLAY_VARROCK_PATHS(Area.OVERWORLD, GroundMaterial.VARROCK_PATHS, p -> p
 		.seasonalReplacement(SeasonalTheme.WINTER, WINTER_JAGGED_STONE_TILE)
 		.ids(-85, -77, 11)
 	),
@@ -1106,30 +1117,37 @@ public enum Overlay {
 			}
 		}
 
-		if (match.replacementResolver != null)
-			return match.replacementResolver.resolve(plugin, scene, tile, match);
+		if (match.replacementResolver != null) {
+			match = match.replacementResolver.resolve(plugin, scene, tile, match);
+			if (match == null)
+				match = NONE;
+		}
 
 		return match;
 	}
 
-	public int[] modifyColor(int[] colorHSL, boolean includeMinimap) {
-		colorHSL[0] = hue >= 0 ? hue : colorHSL[0];
-		colorHSL[0] += shiftHue;
-		colorHSL[0] = HDUtils.clamp(colorHSL[0], 0, 63);
-
-		colorHSL[1] = saturation >= 0 ? saturation : colorHSL[1];
-		colorHSL[1] += shiftSaturation;
-		colorHSL[1] = HDUtils.clamp(colorHSL[1], 0, 7);
-
-		colorHSL[2] = lightness >= 0 ? lightness : colorHSL[2];
-		colorHSL[2] += shiftLightness;
-		colorHSL[2] += includeMinimap ? shiftMinimapLightness : 0;
-		colorHSL[2] = HDUtils.clamp(colorHSL[2], 0, 127);
-
-		return colorHSL;
+	public int modifyColor(int jagexHsl) {
+		return modifyColor(jagexHsl, false);
 	}
 
-	public int[] modifyColor(int[] colorHSL) {
-		return modifyColor(colorHSL,false);
+	public int modifyColor(int jagexHsl, boolean minimap) {
+		int h = hue != -1 ? hue : jagexHsl >> 10 & 0x3F;
+		h += shiftHue;
+		h = HDUtils.clamp(h, 0, 0x3F);
+
+		int s = saturation != -1 ? saturation : jagexHsl >> 7 & 7;
+		s += shiftSaturation;
+		s = HDUtils.clamp(s, 0, 7);
+
+		int l = lightness != -1 ? lightness : jagexHsl & 0x7F;
+		l += shiftLightness;
+
+		if (minimap) {
+			l += shiftMinimapLightness;
+		}
+		l = HDUtils.clamp(l, 0, 0x7F);
+
+		return h << 10 | s << 7 | l;
 	}
+
 }

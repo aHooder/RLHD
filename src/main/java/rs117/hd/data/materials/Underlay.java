@@ -64,6 +64,7 @@ public enum Underlay {
 	DEFAULT_DIRT(p -> p.ids().groundMaterial(GroundMaterial.DIRT)),
 	DEFAULT_SNOW_1(p -> p.ids().groundMaterial(GroundMaterial.SNOW_1)),
 	DEFAULT_GRUNGE(p -> p.ids().groundMaterial(GroundMaterial.GRUNGE)),
+	DEFAULT_ROCKY_GROUND(p -> p.ids().groundMaterial(GroundMaterial.ROCKY_CAVE_FLOOR)),
 	// Lumbridge
 	LUMBRIDGE_CASTLE_TILE(56, Area.LUMBRIDGE_CASTLE_BASEMENT, GroundMaterial.MARBLE_2_SEMIGLOSS, p -> p.blended(false)),
 
@@ -74,6 +75,7 @@ public enum Underlay {
 		.area(Area.DRAYNOR)
 		.groundMaterial(GroundMaterial.OVERWORLD_GRASS_1)
 		.seasonalReplacement(SeasonalTheme.WINTER, WINTER_GRASS)),
+	WIZARD_TOWER_BASEMENT_DIRT(p -> p.ids(63, 66).area(Area.WIZARD_TOWER_BASEMENT).groundMaterial(GroundMaterial.DIRT)),
 
 	COMPLEX_TILES_IMCANDO_PENINSULA(p -> p
 		.ids(55, 61, 62, 63, 68)
@@ -243,6 +245,65 @@ public enum Underlay {
 		.area(Area.KARAMJA_VOLCANO)
 		.groundMaterial(GroundMaterial.EARTHEN_CAVE_FLOOR)
 	),
+	COMPLEX_TILES_KARAMJA(p -> p
+		.ids(50, 55, 61, 62, 63, 68)
+		.area(Area.KARAMJA)
+		.replacementResolver(
+			(plugin, scene, tile, override) -> {
+				int[] hsl = HDUtils.getSouthWesternMostTileColor(tile);
+				if (hsl == null)
+					return override;
+
+				LocalPoint localLocation = tile.getLocalLocation();
+				int tileExX = localLocation.getSceneX() + SCENE_OFFSET;
+				int tileExY = localLocation.getSceneY() + SCENE_OFFSET;
+				short overlayId = scene.getOverlayIds()[tile.getRenderLevel()][tileExX][tileExY];
+
+				// Grass
+				if (hsl[0] >= 13 ||
+					hsl[0] >= 10 && hsl[1] >= 3 ||
+					hsl[0] == 9 && hsl[1] >= 4 ||
+					hsl[0] == 9 && hsl[1] == 3 && hsl[2] <= 45 || // Fixes the southernmost beach
+					hsl[0] == 8 && hsl[1] > 5 && hsl[2] >= 30 && overlayId != 6
+				) {
+					switch (plugin.configSeasonalTheme) {
+						case SUMMER:
+						case AUTUMN:
+							return DEFAULT_GRASS;
+						case WINTER:
+							return WINTER_GRASS;
+					}
+				}
+
+				// Dirt
+				if (hsl[0] <= 8 && hsl[1] >= 4 && hsl[2] <= 71 ||
+					hsl[0] == 9 && hsl[1] == 2 && hsl[2] <= 44 ||
+					hsl[0] == 8 && hsl[1] == 3 && hsl[2] <= 34 // Breaks Sand if higher than 34; Can be fixed with tile averages or medians
+				) {
+					switch (plugin.configSeasonalTheme) {
+						case SUMMER:
+						case AUTUMN:
+							return DEFAULT_DIRT;
+						case WINTER:
+							return WINTER_DIRT;
+					}
+				}
+
+				// Stone
+				if (hsl[0] < 13 && hsl[1] <= 2 && hsl[2] <= 40) {
+					switch (plugin.configSeasonalTheme) {
+						case SUMMER:
+						case AUTUMN:
+							return DEFAULT_GRUNGE;
+						case WINTER:
+							return WINTER_GRUNGE;
+					}
+				}
+
+				return DEFAULT_SAND;
+			}
+		)
+	),
 
 	// Crandor
 	CRANDOR_SAND(-110, Area.CRANDOR, GroundMaterial.SAND, p -> p.saturation(3).hue(6)),
@@ -271,6 +332,45 @@ public enum Underlay {
 		.ids(96, 103)
 		.area(Area.BARROWS_TUNNELS)
 	),
+
+	// Fremennik
+	COMPLEX_TILES_ISLE_OF_STONE(p -> p
+		.ids(58, 97, 112)
+		.area(Area.ISLAND_OF_STONE)
+		.replacementResolver(
+			(plugin, scene, tile, override) -> {
+				int[] hsl = HDUtils.getSouthWesternMostTileColor(tile);
+				if (hsl == null)
+					return override;
+
+				// Dirt
+				if (hsl[0] == 7 && hsl[1] >= 1 && hsl[2] <= 71) {
+					switch (plugin.configSeasonalTheme) {
+						case SUMMER:
+						case AUTUMN:
+							return DEFAULT_DIRT;
+						case WINTER:
+							return WINTER_DIRT;
+					}
+				}
+
+				// Stone
+				if (hsl[0] < 13 && hsl[1] == 0 && hsl[2] <= 40) {
+					switch (plugin.configSeasonalTheme) {
+						case SUMMER:
+						case AUTUMN:
+							return DEFAULT_ROCKY_GROUND;
+						case WINTER:
+							return WINTER_GRUNGE;
+					}
+				}
+
+				return DEFAULT_SNOW_1;
+			}
+		)
+	),
+
+	FREMENNIK_SLAYER_DUNGEON(p -> p.ids(48, 63, 92).area(Area.FREMENNIK_SLAYER_DUNGEON).groundMaterial(GroundMaterial.EARTHEN_CAVE_FLOOR)),
 
 	// Ardougne
 	SHADOW_DUNGEON_FLOOR(63, Area.SHADOW_DUNGEON, GroundMaterial.EARTHEN_CAVE_FLOOR),
@@ -462,20 +562,24 @@ public enum Underlay {
 		.groundMaterial(GroundMaterial.LASSAR_UNDERCITY_TILES)
 		.blended(true)),
 
+	SHIP_SAILING_WATER(p -> p.area(Area.SHIP_SAILING).ids(75).waterType(WaterType.WATER_FLAT)),
+
 	// Cutscenes
 	CANOE_CUTSCENE_GRASS(Area.CANOE_CUTSCENE, GroundMaterial.GRASS_SCROLLING, p -> p.ids(48, 50, 63)),
+
 	// Items that cannot properly be fixed unless we can first detect the hue of the tile to set a texture.
-	TILE_NEEDS_HUE_DEFINED(GroundMaterial.VARIED_DIRT, p -> p
+	TILE_NEEDS_HUE_DEFINED(Area.OVERWORLD, GroundMaterial.VARIED_DIRT, p -> p
 		.ids(26)
 		.seasonalReplacement(SeasonalTheme.WINTER, WINTER_DIRT)
 	),
+
 	// Default underlays
 	OVERWORLD_GRASS(Area.OVERWORLD, GroundMaterial.OVERWORLD_GRASS_1, p -> p
 		.ids(7, 25, 33, 34, 40, 48, 49, 50, 51, 52, 53, 54, 67, 70, 71, 75, 93, 97, 99, 100, 103, 114, 115, 126)
 		.seasonalReplacement(SeasonalTheme.WINTER, WINTER_GRASS)
 	),
 	OVERWORLD_DIRT(Area.OVERWORLD, GroundMaterial.DIRT, p -> p
-		.ids(-111, -110, 19, 56, 57, 66, 80, 111, 118, 122, 139, 150)
+		.ids(-111, -110, 19, 56, 57, 66, 80, 111, 118, 122, 139, 149, 150)
 		.seasonalReplacement(SeasonalTheme.WINTER, WINTER_DIRT)),
 	OVERWORLD_SAND(Area.OVERWORLD, GroundMaterial.SAND, p -> p.ids(-127, -118)),
 	UNDERLAY_PACKED_EARTH(GroundMaterial.PACKED_EARTH, p -> p.ids(15)),
@@ -511,15 +615,24 @@ public enum Underlay {
 			return DEFAULT_SNOW_1;
 		})
 	),
-	UNDERLAY_72(GroundMaterial.VARIED_DIRT, p -> p
-		.ids(72, 73, 98, 112, 113) //112 == Lovakengj
+	UNDERLAY_OVERWORLD_DIRT(GroundMaterial.VARIED_DIRT, p -> p
+		.area(Area.OVERWORLD)
+		.ids(72, 73, 98, 112, 113) // 112 == Lovakengj
 		.seasonalReplacement(SeasonalTheme.WINTER, WINTER_DIRT)
 	),
+	UNDERLAY_DIRT(GroundMaterial.VARIED_DIRT, p -> p
+		.ids(72, 73, 98, 112, 113) // 112 == Lovakengj
+	),
 	UNDERLAY_OVERWORLD_GRUNGE(GroundMaterial.GRUNGE, p -> p
+		.area(Area.OVERWORLD)
 		.ids(8, 10, 58, 60, 92) // 8 = Jatizso, 60 = GotR, 92 = Eadgars Cave
 		.seasonalReplacement(SeasonalTheme.WINTER, WINTER_GRUNGE)
 	),
+	UNDERLAY_GRUNGE(GroundMaterial.GRUNGE, p -> p
+		.ids(8, 10, 58, 60, 92) // 8 = Jatizso, 60 = GotR, 92 = Eadgars Cave
+	),
 	COMPLEX_TILES(p -> p
+		.area(Area.OVERWORLD)
 		.ids(55, 61, 62, 63, 64, 65, 68, 94, 96)
 		.replacementResolver(
 			(plugin, scene, tile, override) -> {
@@ -556,7 +669,7 @@ public enum Underlay {
 					hsl[0] == 9 && hsl[1] == 3 && hsl[2] <= 38 ||
 					hsl[0] >= 10 && hsl[1] >= 2 ||
 					hsl[0] == 8 && hsl[1] == 5 && hsl[2] >= 15 ||
-					hsl[0] == 8 && hsl[1] >= 6 && hsl[2] >= 10
+					hsl[0] == 8 && hsl[1] >= 6 && hsl[2] >= 2
 				) {
 					switch (plugin.configSeasonalTheme) {
 						case SUMMER:
@@ -582,46 +695,6 @@ public enum Underlay {
 					}
 				}
 				return DEFAULT_DIRT;
-			}
-		)
-	),
-	COMPLEX_TILES_KARAMJA(p -> p
-		.ids(61, 62, 63, 68)
-		.area(Area.KARAMJA)
-		.replacementResolver(
-			(plugin, scene, tile, override) -> {
-				int[] hsl = HDUtils.getSouthWesternMostTileColor(tile);
-				if (hsl == null)
-					return override;
-
-				LocalPoint localLocation = tile.getLocalLocation();
-				int tileExX = localLocation.getSceneX() + SCENE_OFFSET;
-				int tileExY = localLocation.getSceneY() + SCENE_OFFSET;
-				short overlayId = scene.getOverlayIds()[tile.getRenderLevel()][tileExX][tileExY];
-
-				// Grass
-				if (hsl[0] >= 9 || hsl[0] == 8 && hsl[1] > 5 && overlayId != 6) {
-					switch (plugin.configSeasonalTheme) {
-						case SUMMER:
-						case AUTUMN:
-							return OVERWORLD_GRASS;
-						case WINTER:
-							return WINTER_GRASS;
-					}
-				}
-
-				// Dirt
-				if (hsl[0] <= 8 && hsl[1] >= 4 && hsl[2] <= 71) {
-					switch (plugin.configSeasonalTheme) {
-						case SUMMER:
-						case AUTUMN:
-							return OVERWORLD_DIRT;
-						case WINTER:
-							return WINTER_DIRT;
-					}
-				}
-
-				return OVERWORLD_SAND;
 			}
 		)
 	),
@@ -728,30 +801,36 @@ public enum Underlay {
 			}
 		}
 
-		if (match.replacementResolver != null)
-			return match.replacementResolver.resolve(plugin, scene, tile, match);
+		if (match.replacementResolver != null) {
+			match = match.replacementResolver.resolve(plugin, scene, tile, match);
+			if (match == null)
+				match = NONE;
+		}
 
 		return match;
 	}
 
-	public int[] modifyColor(int[] colorHSL, boolean includeMinimap) {
-		colorHSL[0] = hue >= 0 ? hue : colorHSL[0];
-		colorHSL[0] += shiftHue;
-		colorHSL[0] = HDUtils.clamp(colorHSL[0], 0, 63);
-
-		colorHSL[1] = saturation >= 0 ? saturation : colorHSL[1];
-		colorHSL[1] += shiftSaturation;
-		colorHSL[1] = HDUtils.clamp(colorHSL[1], 0, 7);
-
-		colorHSL[2] = lightness >= 0 ? lightness : colorHSL[2];
-		colorHSL[2] += shiftLightness;
-		colorHSL[2] += includeMinimap ? shiftMinimapLightness : 0;
-		colorHSL[2] = HDUtils.clamp(colorHSL[2], 0, 127);
-
-		return colorHSL;
+	public int modifyColor(int jagexHsl) {
+		return modifyColor(jagexHsl, false);
 	}
 
-	public int[] modifyColor(int[] colorHSL) {
-		return modifyColor(colorHSL,false);
+	public int modifyColor(int jagexHsl, boolean minimap) {
+		int h = hue != -1 ? hue : jagexHsl >> 10 & 0x3F;
+		h += shiftHue;
+		h = HDUtils.clamp(h, 0, 0x3F);
+
+		int s = saturation != -1 ? saturation : jagexHsl >> 7 & 7;
+		s += shiftSaturation;
+		s = HDUtils.clamp(s, 0, 7);
+
+		int l = lightness != -1 ? lightness : jagexHsl & 0x7F;
+		l += shiftLightness;
+
+		if (minimap) {
+			l += shiftMinimapLightness;
+		}
+		l = HDUtils.clamp(l, 0, 0x7F);
+
+		return h << 10 | s << 7 | l;
 	}
 }

@@ -138,10 +138,11 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	public static final String INTEL_DRIVER_URL = "https://www.intel.com/content/www/us/en/support/detect.html";
 	public static final String NVIDIA_DRIVER_URL = "https://www.nvidia.com/en-us/geforce/drivers/";
 
-	public static final int TEXTURE_UNIT_UI = GL_TEXTURE0; // default state
-	public static final int TEXTURE_UNIT_GAME = GL_TEXTURE1;
-	public static final int TEXTURE_UNIT_SHADOW_MAP = GL_TEXTURE2;
-	public static final int TEXTURE_UNIT_TILE_HEIGHT_MAP = GL_TEXTURE3;
+	public static final int TEXTURE_UNIT_BASE = GL_TEXTURE0;
+	public static final int TEXTURE_UNIT_UI = TEXTURE_UNIT_BASE; // default state
+	public static final int TEXTURE_UNIT_GAME = TEXTURE_UNIT_BASE + 1;
+	public static final int TEXTURE_UNIT_SHADOW_MAP = TEXTURE_UNIT_BASE + 2;
+	public static final int TEXTURE_UNIT_TILE_HEIGHT_MAP = TEXTURE_UNIT_BASE + 3;
 
 	public static final int UNIFORM_BLOCK_CAMERA = 0;
 	public static final int UNIFORM_BLOCK_MATERIALS = 1;
@@ -217,8 +218,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	@Inject
 	private HdPluginConfig config;
 
-	@Inject
-	private Gson rlGson;
 	@Getter
 	private Gson gson;
 
@@ -263,11 +262,11 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		.getPathOrDefault("rlhd.shader-path", () -> path(HdPlugin.class))
 		.chroot();
 
-	private int glSceneProgram;
-	private int glUiProgram;
-	private int glShadowProgram;
-	private int glModelPassthroughComputeProgram;
-	private int[] glModelSortingComputePrograms = {};
+	public int glSceneProgram;
+	public int glUiProgram;
+	public int glShadowProgram;
+	public int glModelPassthroughComputeProgram;
+	public int[] glModelSortingComputePrograms = {};
 
 	private int interfaceTexture;
 	private int interfacePbo;
@@ -406,16 +405,15 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	public boolean configShadowsEnabled;
 	public boolean configExpandShadowDraw;
 	public boolean configUseFasterModelHashing;
-	public boolean configRetainVanillaShading;
-	public boolean configUndoVanillaShadingInCompute;
-	public boolean configUndoVanillaShadingOnCpu;
+	public boolean configUndoVanillaShading;
 	public boolean configPreserveVanillaNormals;
 	public ShadowMode configShadowMode;
 	public SeasonalTheme configSeasonalTheme;
 	public int configMaxDynamicLights;
 
-	public boolean enableDetailedTimers;
 	public boolean useLowMemoryMode;
+	public boolean enableDetailedTimers;
+	public boolean enableShadowMapOverlay;
 
 	private boolean isActive;
 	private boolean lwjglInitialized;
@@ -444,7 +442,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 	@Override
 	protected void startUp() {
-		gson = rlGson.newBuilder().setLenient().create();
+		gson = injector.getInstance(Gson.class).newBuilder().setLenient().create();
 
 		clientThread.invoke(() -> {
 			try {
@@ -760,10 +758,11 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			.define("SHADOW_MODE", configShadowMode)
 			.define("SHADOW_TRANSPARENCY", config.enableShadowTransparency())
 			.define("VANILLA_COLOR_BANDING", config.vanillaColorBanding())
-			.define("UNDO_VANILLA_SHADING", configUndoVanillaShadingInCompute)
+			.define("UNDO_VANILLA_SHADING", configUndoVanillaShading)
 			.define("LEGACY_GREY_COLORS", configLegacyGreyColors)
 			.define("DISABLE_DIRECTIONAL_SHADING", config.shadingMode() != ShadingMode.DEFAULT)
 			.define("FLAT_SHADING", config.flatShading())
+			.define("SHADOW_MAP_OVERLAY", enableShadowMapOverlay)
 			.addIncludePath(SHADER_PATH);
 
 		glSceneProgram = PROGRAM.compile(template);
@@ -800,8 +799,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 		// Bind texture samplers before validating, else the validation fails
 		glUseProgram(glSceneProgram);
-		glUniform1i(uniTextureArray, 1);
-		glUniform1i(uniShadowMap, 2);
+		glUniform1i(uniTextureArray, TEXTURE_UNIT_GAME - TEXTURE_UNIT_BASE);
+		glUniform1i(uniShadowMap, TEXTURE_UNIT_SHADOW_MAP - TEXTURE_UNIT_BASE);
 
 		// Bind a VOA, else validation may fail on older Intel-based Macs
 		glBindVertexArray(vaoSceneHandle);
@@ -814,7 +813,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		}
 
 		glUseProgram(glUiProgram);
-		glUniform1i(uniUiTexture, 0);
+		glUniform1i(uniUiTexture, TEXTURE_UNIT_UI - TEXTURE_UNIT_BASE);
 
 		glUseProgram(0);
 	}
@@ -879,8 +878,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				int uniShadowBlockMaterials = glGetUniformBlockIndex(glShadowProgram, "MaterialUniforms");
 				int uniShadowTextureArray = glGetUniformLocation(glShadowProgram, "textureArray");
 				glUseProgram(glShadowProgram);
-				glUniform1i(uniShadowTextureArray, 1);
-				glUniformBlockBinding(glShadowProgram, uniShadowBlockMaterials, 1);
+				glUniform1i(uniShadowTextureArray, TEXTURE_UNIT_GAME - TEXTURE_UNIT_BASE);
+				glUniformBlockBinding(glShadowProgram, uniShadowBlockMaterials, UNIFORM_BLOCK_MATERIALS);
 				uniShadowElapsedTime = glGetUniformLocation(glShadowProgram, "elapsedTime");
 				uniShadowCameraPos = glGetUniformLocation(glShadowProgram, "cameraPos");
 				// fall-through
@@ -921,6 +920,10 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	}
 
 	public void recompilePrograms() throws ShaderException, IOException {
+		// Avoid recompiling if we haven't already compiled once
+		if (glSceneProgram == 0)
+			return;
+
 		destroyPrograms();
 		initPrograms();
 	}
@@ -2116,7 +2119,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		glUseProgram(glUiProgram);
 		glUniform2i(uniTexSourceDimensions, canvasWidth, canvasHeight);
 		glUniform1f(uniUiColorBlindnessIntensity, config.colorBlindnessIntensity() / 100f);
-		glUniform4fv(uniUiAlphaOverlay, ColorUtils.unpackARGB(overlayColor));
+		glUniform4fv(uniUiAlphaOverlay, ColorUtils.srgba(overlayColor));
 
 		if (client.isStretchedEnabled()) {
 			Dimension dim = client.getStretchedDimensions();
@@ -2393,18 +2396,9 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		configMaxDynamicLights = config.maxDynamicLights().getValue();
 		configExpandShadowDraw = config.expandShadowDraw();
 		configUseFasterModelHashing = config.fasterModelHashing();
-		configUndoVanillaShadingInCompute = config.undoVanillaShadingInCompute();
+		configUndoVanillaShading = config.shadingMode() != ShadingMode.VANILLA;
 		configPreserveVanillaNormals = config.preserveVanillaNormals();
 		configSeasonalTheme = config.seasonalTheme();
-		configRetainVanillaShading = config.shadingMode() == ShadingMode.VANILLA;
-		if (configRetainVanillaShading) {
-			// Disable shading reversal entirely
-			configUndoVanillaShadingOnCpu = false;
-			configUndoVanillaShadingInCompute = false;
-		} else {
-			// Do shading reversal on CPU if it's not being done in compute
-			configUndoVanillaShadingOnCpu = !configUndoVanillaShadingInCompute;
-		}
 	}
 
 	@Subscribe
@@ -2489,7 +2483,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 							reuploadScene = true;
 							break;
 						case KEY_LEGACY_GREY_COLORS:
-						case KEY_UNDO_VANILLA_SHADING_IN_COMPUTE:
 						case KEY_PRESERVE_VANILLA_NORMALS:
 						case KEY_SHADING_MODE:
 						case KEY_FLAT_SHADING:
@@ -2777,7 +2770,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		eightIntWrite[6] = y + client.getCameraY2();
 		eightIntWrite[7] = z + client.getCameraZ2();
 
-		int faceCount;
+		int faceCount = 0;
 		if (sceneContext.id == (offsetModel.getSceneId() & SceneUploader.SCENE_ID_MASK)) {
 			// The model is part of the static scene buffer
 			assert model == renderable;
@@ -2822,15 +2815,17 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				int vertexOffset = dynamicOffsetVertices + sceneContext.getVertexOffset();
 				int uvOffset = dynamicOffsetUvs + sceneContext.getUvOffset();
 				ModelOverride modelOverride = modelOverrideManager.getOverride(hash, HDUtils.cameraSpaceToWorldPoint(client, x, z));
-				modelPusher.pushModel(sceneContext, null, hash, model, modelOverride, ObjectType.NONE, 0, true);
+				if (modelOverride.hide) {
+					vertexOffset = -1;
+				} else {
+					modelPusher.pushModel(sceneContext, null, hash, model, modelOverride, ObjectType.NONE, 0, true);
+					faceCount = sceneContext.modelPusherResults[0];
+					if (sceneContext.modelPusherResults[1] == 0)
+						uvOffset = -1;
+				}
+
 				if (enableDetailedTimers)
 					frameTimer.end(Timer.MODEL_PUSHING);
-
-				faceCount = sceneContext.modelPusherResults[0];
-				if (faceCount == 0)
-					vertexOffset = -1;
-				if (sceneContext.modelPusherResults[1] == 0)
-					uvOffset = -1;
 
 				eightIntWrite[0] = vertexOffset;
 				eightIntWrite[1] = uvOffset;
@@ -2842,6 +2837,9 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			}
 		}
 
+		if (enableDetailedTimers)
+			frameTimer.end(Timer.DRAW_RENDERABLE);
+
 		if (eightIntWrite[0] == -1)
 			return; // Hidden model
 
@@ -2849,9 +2847,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			.ensureCapacity(8)
 			.put(eightIntWrite);
 		renderBufferOffset += faceCount * 3;
-
-		if (enableDetailedTimers)
-			frameTimer.end(Timer.DRAW_RENDERABLE);
 	}
 
 	/**

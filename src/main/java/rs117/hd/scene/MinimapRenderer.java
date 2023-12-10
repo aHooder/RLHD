@@ -79,6 +79,16 @@ public class MinimapRenderer {
 
 	}
 
+	private Material getWater(WaterType type) {
+		if (type == WaterType.ICE || type == WaterType.ICE_FLAT) {
+			return Material.WATER_ICE;
+		} else if (type == WaterType.SWAMP_WATER || type == WaterType.SWAMP_WATER_FLAT) {
+			return Material.SWAMP_WATER_FLAT;
+		}
+
+		return Material.WATER_FLAT;
+	}
+
 	private void processTilePaint(Scene scene, SceneContext sceneContext, Tile tile, int z, int x, int y, boolean classicLighting) {
 		SceneTilePaint paint = tile.getSceneTilePaint();
 		if (paint == null) {
@@ -103,7 +113,7 @@ public class MinimapRenderer {
 
 		WaterType waterType = proceduralGenerator.tileWaterType(scene, tile, paint);
 		boolean hiddenTile = paint.getNwColor() == 12345678;
-		int hiddenRBG = ColorUtils.srgbToPackedHsl(ColorUtils.unpackARGB(paint.getRBG()));
+		int hiddenRBG = ColorUtils.srgbToPackedHsl(ColorUtils.srgba(paint.getRBG()));
 		Overlay overlay = Overlay.getOverlay(scene, tile, plugin);
 		Underlay underlay = Underlay.getUnderlay(scene, tile, plugin);
 
@@ -118,11 +128,11 @@ public class MinimapRenderer {
 					GroundMaterial groundMaterial = null;
 					if (overlay != Overlay.NONE) {
 						groundMaterial = overlay.groundMaterial;
-						colors[i] = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(colors[i]), classicLighting));
+						colors[i] = overlay.modifyColor(colors[i], classicLighting);
 					} else {
 						if (underlay != Underlay.NONE) {
 							groundMaterial = underlay.groundMaterial;
-							colors[i] = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(colors[i]), classicLighting));
+							colors[i] = underlay.modifyColor(colors[i], classicLighting);
 						}
 					}
 
@@ -133,7 +143,7 @@ public class MinimapRenderer {
 			}
 		} else {
 			Arrays.fill(colors, ColorUtils.srgbToPackedHsl(waterType.surfaceColor));
-			Arrays.fill(materials, Material.WATER_FLAT);
+			Arrays.fill(materials, getWater(waterType));
 		}
 
 		float[][] textureColors = new float[4][];
@@ -213,14 +223,14 @@ public class MinimapRenderer {
 							groundMaterial = overlay.groundMaterial;
 						}
 						for (int i = 0; i < colors.length; i++) {
-							colors[i] = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(colors[i])));
+							colors[i] = overlay.modifyColor(colors[i], classicLighting);
 						}
 					} else {
 						if (underlay != Underlay.NONE) {
 							groundMaterial = underlay.groundMaterial;
 						}
 						for (int i = 0; i < colors.length; i++) {
-							colors[i] = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(colors[i])));
+							colors[i] = underlay.modifyColor(colors[i], classicLighting);
 						}
 					}
 					if (plugin.configGroundTextures && groundMaterial != null) {
@@ -235,7 +245,7 @@ public class MinimapRenderer {
 				}
 			} else {
 				Arrays.fill(colors, ColorUtils.srgbToPackedHsl(waterType.surfaceColor));
-				Arrays.fill(materials, Material.WATER_FLAT);
+				Arrays.fill(materials, getWater(waterType));
 			}
 
 			float[][] linearColors = new float[colors.length][];
