@@ -48,6 +48,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
@@ -630,6 +632,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		isActive = false;
 		FileWatcher.destroy();
 
+		var latch = new CountDownLatch(1);
+
 		clientThread.invoke(() -> {
 			var scene = client.getScene();
 			if (scene != null)
@@ -688,7 +692,17 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 			// force main buffer provider rebuild to turn off alpha channel
 			client.resizeCanvas();
+
+			latch.countDown();
 		});
+
+		try {
+			// Block until the plugin has shut down
+			if (!latch.await(1, TimeUnit.SECONDS))
+				log.warn("The plugin took more than a second to shut down");
+		} catch (InterruptedException ex) {
+			log.warn("Interrupted while waiting for shutdown");
+		}
 	}
 
 	public void stopPlugin()
