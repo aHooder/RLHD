@@ -64,11 +64,12 @@ public class ModelOverride
 	public AABB[] hideInAreas = {};
 
 	public Map<Material, ModelOverride> materialOverrides;
+	public Map<Integer, ModelOverride> heightThresholdOverrides;
 
 	public transient boolean isDummy;
 	public transient Map<AABB, ModelOverride> areaOverrides;
 
-	public void normalize() {
+	public void normalize(boolean disableTextures) {
 		// Ensure there are no nulls in case of invalid configuration during development
 		if (baseMaterial == null) {
 			if (Props.DEVELOPMENT)
@@ -111,11 +112,15 @@ public class ModelOverride
 			var normalized = new HashMap<Material, ModelOverride>();
 			for (var entry : materialOverrides.entrySet()) {
 				var override = entry.getValue();
-				override.normalize();
+				override.normalize(disableTextures);
 				normalized.put(entry.getKey().resolveReplacements(), override);
 			}
 			materialOverrides = normalized;
 		}
+
+		if (heightThresholdOverrides != null)
+			for (var override : heightThresholdOverrides.values())
+				override.normalize(disableTextures);
 
 		if (uvOrientationX == 0)
 			uvOrientationX = uvOrientation;
@@ -126,6 +131,13 @@ public class ModelOverride
 
 		if (!castShadows && shadowOpacityThreshold == 0)
 			shadowOpacityThreshold = 1;
+
+		if (disableTextures && !forceMaterialChanges) {
+			if (baseMaterial.hasTexture)
+				baseMaterial = Material.NONE;
+			if (textureMaterial.hasTexture)
+				textureMaterial = Material.NONE;
+		}
 	}
 
 	public ModelOverride copy() {
@@ -157,6 +169,7 @@ public class ModelOverride
 			inheritTileColorType,
 			hideInAreas,
 			materialOverrides,
+			heightThresholdOverrides,
 			isDummy,
 			areaOverrides
 		);

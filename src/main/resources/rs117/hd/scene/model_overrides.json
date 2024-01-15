@@ -3063,12 +3063,6 @@
       25054,
       25055,
       25056,
-      25059,
-      25060,
-      25061,
-      25062,
-      25063,
-      25064,
       29634
     ],
     "flatNormals": true,
@@ -13364,5 +13358,116 @@
     "uvType": "BOX",
     "uvOrientation": 512,
     "uvScale": 1.2
+  },
+  {
+    "description": "Lava edge Karamja volcano",
+    "baseMaterial": "DIRT_1",
+    "uvType": "BOX",
+    "objectIds": [
+      25065
+    ]
+  },
+  {
+    "description": "Lava edge with bottom Karamja volcano",
+    "uvType": "WORLD_XZ",
+    "baseMaterial": "HD_MAGMA_2",
+    "heightThresholdOverrides": {
+      "-120": {
+        "baseMaterial": "DIRT_1",
+        "uvType": "BOX"
+      }
+    },
+    "objectIds": [
+      25070,
+      25072,
+      25074,
+      25075
+    ]
+  },
+  {
+    "description": "Lava edge with bottom Karamja volcano",
+    "uvType": "WORLD_XZ",
+    "baseMaterial": "HD_MAGMA_2",
+    "heightThresholdOverrides": {
+      "-124": {
+        "baseMaterial": "DIRT_1",
+        "uvType": "BOX"
+      }
+    },
+    "objectIds": [
+      25071
+    ]
+  },
+  {
+    "description": "Lava edge with bottom Karamja volcano",
+    "uvType": "WORLD_XZ",
+    "baseMaterial": "HD_MAGMA_2",
+    "heightThresholdOverrides": {
+      "-140": {
+        "baseMaterial": "DIRT_1",
+        "uvType": "BOX"
+      }
+    },
+    "objectIds": [
+      25069
+    ]
+  },
+  {
+    "description": "Lava edge with bottom Karamja volcano",
+    "uvType": "WORLD_XZ",
+    "baseMaterial": "HD_MAGMA_2",
+    "heightThresholdOverrides": {
+      "-156": {
+        "baseMaterial": "DIRT_1",
+        "uvType": "BOX"
+      }
+    },
+    "objectIds": [
+      25066,
+      25067,
+      25068
+    ]
+  },
+  {
+    "description": "Lava edge with bottom Karamja volcano",
+    "uvType": "WORLD_XZ",
+    "baseMaterial": "HD_MAGMA_2",
+    "heightThresholdOverrides": {
+      "-158": {
+        "baseMaterial": "DIRT_1",
+        "uvType": "BOX"
+      }
+    },
+    "objectIds": [
+      25073
+    ]
+  },
+  {
+    "description": "Lava bottom Karamja volcano",
+    "uvType": "WORLD_XZ",
+    "baseMaterial": "HD_MAGMA_2",
+    "objectIds": [
+      25076
+    ]
+  },
+  {
+    "description": "CAVE_WALLS_WITH_LAVA",
+    "uvType": "WORLD_XZ",
+    "baseMaterial": "HD_MAGMA_2",
+    "flatNormals": true,
+    "heightThresholdOverrides": {
+      "-100": {
+        "baseMaterial": "ROCK_2",
+        "uvType": "BOX"
+      }
+    },
+    "objectIds": [
+      25059,
+      25060,
+      25061,
+      25062,
+      25063,
+      25064
+    ]
   }
 ]

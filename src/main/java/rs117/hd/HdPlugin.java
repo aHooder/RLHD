@@ -2475,11 +2475,12 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 							break;
 						case KEY_SEASONAL_THEME:
 							environmentManagerReload = true;
+							// fall-through
+						case KEY_MODEL_TEXTURES:
 							modelOverrideManagerReload = true;
 							// fall-through
-						case KEY_ANISOTROPIC_FILTERING_LEVEL:
 						case KEY_GROUND_TEXTURES:
-						case KEY_MODEL_TEXTURES:
+						case KEY_ANISOTROPIC_FILTERING_LEVEL:
 						case KEY_TEXTURE_RESOLUTION:
 						case KEY_HD_INFERNAL_CAPE:
 							reloadTexturesAndMaterials = true;

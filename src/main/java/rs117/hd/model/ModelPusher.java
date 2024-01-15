@@ -187,17 +187,9 @@ public class ModelPusher {
 			model.getTexIndices2() != null &&
 			model.getTexIndices3() != null &&
 			model.getTextureFaces() != null;
-		Material baseMaterial = modelOverride.baseMaterial;
-		Material textureMaterial = modelOverride.textureMaterial;
-		if (!plugin.configModelTextures && !modelOverride.forceMaterialChanges) {
-			if (baseMaterial.hasTexture)
-				baseMaterial = Material.NONE;
-			if (textureMaterial.hasTexture)
-				textureMaterial = Material.NONE;
-		}
 		boolean skipUVs =
 			!isVanillaTextured &&
-			packMaterialData(baseMaterial, -1, modelOverride, UvType.GEOMETRY, false) == 0;
+			packMaterialData(modelOverride.baseMaterial, -1, modelOverride, UvType.GEOMETRY, false) == 0;
 
 		// ensure capacity upfront
 		sceneContext.stagingBufferVertices.ensureCapacity(bufferSize);
@@ -323,39 +315,55 @@ public class ModelPusher {
 				frameTimer.begin(Timer.MODEL_PUSHING_UV);
 
 			for (int face = 0; face < faceCount; face++) {
+				var override = modelOverride;
+				var heightOverrides = modelOverride.heightThresholdOverrides;
+				if (heightOverrides != null) {
+					final int[] vertexY = model.getVerticesY();
+					final int triA = model.getFaceIndices1()[face];
+					final int triB = model.getFaceIndices2()[face];
+					final int triC = model.getFaceIndices3()[face];
+					int minHeight = -Math.min(Math.min(vertexY[triA], vertexY[triB]), vertexY[triC]);
+					for (var entry : heightOverrides.entrySet()) {
+						if (entry.getKey() < minHeight) {
+							override = entry.getValue();
+						} else {
+							break;
+						}
+					}
+				}
+
 				UvType uvType = UvType.GEOMETRY;
-				Material material = baseMaterial;
+				Material material = override.baseMaterial;
 
 				short textureId = isVanillaTextured ? faceTextures[face] : -1;
 				if (textureId != -1) {
 					uvType = UvType.VANILLA;
-					material = textureMaterial;
+					material = override.textureMaterial;
 					if (material == Material.NONE)
 						material = Material.fromVanillaTexture(textureId);
 				}
 
-				ModelOverride materialOverride = modelOverride;
-				if (modelOverride.materialOverrides != null) {
-					var override = modelOverride.materialOverrides.get(material);
-					if (override != null) {
-						materialOverride = override;
-						material = materialOverride.textureMaterial;
+				if (override.materialOverrides != null) {
+					var materialOverride = override.materialOverrides.get(material);
+					if (materialOverride != null) {
+						override = materialOverride;
+						material = override.textureMaterial;
 					}
 				}
 
 				if (material != Material.NONE) {
-					uvType = materialOverride.uvType;
-					if (uvType == UvType.VANILLA || (textureId != -1 && materialOverride.retainVanillaUvs))
+					uvType = override.uvType;
+					if (uvType == UvType.VANILLA || (textureId != -1 && override.retainVanillaUvs))
 						uvType = isVanillaUVMapped && textureFaces[face] != -1 ? UvType.VANILLA : UvType.GEOMETRY;
 				}
 
-				int materialData = packMaterialData(material, textureId, materialOverride, uvType, false);
+				int materialData = packMaterialData(material, textureId, override, uvType, false);
 
 				final float[] uvData = sceneContext.modelFaceNormals;
 				if (materialData == 0) {
 					Arrays.fill(uvData, 0);
 				} else {
-					materialOverride.fillUvsForFace(uvData, model, preOrientation, uvType, face);
+					override.fillUvsForFace(uvData, model, preOrientation, uvType, face);
 					uvData[3] = uvData[7] = uvData[11] = materialData;
 				}
 

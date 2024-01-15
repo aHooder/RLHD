@@ -51,11 +51,12 @@ public class ModelOverrideManager {
 				ModelOverride[] entries = path.loadJson(plugin.getGson(), ModelOverride[].class);
 				if (entries == null)
 					throw new IOException("Empty or invalid: " + path);
+
 				for (ModelOverride override : entries) {
 					try {
-						override.normalize();
+						override.normalize(!plugin.configModelTextures);
 					} catch (IllegalStateException ex) {
-						log.error("Invalid model override '{}': {}", override.description, ex.getMessage());
+						log.error("Invalid model override '{}':", override.description, ex);
 						continue;
 					}
 
