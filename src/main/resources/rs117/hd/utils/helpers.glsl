@@ -34,6 +34,12 @@ void populateSceneTerrainInformation(inout Context ctx) {
     ctx.waterDepth = waterDepth;
 }
 
+vec2 rotateUv(const vec2 uv, const float rotation) {
+    float c = cos(rotation);
+    float s = sin(rotation);
+    return vec2(uv.x * c + uv.y * s, uv.y * c - uv.x * s);
+}
+
 void populateUvs(inout Context ctx) {
     // Vanilla tree textures rely on UVs being clamped horizontally,
     // which HD doesn't do, so we instead opt to hide these fragments
@@ -55,10 +61,19 @@ void populateUvs(inout Context ctx) {
     ctx.uvs[1] += ctx.materials[1].scrollDuration * elapsedTime;
     ctx.uvs[2] += ctx.materials[2].scrollDuration * elapsedTime;
 
-    // Scale from the center
-    ctx.uvs[0] = (ctx.uvs[0] - 0.5) * ctx.materials[0].textureScale + 0.5;
-    ctx.uvs[1] = (ctx.uvs[1] - 0.5) * ctx.materials[1].textureScale + 0.5;
-    ctx.uvs[2] = (ctx.uvs[2] - 0.5) * ctx.materials[2].textureScale + 0.5;
+    // Scale & rotate around the center
+    ctx.uvs[0] -= .5f;
+    ctx.uvs[1] -= .5f;
+    ctx.uvs[2] -= .5f;
+    ctx.uvs[0] *= ctx.materials[0].uvScale;
+    ctx.uvs[1] *= ctx.materials[1].uvScale;
+    ctx.uvs[2] *= ctx.materials[2].uvScale;
+    ctx.uvs[0] = rotateUv(ctx.uvs[0], ctx.materials[0].uvRotation);
+    ctx.uvs[1] = rotateUv(ctx.uvs[1], ctx.materials[1].uvRotation);
+    ctx.uvs[2] = rotateUv(ctx.uvs[2], ctx.materials[2].uvRotation);
+    ctx.uvs[0] += 0.5;
+    ctx.uvs[1] += 0.5;
+    ctx.uvs[2] += 0.5;
 }
 
 void applyUvFlow(inout Context ctx) {

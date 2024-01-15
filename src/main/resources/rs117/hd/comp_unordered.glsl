@@ -50,25 +50,25 @@ void main() {
     ivec4 thisA, thisB, thisC;
 
     // Grab triangle vertices from the correct buffer
-    thisA = vb[offset + ssboOffset * 3    ];
-    thisB = vb[offset + ssboOffset * 3 + 1];
-    thisC = vb[offset + ssboOffset * 3 + 2];
+    thisA = pos + vb[offset + ssboOffset * 3    ];
+    thisB = pos + vb[offset + ssboOffset * 3 + 1];
+    thisC = pos + vb[offset + ssboOffset * 3 + 2];
 
     uint myOffset = localId;
 
     // position vertices in scene and write to out buffer
-    vout[outOffset + myOffset * 3]     = pos + thisA;
-    vout[outOffset + myOffset * 3 + 1] = pos + thisB;
-    vout[outOffset + myOffset * 3 + 2] = pos + thisC;
+    vout[outOffset + myOffset * 3]     = thisA;
+    vout[outOffset + myOffset * 3 + 1] = thisB;
+    vout[outOffset + myOffset * 3 + 2] = thisC;
 
     if (uvOffset < 0) {
         uvout[outOffset + myOffset * 3]     = vec4(0, 0, 0, 0);
         uvout[outOffset + myOffset * 3 + 1] = vec4(0, 0, 0, 0);
         uvout[outOffset + myOffset * 3 + 2] = vec4(0, 0, 0, 0);
     } else {
-        uvout[outOffset + myOffset * 3]     = uv[uvOffset + localId * 3];
-        uvout[outOffset + myOffset * 3 + 1] = uv[uvOffset + localId * 3 + 1];
-        uvout[outOffset + myOffset * 3 + 2] = uv[uvOffset + localId * 3 + 2];
+        uvout[outOffset + myOffset * 3]     = vec4(thisA.xz / 128.f, 0, uv[uvOffset + localId * 3].w);
+        uvout[outOffset + myOffset * 3 + 1] = vec4(thisB.xz / 128.f, 0, uv[uvOffset + localId * 3 + 1].w);
+        uvout[outOffset + myOffset * 3 + 2] = vec4(thisC.xz / 128.f, 0, uv[uvOffset + localId * 3 + 2].w);
     }
 
     vec4 normA, normB, normC;

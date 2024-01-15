@@ -18,8 +18,9 @@ struct Material
     float flowMapStrength;
     vec2 flowMapDuration;
     vec2 scrollDuration;
-    vec2 textureScale;
-    vec2 pad;
+    vec2 uvScale;
+    float uvRotation;
+    float pad;
 };
 
 layout(std140) uniform MaterialUniforms {

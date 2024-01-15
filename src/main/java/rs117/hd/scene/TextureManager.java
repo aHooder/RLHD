@@ -466,7 +466,8 @@ public class TextureManager {
 			.putFloat(scrollSpeedY)
 			.putFloat(1 / m.textureScale[0])
 			.putFloat(1 / m.textureScale[1])
-			.putFloat(0).putFloat(0); // align vec4
+			.putFloat(m.textureOrientation)
+			.putFloat(0); // align vec4
 	}
 
 	private ByteBuffer generateWaterTypeUniformBuffer() {

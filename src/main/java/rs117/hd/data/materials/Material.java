@@ -827,6 +827,7 @@ public enum Material {
 	public final float specularGloss;
 	public final float[] scrollSpeed;
 	public final float[] textureScale;
+	public final float textureOrientation;
 	public final List<Material> materialsToReplace = new ArrayList<>();
 	public final Function<HdPlugin, Boolean> replacementCondition;
 
@@ -850,6 +851,7 @@ public enum Material {
 		private float specularGloss;
 		private float[] scrollSpeed = { 0, 0 };
 		private float[] textureScale = { 1, 1 };
+		private float textureOrientation = 0;
 		private List<Material> materialsToReplace = new ArrayList<>();
 		private Function<HdPlugin, Boolean> replacementCondition;
 
@@ -877,6 +879,7 @@ public enum Material {
 			this.specularGloss = parent.specularGloss;
 			this.scrollSpeed = parent.scrollSpeed;
 			this.textureScale = parent.textureScale;
+			this.textureOrientation = parent.textureOrientation;
 			this.materialsToReplace.addAll(parent.materialsToReplace);
 			this.replacementCondition = parent.replacementCondition;
 			return this;
@@ -902,6 +905,11 @@ public enum Material {
 
 		Builder setTextureScale(float x, float y) {
 			this.textureScale = new float[] { x, y };
+			return this;
+		}
+
+		Builder setTextureOrientation(float degrees) {
+			this.textureOrientation = degrees / 180 * HDUtils.PI;
 			return this;
 		}
 
@@ -957,6 +965,7 @@ public enum Material {
 		specularGloss = builder.specularGloss;
 		scrollSpeed = builder.scrollSpeed;
 		textureScale = builder.textureScale;
+		textureOrientation = builder.textureOrientation;
 		materialsToReplace.addAll(builder.materialsToReplace);
 		replacementCondition = builder.replacementCondition;
 
