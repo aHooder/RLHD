@@ -155,6 +155,11 @@ public class SceneTileModelCustom implements SceneTileModel {
 	public int[] getTriangleTextureId() { return new int[0]; }
 
 	@Override
+	public boolean isFlat() {
+		return false;
+	}
+
+	@Override
 	public int getBufferOffset() { return 0; }
 
 	@Override

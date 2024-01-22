@@ -1077,8 +1077,4 @@ public enum Underlay {
 
 		return h << 10 | s << 7 | l;
 	}
-
-	public int[] modifyColor(int[] colorHSL) {
-		return modifyColor(colorHSL,false);
-	}
 }

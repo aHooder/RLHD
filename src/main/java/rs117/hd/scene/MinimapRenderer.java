@@ -11,7 +11,6 @@ import rs117.hd.data.materials.Underlay;
 import rs117.hd.overlays.FrameTimer;
 import rs117.hd.overlays.Timer;
 import rs117.hd.utils.ColorUtils;
-import rs117.hd.utils.HDUtils;
 
 import static net.runelite.api.Constants.*;
 import static rs117.hd.scene.SceneUploader.SCENE_OFFSET;
@@ -73,16 +72,16 @@ public class MinimapRenderer {
 						WaterType waterType = proceduralGenerator.tileWaterType(scene, tile, paint);
 						if (waterType == WaterType.NONE) {
 							if (overlay != Overlay.NONE) {
-								swColor = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(swColor), classicLighting));
-								seColor = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(seColor), classicLighting));
-								nwColor = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(nwColor), classicLighting));
-								neColor = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(neColor), classicLighting));
+								swColor = overlay.modifyColor(swColor);
+								seColor = overlay.modifyColor(seColor);
+								nwColor = overlay.modifyColor(nwColor);
+								neColor = overlay.modifyColor(neColor);
 							} else {
 								Underlay underlay = Underlay.getUnderlay(scene, tile, plugin);
-								swColor = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(swColor), classicLighting));
-								seColor = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(seColor), classicLighting));
-								nwColor = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(nwColor), classicLighting));
-								neColor = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(neColor), classicLighting));
+								swColor = underlay.modifyColor(swColor);
+								seColor = underlay.modifyColor(seColor);
+								nwColor = underlay.modifyColor(nwColor);
+								neColor = underlay.modifyColor(neColor);
 							}
 						} else {
 							swColor = seColor = nwColor = neColor = 127;
@@ -123,14 +122,14 @@ public class MinimapRenderer {
 							if (waterType == WaterType.NONE) {
 								if (ProceduralGenerator.isOverlayFace(tile, face)) {
 									Overlay overlay = Overlay.getOverlay(scene, tile, plugin);
-									colorA = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(colorA), classicLighting));
-									colorB = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(colorB), classicLighting));
-									colorC = HDUtils.colorHSLToInt(overlay.modifyColor(HDUtils.colorIntToHSL(colorC), classicLighting));
+									colorA = overlay.modifyColor(colorA);
+									colorB = overlay.modifyColor(colorB);
+									colorC = overlay.modifyColor(colorC);
 								} else {
 									Underlay underlay = Underlay.getUnderlay(scene, tile, plugin);
-									colorA = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(colorA), classicLighting));
-									colorB = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(colorB), classicLighting));
-									colorC = HDUtils.colorHSLToInt(underlay.modifyColor(HDUtils.colorIntToHSL(colorC), classicLighting));
+									colorA = underlay.modifyColor(colorA);
+									colorB = underlay.modifyColor(colorB);
+									colorC = underlay.modifyColor(colorC);
 								}
 							} else {
 								// set colors for the shoreline to create a foam effect in the water shader
