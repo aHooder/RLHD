@@ -12,6 +12,7 @@ import net.runelite.client.input.KeyListener;
 import net.runelite.client.input.KeyManager;
 import rs117.hd.data.environments.Area;
 import rs117.hd.overlays.FrameTimingsOverlay;
+import rs117.hd.overlays.ShadowMapOverlay;
 import rs117.hd.overlays.TileInfoOverlay;
 
 @Slf4j
@@ -19,6 +20,7 @@ public class DeveloperTools implements KeyListener {
 	// This could be part of the config if we had developer mode config sections
 	private static final Keybind KEY_TOGGLE_TILE_INFO = new Keybind(KeyEvent.VK_F3, InputEvent.CTRL_DOWN_MASK);
 	private static final Keybind KEY_TOGGLE_FRAME_TIMINGS = new Keybind(KeyEvent.VK_F4, InputEvent.CTRL_DOWN_MASK);
+	private static final Keybind KEY_TOGGLE_SHADOW_MAP_OVERLAY = new Keybind(KeyEvent.VK_F5, InputEvent.CTRL_DOWN_MASK);
 
 	@Inject
 	private EventBus eventBus;
@@ -32,8 +34,12 @@ public class DeveloperTools implements KeyListener {
 	@Inject
 	private FrameTimingsOverlay frameTimingsOverlay;
 
+	@Inject
+	private ShadowMapOverlay shadowMapOverlay;
+
 	private boolean tileInfoOverlayEnabled = false;
 	private boolean frameTimingsOverlayEnabled = false;
+	private boolean shadowMapOverlayEnabled = false;
 
 	public void activate() {
 		eventBus.register(this);
@@ -46,6 +52,7 @@ public class DeveloperTools implements KeyListener {
 
 		tileInfoOverlay.setActive(tileInfoOverlayEnabled);
 		frameTimingsOverlay.setActive(frameTimingsOverlayEnabled);
+		shadowMapOverlay.setActive(shadowMapOverlayEnabled);
 
 		// Check for any out of bounds areas
 		for (Area area : Area.values()) {
@@ -66,6 +73,7 @@ public class DeveloperTools implements KeyListener {
 		keyManager.unregisterKeyListener(this);
 		tileInfoOverlay.setActive(false);
 		frameTimingsOverlay.setActive(false);
+		shadowMapOverlay.setActive(false);
 	}
 
 	@Subscribe
@@ -85,6 +93,9 @@ public class DeveloperTools implements KeyListener {
 			case "timers":
 				frameTimingsOverlay.setActive(frameTimingsOverlayEnabled = !frameTimingsOverlayEnabled);
 				break;
+			case "shadowmap":
+				shadowMapOverlay.setActive(shadowMapOverlayEnabled = !shadowMapOverlayEnabled);
+				break;
 		}
 	}
 
@@ -98,6 +109,11 @@ public class DeveloperTools implements KeyListener {
 		if (KEY_TOGGLE_FRAME_TIMINGS.matches(event)) {
 			event.consume();
 			frameTimingsOverlay.setActive(frameTimingsOverlayEnabled = !frameTimingsOverlayEnabled);
+		}
+
+		if (KEY_TOGGLE_SHADOW_MAP_OVERLAY.matches(event)) {
+			event.consume();
+			shadowMapOverlay.setActive(shadowMapOverlayEnabled = !shadowMapOverlayEnabled);
 		}
 	}
 

@@ -11,9 +11,9 @@ import javax.annotation.Nullable;
 import net.runelite.api.*;
 import net.runelite.api.coords.*;
 import rs117.hd.data.environments.Area;
-import rs117.hd.data.environments.Environment;
 import rs117.hd.data.materials.Material;
-import rs117.hd.scene.lights.SceneLight;
+import rs117.hd.scene.environments.Environment;
+import rs117.hd.scene.lights.Light;
 import rs117.hd.utils.AABB;
 import rs117.hd.utils.HDUtils;
 import rs117.hd.utils.buffer.GpuFloatBuffer;
@@ -60,7 +60,7 @@ public class SceneContext {
 	public int[][][][] minimapTilePaintColors = new int[MAX_Z][EXTENDED_SCENE_SIZE][EXTENDED_SCENE_SIZE][4];
 	public int[][][][][] minimapTileModelColors = new int[MAX_Z][EXTENDED_SCENE_SIZE][EXTENDED_SCENE_SIZE][6][3];
 
-	public final ArrayList<SceneLight> lights = new ArrayList<>();
+	public final ArrayList<Light> lights = new ArrayList<>();
 	public final HashSet<Projectile> projectiles = new HashSet<>();
 
 	public final ArrayList<Environment> environments = new ArrayList<>();

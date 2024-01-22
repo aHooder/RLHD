@@ -72,8 +72,8 @@ public interface HdPluginConfig extends Config
 		keyName = "drawDistance",
 		name = "Draw Distance",
 		description =
-			"The maximum number of tiles to draw in either direction from the camera.<br>" +
-			"Depending on where the scene was loaded from, you might only see as far as 16 tiles in some directions.",
+			"The number of tiles to draw in either direction from the camera, up to a maximum of 184.<br>" +
+			"Depending on where the scene is centered, you might only see 16 tiles in one direction, unless you extend map loading.",
 		position = 0,
 		section = generalSettings
 	)
@@ -88,7 +88,9 @@ public interface HdPluginConfig extends Config
 	@ConfigItem(
 		keyName = KEY_EXPANDED_MAP_LOADING_CHUNKS,
 		name = "Extended map loading",
-		description = "Extra map area to load, in 8 tile chunks.",
+		description =
+			"How much further the map should be loaded. The maximum is 5 extra chunks.<br>" +
+			"Note, extending the map can have a very high impact on performance.",
 		position = 1,
 		section = generalSettings
 	)
@@ -117,9 +119,9 @@ public interface HdPluginConfig extends Config
 		keyName = "antiAliasingMode",
 		name = "Anti-Aliasing",
 		description =
-			"Improves jagged/shimmering edges at the cost of GPU performance.<br>" +
-			"16x MSAA is highly expensive, so 8x is recommended if anti-aliasing is desired.",
-		position = 3,
+			"Improves pixelated edges at the cost of significantly higher GPU usage.<br>" +
+			"MSAA x16 is very expensive, so x8 is recommended if anti-aliasing is desired.",
+		position = 2,
 		section = generalSettings
 	)
 	default AntiAliasingMode antiAliasingMode()
@@ -413,7 +415,7 @@ public interface HdPluginConfig extends Config
 		name = "Shadow Quality",
 		description =
 			"The resolution of the shadow map.<br>" +
-			"Higher resolutions result in higher quality shadows, at the cost of GPU performance.",
+			"Higher resolutions result in higher quality shadows, at the cost of higher GPU usage.",
 		position = 7,
 		section = lightingSettings
 	)
@@ -442,7 +444,7 @@ public interface HdPluginConfig extends Config
 		name = "Expand Shadow Draw",
 		description =
 			"Reduces shadows popping in and out at the edge of the screen by rendering<br>" +
-			"shadows for a larger portion of the scene, at the cost of performance.",
+			"shadows for a larger portion of the scene, at the cost of higher GPU usage.",
 		position = 10,
 		section = lightingSettings
 	)
@@ -469,7 +471,7 @@ public interface HdPluginConfig extends Config
 	@ConfigItem(
 		keyName = KEY_NORMAL_MAPPING,
 		name = "Normal Mapping",
-		description = "Affects how light interacts with certain materials. Barely affects performance.",
+		description = "Affects how light interacts with certain materials. Barely impacts performance.",
 		position = 12,
 		section = lightingSettings
 	)
@@ -481,7 +483,7 @@ public interface HdPluginConfig extends Config
 	@ConfigItem(
 		keyName = KEY_PARALLAX_OCCLUSION_MAPPING,
 		name = "Parallax Occlusion Mapping",
-		description = "Adds more depth to supported materials, at the cost of performance.",
+		description = "Adds more depth to some materials, at the cost of higher GPU usage.",
 		position = 13,
 		section = lightingSettings
 	)
@@ -495,12 +497,11 @@ public interface HdPluginConfig extends Config
 	@ConfigSection(
 		name = "Environment",
 		description = "Environment settings",
-		position = 2,
-		closedByDefault = false
+		position = 2
 	)
 	String environmentSettings = "environmentSettings";
 
-	String KEY_SEASONAL_THEME = "seasonalThemePreAuto1";
+	String KEY_SEASONAL_THEME = "seasonalTheme";
 	@ConfigItem(
 		keyName = KEY_SEASONAL_THEME,
 		name = "Seasonal Theme",
@@ -509,7 +510,7 @@ public interface HdPluginConfig extends Config
 		section = environmentSettings
 	)
 	default SeasonalTheme seasonalTheme() {
-		return SeasonalTheme.AUTUMN;
+		return SeasonalTheme.AUTOMATIC;
 	}
 
 	@ConfigItem(
@@ -827,21 +828,10 @@ public interface HdPluginConfig extends Config
 	@ConfigItem(
 		keyName = KEY_FASTER_MODEL_HASHING,
 		name = "Use faster model hashing",
-		description = "Should increase performance at the expensive of potential graphical issues.",
+		description = "Should increase performance at the expense of potential graphical issues.",
 		section = experimentalSettings
 	)
 	default boolean fasterModelHashing() {
-		return true;
-	}
-
-	String KEY_UNDO_VANILLA_SHADING_IN_COMPUTE = "experimentalUndoVanillaShadingInCompute";
-	@ConfigItem(
-		keyName = KEY_UNDO_VANILLA_SHADING_IN_COMPUTE,
-		name = "Undo vanilla shading in compute",
-		description = "Should increase performance at the expensive of potential graphical issues.",
-		section = experimentalSettings
-	)
-	default boolean undoVanillaShadingInCompute() {
 		return true;
 	}
 
@@ -861,7 +851,7 @@ public interface HdPluginConfig extends Config
 		keyName = KEY_SHADING_MODE,
 		name = "Shading mode",
 		description =
-			"If you prefer playing without shadows, maybe you'll prefer vanilla or no shading as well.<br>" +
+			"If you prefer playing without shadows, maybe you'll prefer vanilla shading or no shading as well.<br>" +
 			"Keep in mind, with vanilla shading used alongside shadows, you can end up with double shading.",
 		section = experimentalSettings
 	)
