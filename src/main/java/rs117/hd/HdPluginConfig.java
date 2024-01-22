@@ -119,9 +119,10 @@ public interface HdPluginConfig extends Config
 		keyName = "antiAliasingMode",
 		name = "Anti-Aliasing",
 		description =
-			"Improves jagged/shimmering edges at the cost of GPU performance.<br>" +
-			"16x MSAA is highly expensive, so 8x is recommended if anti-aliasing is desired.",
-		position = 3
+			"Improves pixelated edges at the cost of significantly higher GPU usage.<br>" +
+			"MSAA x16 is very expensive, so x8 is recommended if anti-aliasing is desired.",
+		position = 2,
+		section = generalSettings
 	)
 	default AntiAliasingMode antiAliasingMode()
 	{

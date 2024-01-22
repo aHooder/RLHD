@@ -46,7 +46,6 @@ import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.annotation.Nonnull;
@@ -105,7 +104,7 @@ import rs117.hd.scene.ProceduralGenerator;
 import rs117.hd.scene.SceneContext;
 import rs117.hd.scene.SceneUploader;
 import rs117.hd.scene.TextureManager;
-import rs117.hd.scene.lights.SceneLight;
+import rs117.hd.scene.lights.Light;
 import rs117.hd.scene.model_overrides.ModelOverride;
 import rs117.hd.scene.model_overrides.ObjectType;
 import rs117.hd.utils.ColorUtils;
@@ -142,8 +141,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	public static final String AMD_DRIVER_URL = "https://www.amd.com/en/support";
 	public static final String INTEL_DRIVER_URL = "https://www.intel.com/content/www/us/en/support/detect.html";
 	public static final String NVIDIA_DRIVER_URL = "https://www.nvidia.com/en-us/geforce/drivers/";
-
-	public static final String KEY_SKIP_SCENE_REUPLOAD = "skipSceneReupload";
 
 	public static final int TEXTURE_UNIT_BASE = GL_TEXTURE0;
 	public static final int TEXTURE_UNIT_UI = TEXTURE_UNIT_BASE; // default state
@@ -390,11 +387,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	private int uniBlockWaterTypes;
 	private int uniBlockPointLights;
 
-	private float elapsedTime;
-	private long lastFrameTime;
-	private long nextSeasonalThemeUpdate;
-	private int gameTicksUntilSceneReload = 0;
-
 	// Configs used frequently enough to be worth caching
 	public boolean configGroundTextures;
 	public boolean configGroundBlending;
@@ -419,7 +411,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	public boolean enableDetailedTimers;
 	public boolean enableShadowMapOverlay;
 
-	private boolean firstPluginStart = true;
 	private boolean isActive;
 	private boolean lwjglInitialized;
 	private boolean hasLoggedIn;
@@ -438,6 +429,13 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	public final int[] cameraFocalPoint = new int[2];
 	public final int[] cameraShift = new int[2];
 
+	public float deltaTime;
+	public float elapsedTime;
+	public float deltaClientTime;
+	public float elapsedClientTime;
+	private long lastFrameTimeMillis;
+	private float lastFrameClientTime;
+	private int gameTicksUntilSceneReload = 0;
 	public int visibleLightCount;
 
 	@Provides
@@ -459,26 +457,22 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				fboShadowMap = 0;
 				numPassthroughModels = 0;
 				numModelsToSort = null;
+				deltaTime = 0;
 				elapsedTime = 0;
-				lastFrameTime = 0;
-				nextSeasonalThemeUpdate = Long.MAX_VALUE;
+				deltaClientTime = 0;
+				elapsedClientTime = 0;
+				lastFrameTimeMillis = 0;
+				lastFrameClientTime = 0;
 				visibleLightCount = 0;
 
 				AWTContext.loadNatives();
 				canvas = client.getCanvas();
 
 				synchronized (canvas.getTreeLock()) {
-					if (!canvas.isValid()) {
-						// Delay plugin startup until the client's canvas is valid
-						if (firstPluginStart)
-							return false;
+					// Delay plugin startup until the client's canvas is valid
+					if (!canvas.isValid())
+						return false;
 
-						// For subsequent plugin startups, the canvas should be okay to use, but it can get stuck marked as invalid.
-						// This seems to happen when our automatic restart after probable OS suspend triggers.
-						canvas.revalidate();
-					}
-
-					firstPluginStart = false;
 					awtContext = new AWTContext(canvas);
 					awtContext.configurePixelFormat(0, 0, 0);
 				}
@@ -699,8 +693,11 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	}
 
 	public void restartPlugin() {
-		shutDown();
-		startUp();
+		// For some reason, it's necessary to delay this like below to prevent the canvas from locking up on Linux
+		SwingUtilities.invokeLater(() -> clientThread.invokeLater(() -> {
+			shutDown();
+			startUp();
+		}));
 	}
 
 	private String generateFetchCases(String array, int from, int to)
@@ -1446,16 +1443,16 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		if (sceneContext.scene == scene) {
 			// Update lights UBO
 			uniformBufferLights.clear();
-			ArrayList<SceneLight> visibleLights = lightManager.getVisibleLights(configMaxDynamicLights);
+			ArrayList<Light> visibleLights = lightManager.getVisibleLights(configMaxDynamicLights);
 			visibleLightCount = visibleLights.size();
-			for (SceneLight light : visibleLights) {
+			for (Light light : visibleLights) {
 				uniformBufferLights.putFloat(light.x + cameraShift[0]);
 				uniformBufferLights.putFloat(light.z);
 				uniformBufferLights.putFloat(light.y + cameraShift[1]);
-				uniformBufferLights.putFloat(light.currentSize * light.currentSize);
-				uniformBufferLights.putFloat(light.currentColor[0] * light.currentStrength);
-				uniformBufferLights.putFloat(light.currentColor[1] * light.currentStrength);
-				uniformBufferLights.putFloat(light.currentColor[2] * light.currentStrength);
+				uniformBufferLights.putFloat(light.radius * light.radius);
+				uniformBufferLights.putFloat(light.color[0] * light.strength);
+				uniformBufferLights.putFloat(light.color[1] * light.strength);
+				uniformBufferLights.putFloat(light.color[2] * light.strength);
 				uniformBufferLights.putFloat(0); // pad
 			}
 			uniformBufferLights.flip();
@@ -1741,35 +1738,26 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			return;
 		}
 
-		if (lastFrameTime > 0) {
-			final long FIVE_MINUTES = 300000;
-			final long HALF_A_MINUTE = 30000;
-			long timeStep = System.currentTimeMillis() - lastFrameTime;
+		if (lastFrameTimeMillis > 0) {
+			deltaTime = (float) ((System.currentTimeMillis() - lastFrameTimeMillis) / 1000.);
 
 			// Restart the plugin to avoid potential buffer corruption if the computer has likely resumed from suspension
-			if (timeStep > FIVE_MINUTES) {
-				log.debug("Restarting the plugin after probable OS suspend ({} ms time skip)", timeStep);
+			if (deltaTime > 300) {
+				log.debug("Restarting the plugin after probable OS suspend ({} second delta)", deltaTime);
 				restartPlugin();
 				return;
 			}
 
-			// Detect likely system clock changes
-			if (Math.abs(timeStep) > HALF_A_MINUTE) {
-				// Schedule a seasonal theme update, in case the new time should have a different season
-				nextSeasonalThemeUpdate = 0;
-			}
+			// If system time changes between frames, clamp the delta to a more sensible value
+			if (Math.abs(deltaTime) > 10)
+				deltaTime = 1 / 60.f;
+			elapsedTime += deltaTime;
 
-			// shader variables for water, lava animations
-			long frameDeltaTime = System.currentTimeMillis() - lastFrameTime;
-			// if system time changes dramatically between frames,
-			// very large values may be added to elapsedTime,
-			// which causes floating point precision to break down,
-			// leading to texture animations and water appearing frozen
-			if (Math.abs(frameDeltaTime) > 10000)
-				frameDeltaTime = 16;
-			elapsedTime += frameDeltaTime / 1000f;
+			// The client delta doesn't need clamping
+			deltaClientTime = elapsedClientTime - lastFrameClientTime;
 		}
-		lastFrameTime = System.currentTimeMillis();
+		lastFrameTimeMillis = System.currentTimeMillis();
+		lastFrameClientTime = elapsedClientTime;
 
 		final int canvasHeight = client.getCanvasHeight();
 		final int canvasWidth = client.getCanvasWidth();
@@ -2253,18 +2241,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 	@Override
 	public void loadScene(Scene scene) {
-		// Automatically update the seasonal theme only while in the overworld, to avoid stutter during something important
-		if (nextSeasonalThemeUpdate < System.currentTimeMillis() && !scene.isInstance() && Area.OVERWORLD.containsPoint(
-			scene.getBaseX() + SCENE_SIZE / 2,
-			scene.getBaseY() + SCENE_SIZE / 2,
-			client.getPlane()
-		)) {
-			log.info("Automatically changing seasonal theme before loading new scene");
-			nextSeasonalThemeUpdate = Long.MAX_VALUE;
-			pendingConfigChanges.addAll(List.of(KEY_SKIP_SCENE_REUPLOAD, KEY_SEASONAL_THEME));
-			processPendingConfigChanges();
+		if (!isActive)
 			return;
-		}
 
 		if (skipScene != scene && HDUtils.sceneIntersects(scene, getExpandedMapLoadingChunks(), Area.THE_GAUNTLET)) {
 			// Some game objects in The Gauntlet are spawned in too late for the initial scene load,
@@ -2446,21 +2424,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 					configSeasonalTheme = SeasonalTheme.SUMMER;
 					break;
 			}
-
-			int monthsUntilNextSeason = 3 - (time.getMonthValue() % 3);
-			var nextSeasonTime = time.plusMonths(monthsUntilNextSeason);
-			// Truncate to the start of the month
-			nextSeasonTime = ZonedDateTime.of(
-				nextSeasonTime.getYear(),
-				nextSeasonTime.getMonthValue(),
-				1,
-				0,
-				0,
-				0,
-				0,
-				nextSeasonTime.getZone()
-			);
-			nextSeasonalThemeUpdate = nextSeasonTime.toInstant().toEpochMilli();
 		}
 	}
 
@@ -2492,13 +2455,9 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				boolean modelPusherReallocate = false;
 				boolean reuploadScene = false;
 				boolean reprepareMinimap = false;
-				boolean skipSceneReupload = false;
 
 				for (var key : pendingConfigChanges) {
 					switch (key) {
-						case KEY_SKIP_SCENE_REUPLOAD:
-							skipSceneReupload = true;
-							break;
 						case KEY_EXPANDED_MAP_LOADING_CHUNKS:
 							client.setExpandedMapLoading(getExpandedMapLoadingChunks());
 							if (client.getGameState() == GameState.LOGGED_IN)
@@ -2563,7 +2522,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 							break;
 						case KEY_LOW_MEMORY_MODE:
 							restartPlugin();
-							// since we restarted everything anyway, skip all other pending changes
+							// since we'll be restarting the plugin anyway, skip pending changes
 							return;
 					}
 				}
@@ -2590,7 +2549,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 					modelPusher.clearModelCache();
 				}
 
-				if (reuploadScene && !skipSceneReupload)
+				if (reuploadScene)
 					reuploadScene();
 				else if (reprepareMinimap && sceneContext != null)
 					minimapRenderer.prepareScene(sceneContext);
@@ -2617,9 +2576,9 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		client.setUnlockedFps(unlockFps);
 
 		// Without unlocked fps, the client manages sync on its 20ms timer
-		SyncMode syncMode = unlockFps
+		HdPluginConfig.SyncMode syncMode = unlockFps
 				? this.config.syncMode()
-			: SyncMode.OFF;
+				: HdPluginConfig.SyncMode.OFF;
 
 		int swapInterval;
 		switch (syncMode)
@@ -3093,23 +3052,14 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 	@Subscribe
 	public void onClientTick(ClientTick clientTick) {
+		elapsedClientTime += 1 / 50f;
+
 		if (skipScene != client.getScene())
 			redrawPreviousFrame = false;
 	}
 
 	@Subscribe
 	public void onGameTick(GameTick gameTick) {
-		// Automatically update the seasonal theme only while in the overworld, to avoid stutter during something important
-		if (nextSeasonalThemeUpdate < System.currentTimeMillis() && Area.MAINLAND.containsPoint(
-			client.getBaseX() + SCENE_SIZE / 2,
-			client.getBaseY() + SCENE_SIZE / 2,
-			client.getPlane()
-		)) {
-			log.info("Automatically changing seasonal theme");
-			nextSeasonalThemeUpdate = Long.MAX_VALUE;
-			pendingConfigChanges.add(KEY_SEASONAL_THEME);
-		}
-
 		if (gameTicksUntilSceneReload > 0) {
 			if (gameTicksUntilSceneReload == 1)
 				reuploadScene();
