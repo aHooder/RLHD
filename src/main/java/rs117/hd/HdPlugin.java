@@ -123,6 +123,7 @@ import static org.lwjgl.opencl.CL10.*;
 import static org.lwjgl.opengl.GL43C.*;
 import static rs117.hd.HdPluginConfig.*;
 import static rs117.hd.scene.SceneUploader.SCENE_OFFSET;
+import static rs117.hd.utils.HDUtils.MiB;
 import static rs117.hd.utils.HDUtils.PI;
 import static rs117.hd.utils.ResourcePath.path;
 
@@ -493,6 +494,9 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				log.info("Using driver: {}", glGetString(GL_VERSION));
 				log.info("Client is {}-bit", arch);
 				log.info("Low memory mode: {}", useLowMemoryMode);
+
+				String OS = System.getProperty("os.name", "generic").toLowerCase();
+				System.out.println("Os name: " + OS);
 
 				computeMode = OSType.getOSType() == OSType.MacOS ? ComputeMode.OPENCL : ComputeMode.OPENGL;
 
@@ -1480,27 +1484,16 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			sceneContext.stagingBufferVertices.flip();
 			sceneContext.stagingBufferUvs.flip();
 			sceneContext.stagingBufferNormals.flip();
-			updateBuffer(
-				hStagingBufferVertices,
-				GL_ARRAY_BUFFER,
-				dynamicOffsetVertices * VERTEX_SIZE,
-				sceneContext.stagingBufferVertices.getBuffer(),
-				GL_STREAM_DRAW, CL_MEM_READ_ONLY
-			);
-			updateBuffer(
-				hStagingBufferUvs,
-				GL_ARRAY_BUFFER,
-				dynamicOffsetUvs * UV_SIZE,
-				sceneContext.stagingBufferUvs.getBuffer(),
-				GL_STREAM_DRAW, CL_MEM_READ_ONLY
-			);
-			updateBuffer(
-				hStagingBufferNormals,
-				GL_ARRAY_BUFFER,
-				dynamicOffsetVertices * NORMAL_SIZE,
-				sceneContext.stagingBufferNormals.getBuffer(),
-				GL_STREAM_DRAW, CL_MEM_READ_ONLY
-			);
+
+			glBindBuffer(GL_ARRAY_BUFFER, hStagingBufferVertices.glBufferId);
+			glBufferSubData(GL_ARRAY_BUFFER, 4L * dynamicOffsetVertices * VERTEX_SIZE, sceneContext.stagingBufferVertices.getBuffer());
+
+			glBindBuffer(GL_ARRAY_BUFFER, hStagingBufferUvs.glBufferId);
+			glBufferSubData(GL_ARRAY_BUFFER, 4L * dynamicOffsetUvs * UV_SIZE, sceneContext.stagingBufferUvs.getBuffer());
+
+			glBindBuffer(GL_ARRAY_BUFFER, hStagingBufferNormals.glBufferId);
+			glBufferSubData(GL_ARRAY_BUFFER, 4L * dynamicOffsetVertices * NORMAL_SIZE, sceneContext.stagingBufferNormals.getBuffer());
+
 			sceneContext.stagingBufferVertices.clear();
 			sceneContext.stagingBufferUvs.clear();
 			sceneContext.stagingBufferNormals.clear();
@@ -2327,27 +2320,20 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		sceneContext.stagingBufferVertices.flip();
 		sceneContext.stagingBufferUvs.flip();
 		sceneContext.stagingBufferNormals.flip();
-		updateBuffer(
-			hStagingBufferVertices,
-			GL_ARRAY_BUFFER,
-			sceneContext.stagingBufferVertices.getBuffer(),
-			GL_STREAM_DRAW,
-			CL_MEM_READ_ONLY
-		);
-		updateBuffer(
-			hStagingBufferUvs,
-			GL_ARRAY_BUFFER,
-			sceneContext.stagingBufferUvs.getBuffer(),
-			GL_STREAM_DRAW,
-			CL_MEM_READ_ONLY
-		);
-		updateBuffer(
-			hStagingBufferNormals,
-			GL_ARRAY_BUFFER,
-			sceneContext.stagingBufferNormals.getBuffer(),
-			GL_STREAM_DRAW,
-			CL_MEM_READ_ONLY
-		);
+
+		hStagingBufferVertices.size = hStagingBufferUvs.size = hStagingBufferNormals.size = 512 * MiB;
+		glBindBuffer(GL_ARRAY_BUFFER, hStagingBufferVertices.glBufferId);
+		glBufferData(GL_ARRAY_BUFFER, hStagingBufferVertices.size, GL_STREAM_DRAW);
+		glBufferSubData(GL_ARRAY_BUFFER, 0, sceneContext.stagingBufferVertices.getBuffer());
+
+		glBindBuffer(GL_ARRAY_BUFFER, hStagingBufferUvs.glBufferId);
+		glBufferData(GL_ARRAY_BUFFER, hStagingBufferUvs.size, GL_STREAM_DRAW);
+		glBufferSubData(GL_ARRAY_BUFFER, 0, sceneContext.stagingBufferUvs.getBuffer());
+
+		glBindBuffer(GL_ARRAY_BUFFER, hStagingBufferNormals.glBufferId);
+		glBufferData(GL_ARRAY_BUFFER, hStagingBufferNormals.size, GL_STREAM_DRAW);
+		glBufferSubData(GL_ARRAY_BUFFER, 0, sceneContext.stagingBufferNormals.getBuffer());
+
 		sceneContext.stagingBufferVertices.clear();
 		sceneContext.stagingBufferUvs.clear();
 		sceneContext.stagingBufferNormals.clear();
