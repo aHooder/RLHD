@@ -299,7 +299,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	// ordered by face count from small to large
 	public int numSortingBins;
 	public int maxComputeThreadCount;
-	public int[] modelSortingBinFaceCounts; // facesPerThread * threadCount
+	public int[] modelSortingBinTargetFaceCount;
+	public int[] modelSortingBinFacesPerThread;
 	public int[] modelSortingBinThreadCounts;
 	private int[] numModelsToSort;
 	private GpuIntBuffer[] modelSortingBuffers;
@@ -804,9 +805,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 			glModelSortingComputePrograms = new int[numSortingBins];
 			for (int i = 0; i < numSortingBins; i++) {
-				int faceCount = modelSortingBinFaceCounts[i];
+				int facesPerThread = modelSortingBinFacesPerThread[i];
 				int threadCount = modelSortingBinThreadCounts[i];
-				int facesPerThread = (int) Math.ceil((float) faceCount / threadCount);
 				glModelSortingComputePrograms[i] = COMPUTE_PROGRAM.compile(template
 					.copy()
 					.define("THREAD_COUNT", threadCount)
@@ -961,7 +961,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		};
 
 		int numBins = 0;
-		int[] binFaceCounts = new int[targetFaceCounts.length];
+		int[] binTargetFaceCount = new int[targetFaceCounts.length];
+		int[] binFacesPerThread = new int[targetFaceCounts.length];
 		int[] binThreadCounts = new int[targetFaceCounts.length];
 
 		int faceCount = 0;
@@ -976,14 +977,16 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			int threadCount = Math.min(maxThreadCount, (int) Math.ceil((float) targetFaceCount / facesPerThread));
 			System.out.println("target: " + targetFaceCount + ", facesPerThread: " + facesPerThread + ", threadCount: " + threadCount);
 
-			faceCount = forceFacesPerThread ? targetFaceCount : threadCount * facesPerThread;
-			binFaceCounts[numBins] = faceCount;
+			faceCount = threadCount * facesPerThread;
+			binTargetFaceCount[numBins] = targetFaceCount;
+			binFacesPerThread[numBins] = facesPerThread;
 			binThreadCounts[numBins] = threadCount;
 			++numBins;
 		}
 
 		numSortingBins = numBins;
-		modelSortingBinFaceCounts = Arrays.copyOf(binFaceCounts, numBins);
+		modelSortingBinTargetFaceCount = Arrays.copyOf(binTargetFaceCount, numBins);
+		modelSortingBinFacesPerThread = Arrays.copyOf(binFacesPerThread, numBins);
 		modelSortingBinThreadCounts = Arrays.copyOf(binThreadCounts, numBins);
 		numModelsToSort = new int[numBins];
 
@@ -997,7 +1000,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			initGlBuffer(hModelSortingBuffers[i], GL_ARRAY_BUFFER, GL_STREAM_DRAW, CL_MEM_READ_ONLY);
 		}
 
-		log.debug("Spreading model sorting across {} bins: {}", numBins, modelSortingBinFaceCounts);
+		log.debug("Spreading model sorting across {} bins: {}", numBins, modelSortingBinFacesPerThread);
 	}
 
 	private void destroyModelSortingBins() {
@@ -1005,7 +1008,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		redrawPreviousFrame = false;
 
 		numSortingBins = 0;
-		modelSortingBinFaceCounts = null;
+		modelSortingBinTargetFaceCount = null;
+		modelSortingBinFacesPerThread = null;
 		modelSortingBinThreadCounts = null;
 		numModelsToSort = null;
 
@@ -2855,7 +2859,19 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		if (eightIntWrite[0] == -1)
 			return; // Hidden model
 
-		bufferForTriangles(faceCount)
+		GpuIntBuffer b = null;
+		int i = 0;
+		for (; i < numSortingBins; i++) {
+			if (modelSortingBinTargetFaceCount[i] >= faceCount) {
+				++numModelsToSort[i];
+				b = modelSortingBuffers[i];
+				faceCount = Math.min(faceCount, modelSortingBinFacesPerThread[i] * modelSortingBinThreadCounts[i]);
+				eightIntWrite[2] = faceCount;
+				break;
+			}
+		}
+
+		b
 			.ensureCapacity(8)
 			.put(eightIntWrite);
 		renderBufferOffset += faceCount * 3;
@@ -2866,7 +2882,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	 */
 	private GpuIntBuffer bufferForTriangles(int triangles) {
 		for (int i = 0; i < numSortingBins; i++) {
-			if (modelSortingBinFaceCounts[i] >= triangles) {
+			if (modelSortingBinTargetFaceCount[i] >= triangles) {
 				++numModelsToSort[i];
 				return modelSortingBuffers[i];
 			}

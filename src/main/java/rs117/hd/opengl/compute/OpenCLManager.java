@@ -328,7 +328,7 @@ public class OpenCLManager {
 			sortingPrograms = new long[plugin.numSortingBins];
 			sortingKernels = new long[plugin.numSortingBins];
 			for (int i = 0; i < plugin.numSortingBins; i++) {
-				int faceCount = plugin.modelSortingBinFaceCounts[i];
+				int faceCount = plugin.modelSortingBinFacesPerThread[i];
 				int threadCount = plugin.modelSortingBinThreadCounts[i];
 				int facesPerThread = (int) Math.ceil((float) faceCount / threadCount);
 				sortingPrograms[i] = compileProgram(stack, template
@@ -447,7 +447,7 @@ public class OpenCLManager {
 				if (numModels == 0)
 					continue;
 
-				int faceCount = plugin.modelSortingBinFaceCounts[i];
+				int faceCount = plugin.modelSortingBinFacesPerThread[i];
 				int threadCount = plugin.modelSortingBinThreadCounts[i];
 				long kernel = sortingKernels[i];
 
