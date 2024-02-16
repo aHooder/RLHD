@@ -975,6 +975,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			if (forceFacesPerThread)
 				facesPerThread = config.facesPerThread();
 			int threadCount = Math.min(maxThreadCount, (int) Math.ceil((float) targetFaceCount / facesPerThread));
+			threadCount = Math.min(config.maxThreadCount(), threadCount);
 			System.out.println("target: " + targetFaceCount + ", facesPerThread: " + facesPerThread + ", threadCount: " + threadCount);
 
 			faceCount = threadCount * facesPerThread;
@@ -2453,6 +2454,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 									client.setGameState(GameState.LOADING);
 								break;
 							case KEY_DEBUGGING_AMD_DRIVER_CRASH_FACES_PER_THREAD:
+							case KEY_DEBUGGING_AMD_DRIVER_CRASH_MAX_THREAD_COUNT:
 								destroyModelSortingBins();
 								initModelSortingBins(maxComputeThreadCount);
 								// fall-through
