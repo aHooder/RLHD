@@ -13934,5 +13934,9 @@
     "uvType": "BOX",
     "uvScale": 0.6,
     "uvOrientation": 342
+  },
+  {
+    "objectIds": [ 19130 ],
+    "hide": true
   }
 ]

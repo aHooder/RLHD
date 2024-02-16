@@ -55,6 +55,19 @@ public interface HdPluginConfig extends Config
 {
 	String CONFIG_GROUP = "hd";
 
+	@Range(
+		max = 6144
+	)
+	@ConfigItem(
+		keyName = "debuggingAmdDriverCrashTriangleCount",
+		name = "Max face count",
+		description = "For testing",
+		position = -2
+	)
+	default int maxFaceCount() {
+		return 3;
+	}
+
 	/*====== General settings ======*/
 
 	@ConfigSection(

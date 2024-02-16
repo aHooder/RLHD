@@ -955,6 +955,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			128,
 			512,
 			2048,
+			3072,
 			4096,
 			MAX_FACE_COUNT
 		};
@@ -2777,7 +2778,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			// The model is part of the static scene buffer
 			assert model == renderable;
 
-			faceCount = Math.min(MAX_FACE_COUNT, offsetModel.getFaceCount());
+			faceCount = Math.min(config.maxFaceCount(), offsetModel.getFaceCount());
 			int vertexOffset = offsetModel.getBufferOffset();
 			int uvOffset = offsetModel.getUvBufferOffset();
 			int plane = (int) ((hash >> 49) & 3);
@@ -2828,7 +2829,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 					vertexOffset = -1;
 				} else {
 					modelPusher.pushModel(sceneContext, null, hash, model, modelOverride, ObjectType.NONE, 0, true);
-					faceCount = sceneContext.modelPusherResults[0];
+					faceCount = Math.min(config.maxFaceCount(), sceneContext.modelPusherResults[0]);
 					if (sceneContext.modelPusherResults[1] == 0)
 						uvOffset = -1;
 				}
