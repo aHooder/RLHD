@@ -969,16 +969,14 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			if (faceCount >= targetFaceCount)
 				continue;
 
-			int facesPerThread = 1;
-			int threadCount;
-			while (true) {
-				threadCount = (int) Math.ceil((float) targetFaceCount / facesPerThread);
-				if (threadCount <= maxThreadCount)
-					break;
-				++facesPerThread;
-			}
+			boolean forceFacesPerThread = config.facesPerThread() > 0;
+			int facesPerThread = (int) Math.ceil((float) targetFaceCount / maxThreadCount);
+			if (forceFacesPerThread)
+				facesPerThread = config.facesPerThread();
+			int threadCount = Math.min(maxThreadCount, (int) Math.ceil((float) targetFaceCount / facesPerThread));
+			System.out.println("target: " + targetFaceCount + ", facesPerThread: " + facesPerThread + ", threadCount: " + threadCount);
 
-			faceCount = threadCount * facesPerThread;
+			faceCount = forceFacesPerThread ? targetFaceCount : threadCount * facesPerThread;
 			binFaceCounts[numBins] = faceCount;
 			binThreadCounts[numBins] = threadCount;
 			++numBins;
@@ -2450,6 +2448,10 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 								if (client.getGameState() == GameState.LOGGED_IN)
 									client.setGameState(GameState.LOADING);
 								break;
+							case KEY_DEBUGGING_AMD_DRIVER_CRASH_FACES_PER_THREAD:
+								destroyModelSortingBins();
+								initModelSortingBins(maxComputeThreadCount);
+								// fall-through
 							case KEY_COLOR_BLINDNESS:
 							case KEY_MACOS_INTEL_WORKAROUND:
 							case KEY_MAX_DYNAMIC_LIGHTS:

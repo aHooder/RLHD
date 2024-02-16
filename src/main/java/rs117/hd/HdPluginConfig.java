@@ -62,10 +62,24 @@ public interface HdPluginConfig extends Config
 		keyName = "debuggingAmdDriverCrashTriangleCount",
 		name = "Max face count",
 		description = "For testing",
-		position = -2
+		position = -3
 	)
 	default int maxFaceCount() {
 		return 3;
+	}
+
+	String KEY_DEBUGGING_AMD_DRIVER_CRASH_FACES_PER_THREAD = "debuggingAmdDriverCrashFacesPerThread";
+	@Range(
+		max = 16
+	)
+	@ConfigItem(
+		keyName = KEY_DEBUGGING_AMD_DRIVER_CRASH_FACES_PER_THREAD,
+		name = "Faces per thread",
+		description = "For testing",
+		position = -2
+	)
+	default int facesPerThread() {
+		return 0;
 	}
 
 	/*====== General settings ======*/

@@ -1643,7 +1643,10 @@
     "flatNormals": true,
     "inheritTileColorType": "UNDERLAY",
     "castShadows": false,
+    "hide": true,
     "objectIds": [
+      19155,
+      1248,
       1253,
       1272,
       1273,
