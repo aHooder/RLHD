@@ -148,8 +148,6 @@ public class EnvironmentManager {
 	private boolean lightningEnabled = false;
 	private boolean forceNextTransition = false;
 
-	private boolean forceMinimapUpdate = false;
-
 	private rs117.hd.scene.environments.Environment[] environments;
 	private FileWatcher.UnregisterCallback fileWatcher;
 
@@ -264,11 +262,10 @@ public class EnvironmentManager {
 				currentSunAngles[i] = hermite(startSunAngles[i], targetSunAngles[i], t);
 			currentUnderwaterCausticsColor = hermite(startUnderwaterCausticsColor, targetUnderwaterCausticsColor, t);
 			currentUnderwaterCausticsStrength = hermite(startUnderwaterCausticsStrength, targetUnderwaterCausticsStrength, t);
-			forceMinimapUpdate = true;
+			minimapRenderer.updateMinimapLighting = true;
 		}
-		if (forceMinimapUpdate) {
+		if (minimapRenderer.updateMinimapLighting()) {
 			minimapRenderer.applyLighting(sceneContext);
-			forceMinimapUpdate = false;
 		}
 	}
 
@@ -291,9 +288,9 @@ public class EnvironmentManager {
 			skipTransition = false;
 		}
 
-		forceMinimapUpdate = true;
 		log.debug("changing environment from {} to {} (instant: {})", currentEnvironment, newEnvironment, skipTransition);
 		currentEnvironment = newEnvironment;
+		minimapRenderer.updateMinimapLighting = true;
 		transitionComplete = false;
 		transitionStartTime = plugin.elapsedTime - (skipTransition ? TRANSITION_DURATION : 0);
 
@@ -397,7 +394,7 @@ public class EnvironmentManager {
 
 		// Fall back to the default environment
 		sceneContext.environments.add(Environment.DEFAULT);
-		forceMinimapUpdate = true;
+		minimapRenderer.updateMinimapLighting = true;
 	}
 
 	/* lightning */

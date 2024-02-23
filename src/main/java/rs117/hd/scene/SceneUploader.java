@@ -518,10 +518,7 @@ class SceneUploader {
 						neMaterial = groundMaterial.getRandomMaterial(tileZ, baseX + tileX + 1, baseY + tileY + 1);
 					}
 				}
-				sceneContext.minimapTilePaintColors[tileZ][tileExX][tileExY][0] = swColor;
-				sceneContext.minimapTilePaintColors[tileZ][tileExX][tileExY][1] = seColor;
-				sceneContext.minimapTilePaintColors[tileZ][tileExX][tileExY][2] = nwColor;
-				sceneContext.minimapTilePaintColors[tileZ][tileExX][tileExY][3] = neColor;
+
 			}
 			else
 			{
@@ -529,10 +526,7 @@ class SceneUploader {
 
 				swColor = seColor = nwColor = neColor = 127;
 
-				sceneContext.minimapTilePaintColors[tileZ][tileExX][tileExY][0] = swColor;
-				sceneContext.minimapTilePaintColors[tileZ][tileExX][tileExY][1] = seColor;
-				sceneContext.minimapTilePaintColors[tileZ][tileExX][tileExY][2] = nwColor;
-				sceneContext.minimapTilePaintColors[tileZ][tileExX][tileExY][3] = neColor;
+
 
 				if (sceneContext.vertexIsWater.containsKey(swVertexKey) && sceneContext.vertexIsLand.containsKey(swVertexKey))
 					swColor = 0;
@@ -881,18 +875,13 @@ class SceneUploader {
 								baseY + tileY + (int) Math.floor((float) localVertices[2][1] / LOCAL_TILE_SIZE)
 							);
 						}
-						sceneContext.minimapTileModelColors[tileZ][tileExX][tileExY][face][0] = colorA;
-						sceneContext.minimapTileModelColors[tileZ][tileExX][tileExY][face][1] = colorB;
-						sceneContext.minimapTileModelColors[tileZ][tileExX][tileExY][face][2] = colorC;
+
 
 					}
 				} else {
 					// set colors for the shoreline to create a foam effect in the water shader
 					colorA = colorB = colorC = 127;
 
-					sceneContext.minimapTileModelColors[tileZ][tileExX][tileExY][face][0] = colorA;
-					sceneContext.minimapTileModelColors[tileZ][tileExX][tileExY][face][1] = colorB;
-					sceneContext.minimapTileModelColors[tileZ][tileExX][tileExY][face][2] = colorC;
 
 					if (sceneContext.vertexIsWater.containsKey(vertexKeyA) && sceneContext.vertexIsLand.containsKey(vertexKeyA))
 						colorA = 0;

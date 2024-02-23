@@ -1,25 +1,44 @@
 package rs117.hd.scene;
 
+import java.util.Arrays;
 import javax.inject.Inject;
+import javax.inject.Singleton;
 import net.runelite.api.*;
 import rs117.hd.HdPlugin;
 import rs117.hd.HdPluginConfig;
 import rs117.hd.config.MinimapStyle;
 import rs117.hd.data.WaterType;
+import rs117.hd.data.materials.GroundMaterial;
+import rs117.hd.data.materials.Material;
 import rs117.hd.data.materials.Overlay;
 import rs117.hd.data.materials.Underlay;
 import rs117.hd.overlays.FrameTimer;
 import rs117.hd.overlays.Timer;
 import rs117.hd.utils.ColorUtils;
+import rs117.hd.utils.HDUtils;
 
 import static net.runelite.api.Constants.*;
+import static net.runelite.api.Perspective.*;
 import static rs117.hd.scene.SceneUploader.SCENE_OFFSET;
 import static rs117.hd.utils.HDUtils.clamp;
 
+@Singleton
 public class MinimapRenderer {
+
+	public boolean configUseShadedMinimap;
+
+	public boolean configUse117Miniamp;
+
+	public boolean updateMinimapLighting;
+
+	public boolean updateMinimapLighting() {
+		return updateMinimapLighting && configUse117Miniamp;
+	}
+
 	public static SceneTileModel[] tileModels = new SceneTileModel[52];
 
-
+	public int[][][][] minimapTilePaintColorsLighting = new int[MAX_Z][EXTENDED_SCENE_SIZE][EXTENDED_SCENE_SIZE][8];
+	public int[][][][][] minimapTileModelColorsLighting = new int[MAX_Z][EXTENDED_SCENE_SIZE][EXTENDED_SCENE_SIZE][6][6];
 
 	static {
 		for (int index = 0; index < tileModels.length; ++index) {
@@ -29,6 +48,9 @@ public class MinimapRenderer {
 			tileModels[index] = new SceneTileModelCustom(shape, rotation, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0);
 		}
 	}
+
+	@Inject
+	ProceduralGenerator proceduralGenerator;
 
 	@Inject
 	private Client client;
@@ -43,13 +65,251 @@ public class MinimapRenderer {
 	private EnvironmentManager environmentManager;
 
 	@Inject
-	private ProceduralGenerator proceduralGenerator;
+	private TextureManager textureManager;
 
 	private final int[] tmpScreenX = new int[6];
 	private final int[] tmpScreenY = new int[6];
 
 	@Inject
 	private FrameTimer frameTimer;
+
+	public void updateConfigs() {
+		configUse117Miniamp = config.minimapType() == MinimapStyle.DEFAULT;
+		configUseShadedMinimap = configUse117Miniamp || config.minimapType() == MinimapStyle.HD2008;
+		if (configUse117Miniamp) {
+			updateMinimapLighting = true;
+		}
+	}
+
+	public void prepareScene(SceneContext sceneContext) {
+		final Scene scene = sceneContext.scene;
+		boolean classicLighting = config.minimapType() == MinimapStyle.HD2008;
+
+		for (int z = 0; z < MAX_Z; ++z) {
+			for (int x = 0; x < EXTENDED_SCENE_SIZE; ++x) {
+				for (int y = 0; y < EXTENDED_SCENE_SIZE; ++y) {
+					Tile tile = scene.getExtendedTiles()[z][x][y];
+					if (tile == null) continue;
+					processTilePaint(scene, sceneContext, tile, z, x, y, classicLighting);
+					processTileModel(scene, sceneContext, tile, z, x, y, classicLighting);
+				}
+			}
+		}
+
+	}
+
+	private Material getWater(WaterType type) {
+		if (type == WaterType.ICE || type == WaterType.ICE_FLAT) {
+			return Material.WATER_ICE;
+		} else if (type == WaterType.SWAMP_WATER || type == WaterType.SWAMP_WATER_FLAT) {
+			return Material.SWAMP_WATER_FLAT;
+		}
+
+		return Material.WATER_FLAT;
+	}
+
+	private final boolean minimapGroundBlending = false;
+
+	private void processTilePaint(Scene scene, SceneContext sceneContext, Tile tile, int z, int x, int y, boolean classicLighting) {
+		SceneTilePaint paint = tile.getSceneTilePaint();
+		if (paint == null) {
+			return;
+		}
+
+		// Initialize color and material arrays
+		int[] colors = { paint.getSwColor(), paint.getSeColor(), paint.getNwColor(), paint.getNeColor() };
+		Material[] materials = new Material[4];
+
+		Arrays.fill(materials, Material.NONE);
+
+		int tileTexture = paint.getTexture();
+		int[] vertexKeys = ProceduralGenerator.tileVertexKeys(scene, tile);
+
+		final Point tilePoint = tile.getSceneLocation();
+		final int tileX = tilePoint.getX();
+		final int tileY = tilePoint.getY();
+		final int tileZ = tile.getRenderLevel();
+		int baseX = scene.getBaseX();
+		int baseY = scene.getBaseY();
+
+		WaterType waterType = proceduralGenerator.tileWaterType(scene, tile, paint);
+		boolean hiddenTile = paint.getNwColor() == 12345678;
+		int hiddenRBG = ColorUtils.srgbToPackedHsl(ColorUtils.srgba(paint.getRBG()));
+		Overlay overlay = Overlay.getOverlay(scene, tile, plugin);
+		Underlay underlay = Underlay.getUnderlay(scene, tile, plugin);
+
+		if (waterType == WaterType.NONE) {
+			for (int i = 0; i < 4; i++) {
+				materials[i] = Material.fromVanillaTexture(tileTexture);
+				if (minimapGroundBlending && !proceduralGenerator.useDefaultColor(scene, tile) && paint.getTexture() == -1) {
+					if (plugin.configGroundTextures) {
+						materials[i] = sceneContext.vertexTerrainTexture.getOrDefault(vertexKeys[i], materials[i]);
+					}
+				} else {
+					GroundMaterial groundMaterial = null;
+					if (overlay != Overlay.NONE) {
+						groundMaterial = overlay.groundMaterial;
+						colors[i] = overlay.modifyColor(colors[i]);
+					} else {
+						if (underlay != Underlay.NONE) {
+							groundMaterial = underlay.groundMaterial;
+							colors[i] = underlay.modifyColor(colors[i]);
+						}
+					}
+
+					if (plugin.configGroundTextures && groundMaterial != null) {
+						materials[i] = groundMaterial.getRandomMaterial(tileZ, baseX + tileX + (i % 2), baseY + tileY + (i / 2));
+					}
+				}
+			}
+		} else {
+			Arrays.fill(colors, ColorUtils.srgbToPackedHsl(waterType.surfaceColor));
+			Arrays.fill(materials, getWater(waterType));
+		}
+
+		float[][] textureColors = new float[4][];
+		int[] texturePackedColors = new int[4];
+		for (int i = 0; i < 4; i++) {
+			if (hiddenTile) {
+				colors[i] = hiddenRBG;
+			}
+
+			textureColors[i] = textureManager.getTextureAverageColor(materials[i]);
+			float[] colorRGB = ColorUtils.srgbToLinear(ColorUtils.packedHslToSrgb(colors[i]));
+			texturePackedColors[i] = multiplyAndPackColors(textureColors[i], colorRGB);
+
+			if (hiddenTile) {
+				texturePackedColors[i] = hiddenRBG;
+			} else {
+				texturePackedColors[i] =
+					texturePackedColors[0] & 0xFF80 | texturePackedColors[i] & 0x7F; // Ensure hue and saturation consistency
+			}
+		}
+
+		// Update sceneContext with color information
+		System.arraycopy(colors, 0, sceneContext.minimapTilePaintColors[z][x][y], 0, colors.length);
+		System.arraycopy(texturePackedColors, 0, sceneContext.minimapTilePaintColors[z][x][y], colors.length, texturePackedColors.length);
+	}
+
+	private void processTileModel(Scene scene, SceneContext sceneContext, Tile tile, int z, int x, int y, boolean classicLighting) {
+		SceneTileModel model = tile.getSceneTileModel();
+		if (model == null) {
+			return;
+		}
+
+		final int[] faceColorA = model.getTriangleColorA();
+		final int[] faceColorB = model.getTriangleColorB();
+		final int[] faceColorC = model.getTriangleColorC();
+		final int[] faceTextures = model.getTriangleTextureId();
+
+		Point tilePoint = tile.getSceneLocation();
+		final int tileX = tilePoint.getX();
+		final int tileY = tilePoint.getY();
+		final int tileZ = tile.getRenderLevel();
+		int baseX = scene.getBaseX();
+		int baseY = scene.getBaseY();
+
+		Overlay overlay = Overlay.getOverlay(scene, tile, plugin);
+		Underlay underlay = Underlay.getUnderlay(scene, tile, plugin);
+
+		final int faceCount = model.getFaceX().length;
+		for (int face = 0; face < faceCount; ++face) {
+			int[] colors = { faceColorA[face], faceColorB[face], faceColorC[face] };
+			Material[] materials = new Material[3];
+			Arrays.fill(materials, Material.NONE);
+
+			if (faceTextures != null) {
+				int textureIndex = faceTextures[face];
+				Arrays.fill(materials, Material.fromVanillaTexture(textureIndex));
+			}
+
+			int[][] localVertices = ProceduralGenerator.faceLocalVertices(tile, face);
+			int[] vertexKeys = ProceduralGenerator.faceVertexKeys(tile, face);
+			WaterType waterType = proceduralGenerator.faceWaterType(scene, tile, face, model);
+
+			if (waterType == WaterType.NONE) {
+				if (minimapGroundBlending &&
+					!(ProceduralGenerator.isOverlayFace(tile, face) && proceduralGenerator.useDefaultColor(scene, tile)) &&
+					materials[0] == Material.NONE) {
+					for (int i = 0; i < vertexKeys.length; i++) {
+						colors[i] = sceneContext.vertexTerrainColor.getOrDefault(vertexKeys[i], colors[i]);
+						if (plugin.configGroundTextures) {
+							materials[i] = sceneContext.vertexTerrainTexture.getOrDefault(vertexKeys[i], materials[i]);
+						}
+					}
+				} else {
+					GroundMaterial groundMaterial = null;
+					if (ProceduralGenerator.isOverlayFace(tile, face)) {
+						if (overlay != Overlay.NONE) {
+							groundMaterial = overlay.groundMaterial;
+						}
+						for (int i = 0; i < colors.length; i++) {
+							colors[i] = overlay.modifyColor(colors[i]);
+						}
+					} else {
+						if (underlay != Underlay.NONE) {
+							groundMaterial = underlay.groundMaterial;
+						}
+						for (int i = 0; i < colors.length; i++) {
+							colors[i] = underlay.modifyColor(colors[i]);
+						}
+					}
+					if (plugin.configGroundTextures && groundMaterial != null) {
+						for (int i = 0; i < localVertices.length; i++) {
+							materials[i] = groundMaterial.getRandomMaterial(
+								tileZ,
+								baseX + tileX + (int) Math.floor((float) localVertices[i][0] / LOCAL_TILE_SIZE),
+								baseY + tileY + (int) Math.floor((float) localVertices[i][1] / LOCAL_TILE_SIZE)
+							);
+						}
+					}
+				}
+			} else {
+				Arrays.fill(colors, ColorUtils.srgbToPackedHsl(waterType.surfaceColor));
+				Arrays.fill(materials, getWater(waterType));
+			}
+
+			float[][] linearColors = new float[colors.length][];
+			for (int i = 0; i < colors.length; i++) {
+				linearColors[i] = ColorUtils.srgbToLinear(ColorUtils.packedHslToSrgb(colors[i]));
+			}
+
+
+			// Store the processed colors directly
+			System.arraycopy(colors, 0, sceneContext.minimapTileModelColors[z][x][y][face], 0, colors.length);
+
+			// Process materials and store them
+			int firstMaterialColor = 0;
+			for (int i = 0; i < materials.length; i++) {
+				float[] materialColor = textureManager.getTextureAverageColor(materials[i]);
+				int packedColor = multiplyAndPackColors(materialColor, linearColors[i]);
+
+				if (i == 0) {
+					firstMaterialColor = packedColor;
+					sceneContext.minimapTileModelColors[z][x][y][face][3 + i] = packedColor;
+				} else {
+					// Applying the blending operation separately
+					int blendedColor = firstMaterialColor & 0xFF80 | packedColor & 0x7F;
+					sceneContext.minimapTileModelColors[z][x][y][face][3 + i] = blendedColor;
+				}
+			}
+		}
+	}
+
+	public int multiplyAndPackColors(float[] color1, float[] color2) {
+		// Ensure each color array has exactly 3 elements (R, G, B)
+		if (color1.length != 3 || color2.length != 3) {
+			throw new IllegalArgumentException("Each color array must have exactly 3 elements.");
+		}
+
+		float red = color1[0] * color2[0];
+		float green = color1[1] * color2[1];
+		float blue = color1[2] * color2[2];
+
+		return ColorUtils.srgbToPackedHsl(ColorUtils.linearToSrgb(new float[] { red, green, blue }));
+	}
+
+
 
 	public void applyLighting(SceneContext sceneContext) {
 		for (int z = 0; z < MAX_Z; ++z) {
@@ -66,85 +326,78 @@ public class MinimapRenderer {
 						int nwColor = sceneContext.minimapTilePaintColors[z][x][y][2];
 						int neColor = sceneContext.minimapTilePaintColors[z][x][y][3];
 
+						int swTexture = sceneContext.minimapTilePaintColors[z][x][y][4];
+						int seTexture = sceneContext.minimapTilePaintColors[z][x][y][5];
+						int nwTexture = sceneContext.minimapTilePaintColors[z][x][y][6];
+						int neTexture = sceneContext.minimapTilePaintColors[z][x][y][7];
+
 						swColor = environmentalLighting(swColor);
 						seColor = environmentalLighting(seColor);
 						nwColor = environmentalLighting(nwColor);
 						neColor = environmentalLighting(neColor);
+						swTexture = environmentalLighting(swTexture);
+						seTexture = environmentalLighting(seTexture);
+						nwTexture = environmentalLighting(nwTexture);
+						neTexture = environmentalLighting(neTexture);
 
-
-						// Ensure hue and saturation are identical
 						seColor = swColor & 0xFF80 | seColor & 0x7F;
 						nwColor = swColor & 0xFF80 | nwColor & 0x7F;
 						neColor = swColor & 0xFF80 | neColor & 0x7F;
 
-						sceneContext.minimapTilePaintColorsLighting[z][x][y][0] = swColor;
-						sceneContext.minimapTilePaintColorsLighting[z][x][y][1] = seColor;
-						sceneContext.minimapTilePaintColorsLighting[z][x][y][2] = nwColor;
-						sceneContext.minimapTilePaintColorsLighting[z][x][y][3] = neColor;
+						seTexture = swTexture & 0xFF80 | seTexture & 0x7F;
+						nwTexture = swTexture & 0xFF80 | nwTexture & 0x7F;
+						neTexture = swTexture & 0xFF80 | neTexture & 0x7F;
+
+						minimapTilePaintColorsLighting[z][x][y][0] = swColor;
+						minimapTilePaintColorsLighting[z][x][y][1] = seColor;
+						minimapTilePaintColorsLighting[z][x][y][2] = nwColor;
+						minimapTilePaintColorsLighting[z][x][y][3] = neColor;
+
+						minimapTilePaintColorsLighting[z][x][y][4] = swTexture;
+						minimapTilePaintColorsLighting[z][x][y][5] = seTexture;
+						minimapTilePaintColorsLighting[z][x][y][6] = nwTexture;
+						minimapTilePaintColorsLighting[z][x][y][7] = neTexture;
 					}
 
 					var model = tile.getSceneTileModel();
 					if (model != null) {
 						final int faceCount = model.getFaceX().length;
 						for (int face = 0; face < faceCount; ++face) {
-							int colorA = sceneContext.minimapTileModelColors[z][x][y][face][0];
-							int colorB = sceneContext.minimapTileModelColors[z][x][y][face][1];
-							int colorC = sceneContext.minimapTileModelColors[z][x][y][face][2];
+							int c1 = sceneContext.minimapTileModelColors[z][x][y][face][0];
+							int c2 = sceneContext.minimapTileModelColors[z][x][y][face][1];
+							int c3 = sceneContext.minimapTileModelColors[z][x][y][face][2];
 
-							colorA = environmentalLighting(colorA);
-							colorB = environmentalLighting(colorB);
-							colorC = environmentalLighting(colorC);
+							int mc1 = sceneContext.minimapTileModelColors[z][x][y][face][3];
+							int mc2 = sceneContext.minimapTileModelColors[z][x][y][face][4];
+							int mc3 = sceneContext.minimapTileModelColors[z][x][y][face][5];
 
-							// Ensure hue and saturation are identical
-							colorB = colorA & 0xFF80 | colorB & 0x7F;
-							colorC = colorA & 0xFF80 | colorC & 0x7F;
+							c1 = environmentalLighting(c1);
+							c2 = environmentalLighting(c2);
+							c3 = environmentalLighting(c3);
+							mc1 = environmentalLighting(mc1);
+							mc2 = environmentalLighting(mc2);
+							mc3 = environmentalLighting(mc3);
 
-							sceneContext.minimapTileModelColorsLighting[z][x][y][face][0] = colorA;
-							sceneContext.minimapTileModelColorsLighting[z][x][y][face][1] = colorB;
-							sceneContext.minimapTileModelColorsLighting[z][x][y][face][2] = colorC;
+							c2 = c1 & 0xFF80 | c2 & 0x7F;
+							c3 = c1 & 0xFF80 | c3 & 0x7F;
+
+							mc2 = mc1 & 0xFF80 | mc2 & 0x7F;
+							mc3 = mc1 & 0xFF80 | mc3 & 0x7F;
+
+							minimapTileModelColorsLighting[z][x][y][face][0] = c1;
+							minimapTileModelColorsLighting[z][x][y][face][1] = c2;
+							minimapTileModelColorsLighting[z][x][y][face][2] = c3;
+
+							minimapTileModelColorsLighting[z][x][y][face][3] = mc1;
+							minimapTileModelColorsLighting[z][x][y][face][4] = mc2;
+							minimapTileModelColorsLighting[z][x][y][face][5] = mc3;
+
 						}
 					}
 				}
 			}
 		}
-	}
-
-	public int getTileModelColor(SceneContext sceneContext, int plane, int tileExX, int tileExY, int face, int idx) {
-		return (config.minimapType() == MinimapStyle.HD2008)
-			? sceneContext.minimapTileModelColors[plane][tileExX][tileExY][face][idx]
-			: sceneContext.minimapTileModelColorsLighting[plane][tileExX][tileExY][face][idx];
-	}
-
-	public int getTilePaintColor(SceneContext sceneContext, int plane, int tileExX, int tileExY, int idx) {
-		return (config.minimapType() == MinimapStyle.HD2008)
-			? sceneContext.minimapTilePaintColors[plane][tileExX][tileExY][idx]
-			: sceneContext.minimapTilePaintColorsLighting[plane][tileExX][tileExY][idx];
-	}
-
-	private static int blend(int baseHsl, int brightnessFactorHsl) {
-		int lightness = (baseHsl & 0x7F) * (brightnessFactorHsl & 0x7F) >> 7;
-		return (baseHsl & ~0x7F) | clamp(lightness, 0, 0x7F);
-	}
-
-	public void drawTile(Tile tile, int tx, int ty, int px0, int py0, int px1, int py1) {
-		frameTimer.begin(Timer.MINIMAP_DRAW);
-		if (config.minimapType() == MinimapStyle.DEFAULT || config.minimapType() == MinimapStyle.HD2008) {
-			drawMinimapShaded(tile, tx, ty, px0, py0, px1, py1);
-		} else {
-			drawMinimapOSRS(tile, tx, ty, px0, py0, px1, py1);
-		}
-		frameTimer.end(Timer.MINIMAP_DRAW);
-	}
-
-	private int environmentalLighting(int packedHsl) {
-		var rgb = ColorUtils.srgbToLinear(ColorUtils.packedHslToSrgb(packedHsl));
-		for (int i = 0; i < 3; i++) {
-			rgb[i] *=
-				environmentManager.currentAmbientColor[i] * environmentManager.currentAmbientStrength +
-				environmentManager.currentDirectionalColor[i] * environmentManager.currentDirectionalStrength;
-			rgb[i] = clamp(rgb[i], 0, 1);
-		}
-		return ColorUtils.srgbToPackedHsl(ColorUtils.linearToSrgb(rgb));
+		updateMinimapLighting = false;
 	}
 
 	private void drawMinimapOSRS(Tile tile, int tx, int ty, int px0, int py0, int px1, int py1) {
@@ -173,7 +426,7 @@ public class MinimapRenderer {
 
 					for (int vert = 0; vert < vertexX.length; ++vert) {
 						tmpScreenX[vert] = px0 + ((vertexX[vert] * w) >> Perspective.LOCAL_COORD_BITS);
-						tmpScreenY[vert] = py0 + (((Perspective.LOCAL_TILE_SIZE - vertexZ[vert]) * h) >> Perspective.LOCAL_COORD_BITS);
+						tmpScreenY[vert] = py0 + (((LOCAL_TILE_SIZE - vertexZ[vert]) * h) >> Perspective.LOCAL_COORD_BITS);
 					}
 
 					for (int face = 0; face < indicies1.length; ++face) {
@@ -211,22 +464,30 @@ public class MinimapRenderer {
 
 		var paint = tile.getSceneTilePaint();
 		if (paint != null) {
-			int swColor = getTilePaintColor(sceneContext,plane,tileExX,tileExY,0);
-			int seColor = getTilePaintColor(sceneContext,plane,tileExX,tileExY,1);
-			int nwColor = getTilePaintColor(sceneContext,plane,tileExX,tileExY,2);
-			int neColor = getTilePaintColor(sceneContext,plane,tileExX,tileExY,3);
 
-			int tex = paint.getTexture();
-			if (tex == -1) {
-				if (paint.getNwColor() != 12345678) {
-					fillGradient(px0, py0, px1, py1, nwColor, neColor, swColor, seColor);
-				} else {
-					client.getRasterizer().fillRectangle(px0, py0, px1 - px0, py1 - py0, paint.getRBG());
-				}
-			} else {
-				int hsl = client.getTextureProvider().getDefaultColor(tex);
-				fillGradient(px0, py0, px1, py1, blend(hsl, nwColor), blend(hsl, neColor), blend(hsl, swColor), blend(hsl, seColor));
-			}
+			int[] colors = getTilePaintColor(sceneContext, plane, tileExX, tileExY);
+
+			int swColor = colors[0];
+			int seColor = colors[1];
+			int nwColor = colors[2];
+			int neColor = colors[3];
+
+			int swTexture = colors[4];
+			int seTexture = colors[5];
+			int nwTexture = colors[6];
+			int neTexture = colors[7];
+
+			boolean hasTexture = nwTexture != 0;
+			fillGradient(
+				px0,
+				py0,
+				px1,
+				py1,
+				hasTexture ? nwTexture : nwColor,
+				hasTexture ? neTexture : neColor,
+				hasTexture ? swTexture : swColor,
+				hasTexture ? seTexture : seColor
+			);
 		}
 
 		var model = tile.getSceneTileModel();
@@ -257,26 +518,68 @@ public class MinimapRenderer {
 				int idx2 = indicies2[face];
 				int idx3 = indicies3[face];
 
-				int c1 = getTileModelColor(sceneContext,plane,tileExX,tileExY,face,0);
-				int c2 = getTileModelColor(sceneContext,plane,tileExX,tileExY,face,1);
-				int c3 = getTileModelColor(sceneContext,plane,tileExX,tileExY,face,2);
+				int[] colors = getTileModelColor(sceneContext, plane, tileExX, tileExY, face);
 
-				if (textures != null && textures[face] != -1) {
-					int hsl = client.getTextureProvider().getDefaultColor(textures[face]);
+				int c1 = colors[0];
+				int c2 = colors[1];
+				int c3 = colors[2];
+
+
+				int mc1 = colors[3];
+				int mc2 = colors[4];
+				int mc3 = colors[5];
+
+
+				if ((textures != null && textures[face] != -1)) {
 					client.getRasterizer().rasterGouraud(
 						tmpScreenY[idx1], tmpScreenY[idx2], tmpScreenY[idx3],
 						tmpScreenX[idx1], tmpScreenX[idx2], tmpScreenX[idx3],
-						blend(hsl, c1), blend(hsl, c2), blend(hsl, c3)
+						mc1, mc2, mc3
 					);
 				} else if (color1[face] != 12345678) {
 					client.getRasterizer().rasterGouraud(
 						tmpScreenY[idx1], tmpScreenY[idx2], tmpScreenY[idx3],
 						tmpScreenX[idx1], tmpScreenX[idx2], tmpScreenX[idx3],
-						c1, c2, c3
+						mc1 == 0 ? c1 : mc1, mc2 == 0 ? c2 : mc2, mc3 == 0 ? c3 : mc3
 					);
 				}
+
 			}
 		}
+	}
+
+
+	public int[] getTileModelColor(SceneContext sceneContext, int plane, int tileExX, int tileExY, int face) {
+		return (!configUse117Miniamp)
+			? sceneContext.minimapTileModelColors[plane][tileExX][tileExY][face]
+			: minimapTileModelColorsLighting[plane][tileExX][tileExY][face];
+	}
+
+	public int[] getTilePaintColor(SceneContext sceneContext, int plane, int tileExX, int tileExY) {
+		return (!configUse117Miniamp)
+			? sceneContext.minimapTilePaintColors[plane][tileExX][tileExY]
+			: minimapTilePaintColorsLighting[plane][tileExX][tileExY];
+	}
+
+	public void drawTile(Tile tile, int tx, int ty, int px0, int py0, int px1, int py1) {
+		frameTimer.begin(Timer.MINIMAP_DRAW);
+		if (configUseShadedMinimap) {
+			drawMinimapShaded(tile, tx, ty, px0, py0, px1, py1);
+		} else {
+			drawMinimapOSRS(tile, tx, ty, px0, py0, px1, py1);
+		}
+		frameTimer.end(Timer.MINIMAP_DRAW);
+	}
+
+	private int environmentalLighting(int packedHsl) {
+		var rgb = ColorUtils.srgbToLinear(ColorUtils.packedHslToSrgb(packedHsl));
+		for (int i = 0; i < 3; i++) {
+			rgb[i] *=
+				environmentManager.currentAmbientColor[i] * environmentManager.currentAmbientStrength +
+				environmentManager.currentDirectionalColor[i] * environmentManager.currentDirectionalStrength;
+			rgb[i] = clamp(rgb[i], 0, 1);
+		}
+		return ColorUtils.srgbToPackedHsl(ColorUtils.linearToSrgb(rgb));
 	}
 
 	private void fillGradient(int px0, int py0, int px1, int py1, int c00, int c10, int c01, int c11) {

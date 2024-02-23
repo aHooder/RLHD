@@ -405,6 +405,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	public boolean configPreserveVanillaNormals;
 	public ShadowMode configShadowMode;
 	public SeasonalTheme configSeasonalTheme;
+
+	public MinimapStyle configMinimapStyle;
 	public int configMaxDynamicLights;
 
 	public boolean useLowMemoryMode;
@@ -2275,6 +2277,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				proceduralGenerator.generateSceneData(context);
 				environmentManager.loadSceneEnvironments(context);
 				sceneUploader.upload(context);
+				minimapRenderer.prepareScene(context);
 			}
 		} catch (OutOfMemoryError oom) {
 			log.error("Ran out of memory while loading scene (32-bit: {}, low memory mode: {})",
@@ -2307,6 +2310,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		} else {
 			initTileHeightMap(scene);
 		}
+
+		minimapRenderer.updateMinimapLighting = true;
 
 		lightManager.loadSceneLights(nextSceneContext, sceneContext);
 
@@ -2405,6 +2410,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		configUndoVanillaShading = config.shadingMode() != ShadingMode.VANILLA;
 		configPreserveVanillaNormals = config.preserveVanillaNormals();
 		configSeasonalTheme = config.seasonalTheme();
+		configMinimapStyle = config.minimapType();
+		minimapRenderer.updateConfigs();
 
 		if (configSeasonalTheme == SeasonalTheme.AUTOMATIC) {
 			var time = ZonedDateTime.now(ZoneOffset.UTC);
@@ -2468,6 +2475,9 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 						case KEY_NORMAL_MAPPING:
 						case KEY_PARALLAX_OCCLUSION_MAPPING:
 						case KEY_UI_SCALING_MODE:
+						case KEY_MINIMAP_STYLE:
+							configMinimapStyle = config.minimapType();
+							minimapRenderer.updateConfigs();
 						case KEY_VANILLA_COLOR_BANDING:
 							recompilePrograms = true;
 							break;
@@ -3039,15 +3049,15 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	public void onBeforeRender(BeforeRender beforeRender) {
 		// The game runs significantly slower with lower planes in Chambers of Xeric
 		client.getScene().setMinLevel(isInChambersOfXeric ? client.getPlane() : client.getScene().getMinLevel());
-		if (config.minimapType() != MinimapStyle.RUNELITE) {
+		if (configMinimapStyle != MinimapStyle.RUNELITE) {
 			client.setMinimapTileDrawer(minimapRenderer::drawTile);
 		}
+
 	}
 
 	@Subscribe
 	public void onClientTick(ClientTick clientTick) {
 		elapsedClientTime += 1 / 50f;
-
 		if (skipScene != client.getScene())
 			redrawPreviousFrame = false;
 	}
