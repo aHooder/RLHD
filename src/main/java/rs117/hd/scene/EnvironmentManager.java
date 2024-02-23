@@ -72,6 +72,9 @@ public class EnvironmentManager {
 	@Inject
 	private HdPluginConfig config;
 
+	@Inject
+	private MinimapRenderer minimapRenderer;
+
 	private static final float TRANSITION_DURATION = 3; // seconds
 	// distance in tiles to skip transition (e.g. entering cave, teleporting)
 	// walking across a loading line causes a movement of 40-41 tiles
@@ -144,6 +147,8 @@ public class EnvironmentManager {
 
 	private boolean lightningEnabled = false;
 	private boolean forceNextTransition = false;
+
+	private boolean forceMinimapUpdate = false;
 
 	private rs117.hd.scene.environments.Environment[] environments;
 	private FileWatcher.UnregisterCallback fileWatcher;
@@ -222,12 +227,15 @@ public class EnvironmentManager {
 		previousPosition = focalPoint;
 
 		boolean skipTransition = tileChange >= SKIP_TRANSITION_DISTANCE;
+
 		for (var environment : sceneContext.environments) {
 			if (environment.area.containsPoint(focalPoint)) {
 				changeEnvironment(environment, skipTransition);
 				break;
 			}
 		}
+
+
 
 		updateTargetSkyColor(); // Update every frame, since other plugins may control it
 
@@ -256,9 +264,12 @@ public class EnvironmentManager {
 				currentSunAngles[i] = hermite(startSunAngles[i], targetSunAngles[i], t);
 			currentUnderwaterCausticsColor = hermite(startUnderwaterCausticsColor, targetUnderwaterCausticsColor, t);
 			currentUnderwaterCausticsStrength = hermite(startUnderwaterCausticsStrength, targetUnderwaterCausticsStrength, t);
+			forceMinimapUpdate = true;
 		}
-
-		updateLightning();
+		if (forceMinimapUpdate) {
+			minimapRenderer.applyLighting(sceneContext);
+			forceMinimapUpdate = false;
+		}
 	}
 
 	/**
@@ -280,6 +291,7 @@ public class EnvironmentManager {
 			skipTransition = false;
 		}
 
+		forceMinimapUpdate = true;
 		log.debug("changing environment from {} to {} (instant: {})", currentEnvironment, newEnvironment, skipTransition);
 		currentEnvironment = newEnvironment;
 		transitionComplete = false;
@@ -385,6 +397,7 @@ public class EnvironmentManager {
 
 		// Fall back to the default environment
 		sceneContext.environments.add(Environment.DEFAULT);
+		forceMinimapUpdate = true;
 	}
 
 	/* lightning */

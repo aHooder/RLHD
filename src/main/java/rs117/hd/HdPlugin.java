@@ -2275,7 +2275,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				proceduralGenerator.generateSceneData(context);
 				environmentManager.loadSceneEnvironments(context);
 				sceneUploader.upload(context);
-				minimapRenderer.prepareScene(context);
 			}
 		} catch (OutOfMemoryError oom) {
 			log.error("Ran out of memory while loading scene (32-bit: {}, low memory mode: {})",
@@ -2454,7 +2453,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				boolean modelPusherClearModelCache = false;
 				boolean modelPusherReallocate = false;
 				boolean reuploadScene = false;
-				boolean reprepareMinimap = false;
 
 				for (var key : pendingConfigChanges) {
 					switch (key) {
@@ -2463,9 +2461,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 							if (client.getGameState() == GameState.LOGGED_IN)
 								client.setGameState(GameState.LOADING);
 							break;
-						case KEY_MINIMAP_STYLE:
-							reprepareMinimap = true;
-							break;
+
 						case KEY_COLOR_BLINDNESS:
 						case KEY_MACOS_INTEL_WORKAROUND:
 						case KEY_MAX_DYNAMIC_LIGHTS:
@@ -2551,8 +2547,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 				if (reuploadScene)
 					reuploadScene();
-				else if (reprepareMinimap && sceneContext != null)
-					minimapRenderer.prepareScene(sceneContext);
 
 				if (recreateShadowMapFbo) {
 					destroyShadowMapFbo();

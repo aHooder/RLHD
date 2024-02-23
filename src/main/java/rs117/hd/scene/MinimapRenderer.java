@@ -19,6 +19,8 @@ import static rs117.hd.utils.HDUtils.clamp;
 public class MinimapRenderer {
 	public static SceneTileModel[] tileModels = new SceneTileModel[52];
 
+
+
 	static {
 		for (int index = 0; index < tileModels.length; ++index) {
 			int shape = index >> 2;
@@ -49,11 +51,7 @@ public class MinimapRenderer {
 	@Inject
 	private FrameTimer frameTimer;
 
-	public void prepareScene(SceneContext sceneContext) {
-		final Scene scene = sceneContext.scene;
-
-		boolean classicLighting = config.minimapType() == MinimapStyle.HD2008;
-
+	public void applyLighting(SceneContext sceneContext) {
 		for (int z = 0; z < MAX_Z; ++z) {
 			for (int x = 0; x < EXTENDED_SCENE_SIZE; ++x) {
 				for (int y = 0; y < EXTENDED_SCENE_SIZE; ++y) {
@@ -63,97 +61,64 @@ public class MinimapRenderer {
 
 					var paint = tile.getSceneTilePaint();
 					if (paint != null) {
-						int swColor = paint.getSwColor();
-						int seColor = paint.getSeColor();
-						int nwColor = paint.getNwColor();
-						int neColor = paint.getNeColor();
+						int swColor = sceneContext.minimapTilePaintColors[z][x][y][0];
+						int seColor = sceneContext.minimapTilePaintColors[z][x][y][1];
+						int nwColor = sceneContext.minimapTilePaintColors[z][x][y][2];
+						int neColor = sceneContext.minimapTilePaintColors[z][x][y][3];
 
-						Overlay overlay = Overlay.getOverlay(scene, tile, plugin);
-						WaterType waterType = proceduralGenerator.tileWaterType(scene, tile, paint);
-						if (waterType == WaterType.NONE) {
-							if (overlay != Overlay.NONE) {
-								swColor = overlay.modifyColor(swColor);
-								seColor = overlay.modifyColor(seColor);
-								nwColor = overlay.modifyColor(nwColor);
-								neColor = overlay.modifyColor(neColor);
-							} else {
-								Underlay underlay = Underlay.getUnderlay(scene, tile, plugin);
-								swColor = underlay.modifyColor(swColor);
-								seColor = underlay.modifyColor(seColor);
-								nwColor = underlay.modifyColor(nwColor);
-								neColor = underlay.modifyColor(neColor);
-							}
-						} else {
-							swColor = seColor = nwColor = neColor = 127;
-						}
+						swColor = environmentalLighting(swColor);
+						seColor = environmentalLighting(seColor);
+						nwColor = environmentalLighting(nwColor);
+						neColor = environmentalLighting(neColor);
 
-						if (!classicLighting) {
-							swColor = environmentalLighting(swColor);
-							seColor = environmentalLighting(seColor);
-							nwColor = environmentalLighting(nwColor);
-							neColor = environmentalLighting(neColor);
 
-							// Ensure hue and saturation are identical
-							seColor = swColor & 0xFF80 | seColor & 0x7F;
-							nwColor = swColor & 0xFF80 | nwColor & 0x7F;
-							neColor = swColor & 0xFF80 | neColor & 0x7F;
-						}
+						// Ensure hue and saturation are identical
+						seColor = swColor & 0xFF80 | seColor & 0x7F;
+						nwColor = swColor & 0xFF80 | nwColor & 0x7F;
+						neColor = swColor & 0xFF80 | neColor & 0x7F;
 
-						sceneContext.minimapTilePaintColors[z][x][y][0] = swColor;
-						sceneContext.minimapTilePaintColors[z][x][y][1] = seColor;
-						sceneContext.minimapTilePaintColors[z][x][y][2] = nwColor;
-						sceneContext.minimapTilePaintColors[z][x][y][3] = neColor;
+						sceneContext.minimapTilePaintColorsLighting[z][x][y][0] = swColor;
+						sceneContext.minimapTilePaintColorsLighting[z][x][y][1] = seColor;
+						sceneContext.minimapTilePaintColorsLighting[z][x][y][2] = nwColor;
+						sceneContext.minimapTilePaintColorsLighting[z][x][y][3] = neColor;
 					}
 
 					var model = tile.getSceneTileModel();
 					if (model != null) {
-						final int[] faceColorA = model.getTriangleColorA();
-						final int[] faceColorB = model.getTriangleColorB();
-						final int[] faceColorC = model.getTriangleColorC();
-
 						final int faceCount = model.getFaceX().length;
-
 						for (int face = 0; face < faceCount; ++face) {
-							int colorA = faceColorA[face];
-							int colorB = faceColorB[face];
-							int colorC = faceColorC[face];
+							int colorA = sceneContext.minimapTileModelColors[z][x][y][face][0];
+							int colorB = sceneContext.minimapTileModelColors[z][x][y][face][1];
+							int colorC = sceneContext.minimapTileModelColors[z][x][y][face][2];
 
-							var waterType = proceduralGenerator.faceWaterType(scene, tile, face, model);
-							if (waterType == WaterType.NONE) {
-								if (ProceduralGenerator.isOverlayFace(tile, face)) {
-									Overlay overlay = Overlay.getOverlay(scene, tile, plugin);
-									colorA = overlay.modifyColor(colorA);
-									colorB = overlay.modifyColor(colorB);
-									colorC = overlay.modifyColor(colorC);
-								} else {
-									Underlay underlay = Underlay.getUnderlay(scene, tile, plugin);
-									colorA = underlay.modifyColor(colorA);
-									colorB = underlay.modifyColor(colorB);
-									colorC = underlay.modifyColor(colorC);
-								}
-							} else {
-								// set colors for the shoreline to create a foam effect in the water shader
-								colorA = colorB = colorC = 127;
-							}
+							colorA = environmentalLighting(colorA);
+							colorB = environmentalLighting(colorB);
+							colorC = environmentalLighting(colorC);
 
-							if (!classicLighting) {
-								colorA = environmentalLighting(colorA);
-								colorB = environmentalLighting(colorB);
-								colorC = environmentalLighting(colorC);
+							// Ensure hue and saturation are identical
+							colorB = colorA & 0xFF80 | colorB & 0x7F;
+							colorC = colorA & 0xFF80 | colorC & 0x7F;
 
-								// Ensure hue and saturation are identical
-								colorB = colorA & 0xFF80 | colorB & 0x7F;
-								colorC = colorA & 0xFF80 | colorC & 0x7F;
-							}
-
-							sceneContext.minimapTileModelColors[z][x][y][face][0] = colorA;
-							sceneContext.minimapTileModelColors[z][x][y][face][1] = colorB;
-							sceneContext.minimapTileModelColors[z][x][y][face][2] = colorC;
+							sceneContext.minimapTileModelColorsLighting[z][x][y][face][0] = colorA;
+							sceneContext.minimapTileModelColorsLighting[z][x][y][face][1] = colorB;
+							sceneContext.minimapTileModelColorsLighting[z][x][y][face][2] = colorC;
 						}
 					}
 				}
 			}
 		}
+	}
+
+	public int getTileModelColor(SceneContext sceneContext, int plane, int tileExX, int tileExY, int face, int idx) {
+		return (config.minimapType() == MinimapStyle.HD2008)
+			? sceneContext.minimapTileModelColors[plane][tileExX][tileExY][face][idx]
+			: sceneContext.minimapTileModelColorsLighting[plane][tileExX][tileExY][face][idx];
+	}
+
+	public int getTilePaintColor(SceneContext sceneContext, int plane, int tileExX, int tileExY, int idx) {
+		return (config.minimapType() == MinimapStyle.HD2008)
+			? sceneContext.minimapTilePaintColors[plane][tileExX][tileExY][idx]
+			: sceneContext.minimapTilePaintColorsLighting[plane][tileExX][tileExY][idx];
 	}
 
 	private static int blend(int baseHsl, int brightnessFactorHsl) {
@@ -246,10 +211,10 @@ public class MinimapRenderer {
 
 		var paint = tile.getSceneTilePaint();
 		if (paint != null) {
-			int swColor = sceneContext.minimapTilePaintColors[plane][tileExX][tileExY][0];
-			int seColor = sceneContext.minimapTilePaintColors[plane][tileExX][tileExY][1];
-			int nwColor = sceneContext.minimapTilePaintColors[plane][tileExX][tileExY][2];
-			int neColor = sceneContext.minimapTilePaintColors[plane][tileExX][tileExY][3];
+			int swColor = getTilePaintColor(sceneContext,plane,tileExX,tileExY,0);
+			int seColor = getTilePaintColor(sceneContext,plane,tileExX,tileExY,1);
+			int nwColor = getTilePaintColor(sceneContext,plane,tileExX,tileExY,2);
+			int neColor = getTilePaintColor(sceneContext,plane,tileExX,tileExY,3);
 
 			int tex = paint.getTexture();
 			if (tex == -1) {
@@ -292,9 +257,9 @@ public class MinimapRenderer {
 				int idx2 = indicies2[face];
 				int idx3 = indicies3[face];
 
-				int c1 = sceneContext.minimapTileModelColors[plane][tileExX][tileExY][face][0];
-				int c2 = sceneContext.minimapTileModelColors[plane][tileExX][tileExY][face][1];
-				int c3 = sceneContext.minimapTileModelColors[plane][tileExX][tileExY][face][2];
+				int c1 = getTileModelColor(sceneContext,plane,tileExX,tileExY,face,0);
+				int c2 = getTileModelColor(sceneContext,plane,tileExX,tileExY,face,1);
+				int c3 = getTileModelColor(sceneContext,plane,tileExX,tileExY,face,2);
 
 				if (textures != null && textures[face] != -1) {
 					int hsl = client.getTextureProvider().getDefaultColor(textures[face]);

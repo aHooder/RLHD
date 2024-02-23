@@ -65,6 +65,9 @@ class SceneUploader {
 	private Client client;
 
 	@Inject
+	private MinimapRenderer minimapRenderer;
+
+	@Inject
 	private HdPlugin plugin;
 
 	@Inject
@@ -88,7 +91,7 @@ class SceneUploader {
 				}
 			}
 		}
-
+		
 		stopwatch.stop();
 		log.debug(
 			"Scene upload time: {}, unique models: {}, size: {} MB",
@@ -431,14 +434,18 @@ class SceneUploader {
 		int nwVertexKey = vertexKeys[2];
 		int neVertexKey = vertexKeys[3];
 
+		int seColor = 0;
+		int swColor = 0;
+		int neColor = 0;
+		int nwColor = 0;
 		// Ignore certain tiles that aren't supposed to be visible,
 		// but which we can still make a height-adjusted version of for underwater
 		if (sceneTilePaint.getNeColor() != 12345678)
 		{
-			int swColor = sceneTilePaint.getSwColor();
-			int seColor = sceneTilePaint.getSeColor();
-			int neColor = sceneTilePaint.getNeColor();
-			int nwColor = sceneTilePaint.getNwColor();
+			swColor = sceneTilePaint.getSwColor();
+			seColor = sceneTilePaint.getSeColor();
+			neColor = sceneTilePaint.getNeColor();
+			nwColor = sceneTilePaint.getNwColor();
 
 			int tileTexture = sceneTilePaint.getTexture();
 
@@ -511,12 +518,21 @@ class SceneUploader {
 						neMaterial = groundMaterial.getRandomMaterial(tileZ, baseX + tileX + 1, baseY + tileY + 1);
 					}
 				}
+				sceneContext.minimapTilePaintColors[tileZ][tileExX][tileExY][0] = swColor;
+				sceneContext.minimapTilePaintColors[tileZ][tileExX][tileExY][1] = seColor;
+				sceneContext.minimapTilePaintColors[tileZ][tileExX][tileExY][2] = nwColor;
+				sceneContext.minimapTilePaintColors[tileZ][tileExX][tileExY][3] = neColor;
 			}
 			else
 			{
 				// set colors for the shoreline to create a foam effect in the water shader
 
 				swColor = seColor = nwColor = neColor = 127;
+
+				sceneContext.minimapTilePaintColors[tileZ][tileExX][tileExY][0] = swColor;
+				sceneContext.minimapTilePaintColors[tileZ][tileExX][tileExY][1] = seColor;
+				sceneContext.minimapTilePaintColors[tileZ][tileExX][tileExY][2] = nwColor;
+				sceneContext.minimapTilePaintColors[tileZ][tileExX][tileExY][3] = neColor;
 
 				if (sceneContext.vertexIsWater.containsKey(swVertexKey) && sceneContext.vertexIsLand.containsKey(swVertexKey))
 					swColor = 0;
@@ -585,6 +601,7 @@ class SceneUploader {
 
 			uvBufferLength += 6;
 		}
+
 
 		return new int[]{bufferLength, uvBufferLength, underwaterTerrain};
 	}
@@ -864,10 +881,19 @@ class SceneUploader {
 								baseY + tileY + (int) Math.floor((float) localVertices[2][1] / LOCAL_TILE_SIZE)
 							);
 						}
+						sceneContext.minimapTileModelColors[tileZ][tileExX][tileExY][face][0] = colorA;
+						sceneContext.minimapTileModelColors[tileZ][tileExX][tileExY][face][1] = colorB;
+						sceneContext.minimapTileModelColors[tileZ][tileExX][tileExY][face][2] = colorC;
+
 					}
 				} else {
 					// set colors for the shoreline to create a foam effect in the water shader
 					colorA = colorB = colorC = 127;
+
+					sceneContext.minimapTileModelColors[tileZ][tileExX][tileExY][face][0] = colorA;
+					sceneContext.minimapTileModelColors[tileZ][tileExX][tileExY][face][1] = colorB;
+					sceneContext.minimapTileModelColors[tileZ][tileExX][tileExY][face][2] = colorC;
+
 					if (sceneContext.vertexIsWater.containsKey(vertexKeyA) && sceneContext.vertexIsLand.containsKey(vertexKeyA))
 						colorA = 0;
 					if (sceneContext.vertexIsWater.containsKey(vertexKeyB) && sceneContext.vertexIsLand.containsKey(vertexKeyB))
