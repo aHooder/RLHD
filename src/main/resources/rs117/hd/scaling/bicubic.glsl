@@ -117,6 +117,7 @@ vec4 textureCubic(sampler2D sampler, vec2 texCoords)
             {
                 // this would use texelFetch, but that would require manual implementation of texture wrapping
                 vec4 vecData = texture(sampler, texCoords + vec2(m, n) * texelSize);
+                vecData = replaceTransparency(vecData);
 
                 // update min and max as we go
                 min_sample = min(min_sample, vecData);
@@ -146,6 +147,7 @@ vec4 textureCubic(sampler2D sampler, vec2 texCoords)
             {
                 // this would use texelFetch, but that would require manual implementation of texture wrapping
                 vec4 vecData = texture(sampler, texCoords + vec2(m, n) * texelSize);
+                vecData = replaceTransparency(vecData);
 
                 // calculate weight based on distance of the current texel offset from the sub-texel position of the sampling location
                 float w = mitchell( d(vec2(m, n), coordFract) );

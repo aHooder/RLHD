@@ -266,6 +266,7 @@ public class EnvironmentManager {
 		}
 		if (minimapRenderer.updateMinimapLighting()) {
 			minimapRenderer.applyLighting(sceneContext);
+			minimapRenderer.generateMiniMapImage();
 		}
 	}
 
@@ -289,8 +290,9 @@ public class EnvironmentManager {
 		}
 
 		log.debug("changing environment from {} to {} (instant: {})", currentEnvironment, newEnvironment, skipTransition);
+
 		currentEnvironment = newEnvironment;
-		minimapRenderer.updateMinimapLighting = true;
+		minimapRenderer.generateMiniMapImage();
 		transitionComplete = false;
 		transitionStartTime = plugin.elapsedTime - (skipTransition ? TRANSITION_DURATION : 0);
 

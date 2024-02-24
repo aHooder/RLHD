@@ -104,7 +104,7 @@ public class FrameTimer {
 			glQueryCounter(gpuQueries[timer.ordinal() * 2 + 1], GL_TIMESTAMP);
 			// leave the GPU timer active, since it needs to be gathered at a later point
 		} else {
-			cumulativeError += 17; // compensate slightly for the timer's own overhead
+			cumulativeError += 27; // compensate slightly for the timer's own overhead
 			timings[timer.ordinal()] += System.nanoTime() - cumulativeError;
 			activeTimers[timer.ordinal()] = false;
 		}

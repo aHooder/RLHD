@@ -1,9 +1,11 @@
 package rs117.hd.scene;
 
+import java.awt.image.BufferedImage;
 import java.util.Arrays;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import net.runelite.api.*;
+import net.runelite.client.callback.ClientThread;
 import rs117.hd.HdPlugin;
 import rs117.hd.HdPluginConfig;
 import rs117.hd.config.MinimapStyle;
@@ -15,7 +17,6 @@ import rs117.hd.data.materials.Underlay;
 import rs117.hd.overlays.FrameTimer;
 import rs117.hd.overlays.Timer;
 import rs117.hd.utils.ColorUtils;
-import rs117.hd.utils.HDUtils;
 
 import static net.runelite.api.Constants.*;
 import static net.runelite.api.Perspective.*;
@@ -24,6 +25,18 @@ import static rs117.hd.utils.HDUtils.clamp;
 
 @Singleton
 public class MinimapRenderer {
+
+	public static SceneTileModel[] tileModels = new SceneTileModel[52];
+
+	static {
+		for (int index = 0; index < tileModels.length; ++index) {
+			int shape = index >> 2;
+			int rotation = index & 0x3;
+
+			tileModels[index] = new SceneTileModelCustom(shape, rotation, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0);
+		}
+	}
+
 
 	public boolean configUseShadedMinimap;
 
@@ -35,19 +48,26 @@ public class MinimapRenderer {
 		return updateMinimapLighting && configUse117Miniamp;
 	}
 
-	public static SceneTileModel[] tileModels = new SceneTileModel[52];
-
 	public int[][][][] minimapTilePaintColorsLighting = new int[MAX_Z][EXTENDED_SCENE_SIZE][EXTENDED_SCENE_SIZE][8];
 	public int[][][][][] minimapTileModelColorsLighting = new int[MAX_Z][EXTENDED_SCENE_SIZE][EXTENDED_SCENE_SIZE][6][6];
 
-	static {
-		for (int index = 0; index < tileModels.length; ++index) {
-			int shape = index >> 2;
-			int rotation = index & 0x3;
 
-			tileModels[index] = new SceneTileModelCustom(shape, rotation, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0);
-		}
-	}
+	/**
+	 * Saved image of the scene, no reason to draw the whole thing every
+	 * frame.
+	 */
+	public volatile BufferedImage minimiapImage;
+
+	public Boolean mapCaptured = false;
+
+
+	/**
+	 * The size of tiles on the map. The way the client renders requires
+	 * this value to be 4. Changing this will break the method for rendering
+	 * complex tiles
+	 */
+	static final int TILE_SIZE = 4;
+
 
 	@Inject
 	ProceduralGenerator proceduralGenerator;
@@ -59,6 +79,9 @@ public class MinimapRenderer {
 	private HdPlugin plugin;
 
 	@Inject
+	private ClientThread clientThread;
+
+	@Inject
 	private HdPluginConfig config;
 
 	@Inject
@@ -66,6 +89,7 @@ public class MinimapRenderer {
 
 	@Inject
 	private TextureManager textureManager;
+
 
 	private final int[] tmpScreenX = new int[6];
 	private final int[] tmpScreenY = new int[6];
@@ -81,6 +105,45 @@ public class MinimapRenderer {
 		}
 	}
 
+	public void generateMiniMapImage() {
+		mapCaptured = false;
+		captureMinimap();
+	}
+
+	private void captureMinimap() {
+		if (mapCaptured) return;
+		SpritePixels map = client.drawInstanceMap(client.getPlane());
+		// larger instance map doesn't fit on fixed mode, so reduce to 104x104
+		BufferedImage image = minimapToBufferedImage(map, client.isResized() ? client.getExpandedMapLoading() : 0);
+		synchronized (this)
+		{
+			minimiapImage = image;
+			mapCaptured = true;
+		}
+	}
+
+	private static BufferedImage minimapToBufferedImage(SpritePixels spritePixels, int expandedChunks)
+	{
+		int width = spritePixels.getWidth();
+		int height = spritePixels.getHeight();
+		int[] pixels = spritePixels.getPixels();
+		BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+		img.setRGB(0, 0, width, height, pixels, 0, width);
+		int maxChunks = ((Constants.EXTENDED_SCENE_SIZE - Constants.SCENE_SIZE) / 2) / 8;
+		if (expandedChunks < maxChunks)
+		{
+			int cropChunks = maxChunks - expandedChunks;
+			img = img.getSubimage(
+				TILE_SIZE * (cropChunks * 8),
+				TILE_SIZE * (cropChunks * 8),
+				(Constants.SCENE_SIZE + expandedChunks * 8) * TILE_SIZE,
+				(Constants.SCENE_SIZE + expandedChunks * 8) * TILE_SIZE
+			);
+		}
+		return img;
+	}
+
+
 	public void prepareScene(SceneContext sceneContext) {
 		final Scene scene = sceneContext.scene;
 		boolean classicLighting = config.minimapType() == MinimapStyle.HD2008;
@@ -95,7 +158,6 @@ public class MinimapRenderer {
 				}
 			}
 		}
-
 	}
 
 	private Material getWater(WaterType type) {
@@ -563,11 +625,18 @@ public class MinimapRenderer {
 
 	public void drawTile(Tile tile, int tx, int ty, int px0, int py0, int px1, int py1) {
 		frameTimer.begin(Timer.MINIMAP_DRAW);
-		if (configUseShadedMinimap) {
-			drawMinimapShaded(tile, tx, ty, px0, py0, px1, py1);
+
+		if (!mapCaptured) {
+			if (configUseShadedMinimap) {
+				drawMinimapShaded(tile, tx, ty, px0, py0, px1, py1);
+			} else {
+				drawMinimapOSRS(tile, tx, ty, px0, py0, px1, py1);
+			}
 		} else {
-			drawMinimapOSRS(tile, tx, ty, px0, py0, px1, py1);
+			client.getRasterizer().fillRectangle(px0, py0, px1 - px0, py1 - py0, 12345678);
 		}
+
+
 		frameTimer.end(Timer.MINIMAP_DRAW);
 	}
 

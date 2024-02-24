@@ -58,6 +58,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.events.*;
 import net.runelite.api.hooks.*;
+import net.runelite.api.widgets.*;
 import net.runelite.client.RuneLite;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
@@ -216,7 +217,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	private MinimapRenderer minimapRenderer;
 
 	@Inject
-	private DeveloperTools developerTools;
+	public DeveloperTools developerTools;
 
 	@Inject
 	private FrameTimer frameTimer;
@@ -379,7 +380,9 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	private int uniLightProjectionMatrix;
 	private int uniShadowMap;
 	private int uniUiTexture;
+
 	private int uniTexSourceDimensions;
+
 	private int uniTexTargetDimensions;
 	private int uniUiAlphaOverlay;
 	private int uniTextureArray;
@@ -2019,6 +2022,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			glUniform3fv(uniUnderwaterCausticsColor, environmentManager.currentUnderwaterCausticsColor);
 			glUniform1f(uniUnderwaterCausticsStrength, environmentManager.currentUnderwaterCausticsStrength);
 			glUniform1f(uniElapsedTime, elapsedTime);
+
 			glUniform3fv(uniCameraPos, cameraPosition);
 
 			// Extract the 3rd column from the light view matrix (the float array is column-major)
@@ -2137,9 +2141,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		if (client.getGameState().getState() < GameState.LOADING.getState())
 			overlayColor = 0;
 
-		glEnable(GL_BLEND);
+		glUseProgram(glUiProgram);
 
-		glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 		glBindTexture(GL_TEXTURE_2D, interfaceTexture);
 
 		// Use the texture bound in the first pass
@@ -2166,6 +2169,9 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, function);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, function);
 		}
+
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 		// Texture on UI
 		glBindVertexArray(vaoUiHandle);
@@ -2288,6 +2294,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				environmentManager.loadSceneEnvironments(context);
 				sceneUploader.upload(context);
 				minimapRenderer.prepareScene(context);
+				//minimapRenderer.mapCaptured = false;
+				//minimapRenderer.catpureMinimap();
 			}
 		} catch (OutOfMemoryError oom) {
 			log.error("Ran out of memory while loading scene (32-bit: {}, low memory mode: {})",
@@ -2493,6 +2501,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 							case KEY_MINIMAP_STYLE:
 								configMinimapStyle = config.minimapType();
 								minimapRenderer.updateConfigs();
+								minimapRenderer.generateMiniMapImage();
 							case KEY_SHADOW_MODE:
 							case KEY_SHADOW_TRANSPARENCY:
 								recompilePrograms = true;
