@@ -34,6 +34,8 @@ uniform sampler2D uiTexture;
 uniform int samplingMode;
 uniform ivec2 sourceDimensions;
 uniform ivec2 targetDimensions;
+uniform ivec2 minimapLocation;
+uniform float isResized;
 uniform float colorBlindnessIntensity;
 uniform vec4 alphaOverlay;
 
@@ -72,23 +74,19 @@ vec4 alphaBlend(vec4 src, vec4 dst) {
      return dst * (1 - src.a) + src;
 }
 
-vec2 getMinimapLocation(bool isResized) {
-    float offsetY = isResized ? 1.0 : 0.0;
-    if (!isResized) {
-        return vec2(0, 0);
-    }
-    return vec2(sourceDimensions.x - 159, sourceDimensions.y - 9 - 152.0 + offsetY);
+vec2 getMinimapLocation() {
+    return vec2(minimapLocation.x, sourceDimensions.y - minimapLocation.y - 152);
 }
 
 void main() {
     // Size of the red square
-    vec2 squareSize = vec2(150.0, 150.0); // Adjust these values based on your needs
+    vec2 squareSize = vec2(152.0, 152.0); // Adjust these values based on your needs
 
     // Coordinates for the center of the top right corner
     vec2 topRightCenter = vec2(1.0, 1.0) - squareSize * 0.5;
 
     // Calculate the position of the red square in screen space
-    vec2 squarePosition = getMinimapLocation(true);
+    vec2 squarePosition = getMinimapLocation();
 
     // Check if the current fragment is inside the red square
     bool insideRedSquare = (
@@ -110,30 +108,27 @@ void main() {
 
     #if UI_SCALING_MODE == SAMPLING_MITCHELL || UI_SCALING_MODE == SAMPLING_CATROM
     vec4 c = textureCubic(uiTexture, TexCoord);
-    #elif UI_SCALING_MODE == SAMPLING_XBR
-    vec4 c = textureXBR(uiTexture, TexCoord, xbrTable, ceil(1.0 * targetDimensions.x / sourceDimensions.x));
-    #else // NEAREST or LINEAR, which uses GL_TEXTURE_MIN_FILTER/GL_TEXTURE_MAG_FILTER to affect sampling
-    vec4 c = texture(uiTexture, TexCoord);
-    c = replaceTransparency(c); // TODO: Fix bilinear by implementing it in software
-    #endif
+        #elif UI_SCALING_MODE == SAMPLING_XBR
+        vec4 c = textureXBR(uiTexture, TexCoord, xbrTable, ceil(1.0 * targetDimensions.x / sourceDimensions.x));
+        #else // NEAREST or LINEAR, which uses GL_TEXTURE_MIN_FILTER/GL_TEXTURE_MAG_FILTER to affect sampling
+        vec4 c = texture(uiTexture, TexCoord);
+        c = replaceTransparency(c); // TODO: Fix bilinear by implementing it in software
+        #endif
+
+        // Apply vanilla game screen transition color overlay before UI
+        c = alphaBlend(c, alphaOverlay);
+
+        // Blend redSquareColor under the minimap color
+        if (insideRedSquare) {
+            vec4 redSquareColor = vec4(1.0, 0.0, 0.0, 1.0); // Red color with alpha of 1.0
+            c = alphaBlend(c, redSquareColor);
+        }
 
     c.rgb /= c.a; // Undo vanilla premultiplied alpha
 
-    c = alphaBlend(c, alphaOverlay);
-    c.rgb = colorBlindnessCompensation(c.rgb);
-
-    vec4 redSquareColor = vec4(1.0, 0.0, 0.0, 1.0); // Red color with alpha of 1.0
-
-    // Blend redSquareColor under the minimap color
-    if (insideRedSquare) {
-      c = alphaBlend(c, redSquareColor);
-
-    }
-
-    c.rgb /= c.a; // Undo vanilla premultiplied alpha
-
-    c = alphaBlend(c, alphaOverlay);
     c.rgb = colorBlindnessCompensation(c.rgb);
 
     FragColor = c;
+
+
 }

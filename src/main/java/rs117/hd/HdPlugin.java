@@ -382,6 +382,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	private int uniUiTexture;
 
 	private int uniTexSourceDimensions;
+	private int uniisResized;
+	private int uniMinimapLocation;
 
 	private int uniTexTargetDimensions;
 	private int uniUiAlphaOverlay;
@@ -887,8 +889,10 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		uniElapsedTime = glGetUniformLocation(glSceneProgram, "elapsedTime");
 
 		uniUiTexture = glGetUniformLocation(glUiProgram, "uiTexture");
+		uniMinimapLocation = glGetUniformLocation(glUiProgram, "minimapLocation");
 		uniTexTargetDimensions = glGetUniformLocation(glUiProgram, "targetDimensions");
 		uniTexSourceDimensions = glGetUniformLocation(glUiProgram, "sourceDimensions");
+		uniisResized = glGetUniformLocation(glUiProgram, "isResized");
 		uniUiColorBlindnessIntensity = glGetUniformLocation(glUiProgram, "colorBlindnessIntensity");
 		uniUiAlphaOverlay = glGetUniformLocation(glUiProgram, "alphaOverlay");
 
@@ -2134,6 +2138,22 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			SwingUtilities.invokeLater(this::processPendingConfigChanges);
 	}
 
+	public Point getMinimapLocation() {
+		Widget minimapDrawWidget;
+
+		if (client.isResized()) {
+			if (client.getVarbitValue(Varbits.SIDE_PANELS) == 1) {
+				minimapDrawWidget = client.getWidget(WidgetInfo.RESIZABLE_MINIMAP_DRAW_AREA);
+			} else {
+				minimapDrawWidget = client.getWidget(WidgetInfo.RESIZABLE_MINIMAP_STONES_DRAW_AREA);
+			}
+		} else {
+			minimapDrawWidget = client.getWidget(WidgetInfo.FIXED_VIEWPORT_MINIMAP_DRAW_AREA);
+		}
+
+		return minimapDrawWidget == null ? new Point(0,0) : minimapDrawWidget.getCanvasLocation();
+	}
+
 	private void drawUi(int overlayColor, final int canvasHeight, final int canvasWidth) {
 		frameTimer.begin(Timer.RENDER_UI);
 
@@ -2147,7 +2167,10 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 		// Use the texture bound in the first pass
 		glUseProgram(glUiProgram);
+		Point minimapLocation = getMinimapLocation();
+		glUniform2i(uniMinimapLocation, minimapLocation.getX(), minimapLocation.getY());
 		glUniform2i(uniTexSourceDimensions, canvasWidth, canvasHeight);
+		glUniform1f(uniisResized, client.isResized() ? 1 : 0);
 		glUniform1f(uniUiColorBlindnessIntensity, config.colorBlindnessIntensity() / 100f);
 		glUniform4fv(uniUiAlphaOverlay, ColorUtils.srgba(overlayColor));
 
