@@ -64,6 +64,7 @@ import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
+import net.runelite.client.game.SpriteManager;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDependency;
 import net.runelite.client.plugins.PluginDescriptor;
@@ -151,6 +152,10 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	public static final int TEXTURE_UNIT_SHADOW_MAP = TEXTURE_UNIT_BASE + 2;
 	public static final int TEXTURE_UNIT_TILE_HEIGHT_MAP = TEXTURE_UNIT_BASE + 3;
 
+	public static final int TEXTURE_UNIT_MINIMAP_IMAGE = TEXTURE_UNIT_BASE + 4;
+
+	public static final int TEXTURE_UNIT_MINIMAP_MASK = TEXTURE_UNIT_BASE + 5;
+
 	public static final int UNIFORM_BLOCK_CAMERA = 0;
 	public static final int UNIFORM_BLOCK_MATERIALS = 1;
 	public static final int UNIFORM_BLOCK_WATER_TYPES = 2;
@@ -173,6 +178,10 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 	@Inject
 	private Client client;
+
+
+	@Inject
+	private SpriteManager spriteManager;
 
 	@Inject
 	private ClientUI clientUI;
@@ -289,6 +298,10 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	private int fboShadowMap;
 	private int texShadowMap;
 
+	private int minimapMaskTexture;
+
+	private int minimapImageTexture;
+
 	private int texTileHeightMap;
 
 	private final GLBuffer hStagingBufferVertices = new GLBuffer(); // temporary scene vertex buffer
@@ -379,10 +392,14 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	private int uniProjectionMatrix;
 	private int uniLightProjectionMatrix;
 	private int uniShadowMap;
+	
+	private int uniMinimapMask;
+
+	private int uniMinimapImage;
 	private int uniUiTexture;
 
 	private int uniTexSourceDimensions;
-	private int uniisResized;
+
 	private int uniMinimapLocation;
 
 	private int uniTexTargetDimensions;
@@ -580,6 +597,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				initShaderHotswapping();
 				initInterfaceTexture();
 				initShadowMapFbo();
+				handleMinimapMask();
 
 				checkGLErrors();
 
@@ -835,6 +853,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		glUniform1i(uniTextureArray, TEXTURE_UNIT_GAME - TEXTURE_UNIT_BASE);
 		glUniform1i(uniShadowMap, TEXTURE_UNIT_SHADOW_MAP - TEXTURE_UNIT_BASE);
 
+		
 		// Bind a VOA, else validation may fail on older Intel-based Macs
 		glBindVertexArray(vaoSceneHandle);
 
@@ -847,6 +866,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 		glUseProgram(glUiProgram);
 		glUniform1i(uniUiTexture, TEXTURE_UNIT_UI - TEXTURE_UNIT_BASE);
+		glUniform1i(uniMinimapMask, TEXTURE_UNIT_MINIMAP_MASK - TEXTURE_UNIT_BASE);
+		glUniform1i(uniMinimapImage, TEXTURE_UNIT_MINIMAP_IMAGE - TEXTURE_UNIT_BASE);
 
 		glUseProgram(0);
 	}
@@ -888,11 +909,12 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		uniTextureArray = glGetUniformLocation(glSceneProgram, "textureArray");
 		uniElapsedTime = glGetUniformLocation(glSceneProgram, "elapsedTime");
 
+		uniMinimapMask = glGetUniformLocation(glUiProgram, "minimapMask");
+		uniMinimapImage = glGetUniformLocation(glUiProgram, "minimapImage");
 		uniUiTexture = glGetUniformLocation(glUiProgram, "uiTexture");
 		uniMinimapLocation = glGetUniformLocation(glUiProgram, "minimapLocation");
 		uniTexTargetDimensions = glGetUniformLocation(glUiProgram, "targetDimensions");
 		uniTexSourceDimensions = glGetUniformLocation(glUiProgram, "sourceDimensions");
-		uniisResized = glGetUniformLocation(glUiProgram, "isResized");
 		uniUiColorBlindnessIntensity = glGetUniformLocation(glUiProgram, "colorBlindnessIntensity");
 		uniUiAlphaOverlay = glGetUniformLocation(glUiProgram, "alphaOverlay");
 
@@ -1320,6 +1342,84 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		// Reset active texture to UI texture
 		glActiveTexture(TEXTURE_UNIT_UI);
 	}
+
+	public void handleMinimapMask() {
+		glActiveTexture(TEXTURE_UNIT_MINIMAP_MASK);
+		minimapMaskTexture = glGenTextures();
+		glBindTexture(GL_TEXTURE_2D, minimapMaskTexture);
+
+		BufferedImage image = spriteManager.getSprite(client.isResized() ? SpriteID.RESIZEABLE_MODE_MINIMAP_ALPHA_MASK : SpriteID.FIXED_MODE_MINIMAP_ALPHA_MASK, 0);
+
+		int width = image.getWidth();
+		int height = image.getHeight();
+
+		System.out.println("Width: " + width);
+
+		int[] pixels = ((DataBufferInt) image.getRaster().getDataBuffer()).getData();
+		IntBuffer pixelBuffer = BufferUtils.createIntBuffer(width * height);
+		IntBuffer flippedBuffer = BufferUtils.createIntBuffer(width * height);
+		pixelBuffer.put(pixels).flip();
+		for (int y = height - 1; y >= 0; y--) {
+			for (int x = 0; x < width; x++) {
+				flippedBuffer.put(pixelBuffer.get(y * width + x));
+			}
+		}
+		flippedBuffer.flip();
+
+		// Go from TYPE_4BYTE_ABGR in the BufferedImage to RGBA
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
+			GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, flippedBuffer);
+		checkGLErrors();
+
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		checkGLErrors();
+
+		// Reset
+		glActiveTexture(TEXTURE_UNIT_UI);
+	}
+
+	public void handleMinimapImageUpload() {
+
+		glActiveTexture(TEXTURE_UNIT_MINIMAP_IMAGE);
+		minimapImageTexture = glGenTextures();
+		glBindTexture(GL_TEXTURE_2D, minimapImageTexture);
+
+		BufferedImage image = minimapRenderer.minimiapImage;
+
+		int width = image.getWidth();
+		int height = image.getHeight();
+
+		System.out.println("Width: " + width);
+
+		int[] pixels = ((DataBufferInt) image.getRaster().getDataBuffer()).getData();
+		IntBuffer pixelBuffer = BufferUtils.createIntBuffer(width * height);
+		IntBuffer flippedBuffer = BufferUtils.createIntBuffer(width * height);
+		pixelBuffer.put(pixels).flip();
+		for (int y = height - 1; y >= 0; y--) {
+			for (int x = 0; x < width; x++) {
+				flippedBuffer.put(pixelBuffer.get(y * width + x));
+			}
+		}
+		flippedBuffer.flip();
+
+		// Go from TYPE_4BYTE_ABGR in the BufferedImage to RGBA
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
+			GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, flippedBuffer);
+		checkGLErrors();
+
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		checkGLErrors();
+
+		// Reset
+		glActiveTexture(TEXTURE_UNIT_UI);
+	}
+
 
 	private void initDummyShadowMap()
 	{
@@ -2167,10 +2267,9 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 		// Use the texture bound in the first pass
 		glUseProgram(glUiProgram);
-		Point minimapLocation = getMinimapLocation();
-		glUniform2i(uniMinimapLocation, minimapLocation.getX(), minimapLocation.getY());
+
+		glUniform2i(uniMinimapLocation, getMinimapLocation().getX(), getMinimapLocation().getY());
 		glUniform2i(uniTexSourceDimensions, canvasWidth, canvasHeight);
-		glUniform1f(uniisResized, client.isResized() ? 1 : 0);
 		glUniform1f(uniUiColorBlindnessIntensity, config.colorBlindnessIntensity() / 100f);
 		glUniform4fv(uniUiAlphaOverlay, ColorUtils.srgba(overlayColor));
 
@@ -2182,6 +2281,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			glDpiAwareViewport(0, 0, canvasWidth, canvasHeight);
 			glUniform2i(uniTexTargetDimensions, canvasWidth, canvasHeight);
 		}
+
 
 		// Set the sampling function used when stretching the UI.
 		// This is probably better done with sampler objects instead of texture parameters, but this is easier and likely more portable.
@@ -3091,6 +3191,11 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			return;
 		// The game runs significantly slower with lower planes in Chambers of Xeric
 		client.getScene().setMinLevel(isInChambersOfXeric ? client.getPlane() : client.getScene().getMinLevel());
+	}
+
+	@Subscribe
+	public void onResizeableChanged(ResizeableChanged event) {
+		handleMinimapMask();
 	}
 
 	@Subscribe

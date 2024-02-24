@@ -31,11 +31,13 @@
 #define SAMPLING_XBR 3
 
 uniform sampler2D uiTexture;
+uniform sampler2D minimapMask;
+uniform sampler2D minimapImage;
 uniform int samplingMode;
 uniform ivec2 sourceDimensions;
 uniform ivec2 targetDimensions;
 uniform ivec2 minimapLocation;
-uniform float isResized;
+
 uniform float colorBlindnessIntensity;
 uniform vec4 alphaOverlay;
 
@@ -120,9 +122,12 @@ void main() {
 
         // Blend redSquareColor under the minimap color
         if (insideRedSquare) {
-            vec4 redSquareColor = vec4(1.0, 0.0, 0.0, 1.0); // Red color with alpha of 1.0
-            c = alphaBlend(c, redSquareColor);
+           vec4 redSquareColor = vec4(1.0, 0.0, 0.0, 1.0); // Red color with alpha of 1.0
+           vec2 textureCoord = (gl_FragCoord.xy - squarePosition) / squareSize;
+           vec4 minimapMaskColor = texture(minimapMask, textureCoord);
+           c = alphaBlend(c, redSquareColor * (1.0 - minimapMaskColor.a));  // Invert the mask
         }
+
 
     c.rgb /= c.a; // Undo vanilla premultiplied alpha
 

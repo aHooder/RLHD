@@ -118,6 +118,7 @@ public class MinimapRenderer {
 		synchronized (this)
 		{
 			minimiapImage = image;
+			plugin.handleMinimapImageUpload();
 			mapCaptured = true;
 		}
 	}
