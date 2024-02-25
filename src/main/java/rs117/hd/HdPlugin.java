@@ -223,7 +223,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	private ModelHasher modelHasher;
 
 	@Inject
-	private MinimapRenderer minimapRenderer;
+	public MinimapRenderer minimapRenderer;
 
 	@Inject
 	public DeveloperTools developerTools;
@@ -400,7 +400,9 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 	private int uniTexSourceDimensions;
 
-	private int uniMinimapLocation;
+	public int uniMinimapLocation;
+
+	public int uniPlayerLocation;
 
 	private int uniTexTargetDimensions;
 	private int uniUiAlphaOverlay;
@@ -913,6 +915,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		uniMinimapImage = glGetUniformLocation(glUiProgram, "minimapImage");
 		uniUiTexture = glGetUniformLocation(glUiProgram, "uiTexture");
 		uniMinimapLocation = glGetUniformLocation(glUiProgram, "minimapLocation");
+		uniPlayerLocation = glGetUniformLocation(glUiProgram, "playerLocation");
 		uniTexTargetDimensions = glGetUniformLocation(glUiProgram, "targetDimensions");
 		uniTexSourceDimensions = glGetUniformLocation(glUiProgram, "sourceDimensions");
 		uniUiColorBlindnessIntensity = glGetUniformLocation(glUiProgram, "colorBlindnessIntensity");
@@ -1353,8 +1356,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		int width = image.getWidth();
 		int height = image.getHeight();
 
-		System.out.println("Width: " + width);
-
 		int[] pixels = ((DataBufferInt) image.getRaster().getDataBuffer()).getData();
 		IntBuffer pixelBuffer = BufferUtils.createIntBuffer(width * height);
 		IntBuffer flippedBuffer = BufferUtils.createIntBuffer(width * height);
@@ -1387,12 +1388,10 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		minimapImageTexture = glGenTextures();
 		glBindTexture(GL_TEXTURE_2D, minimapImageTexture);
 
-		BufferedImage image = minimapRenderer.minimiapImage;
+		BufferedImage image = minimapRenderer.miniMapImageCircle;
 
 		int width = image.getWidth();
 		int height = image.getHeight();
-
-		System.out.println("Width: " + width);
 
 		int[] pixels = ((DataBufferInt) image.getRaster().getDataBuffer()).getData();
 		IntBuffer pixelBuffer = BufferUtils.createIntBuffer(width * height);
@@ -2269,6 +2268,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		glUseProgram(glUiProgram);
 
 		glUniform2i(uniMinimapLocation, getMinimapLocation().getX(), getMinimapLocation().getY());
+		Point pos = minimapRenderer.getPlayerMinimapLocation();
+		glUniform2i(uniPlayerLocation, pos.getX(), pos.getY());
 		glUniform2i(uniTexSourceDimensions, canvasWidth, canvasHeight);
 		glUniform1f(uniUiColorBlindnessIntensity, config.colorBlindnessIntensity() / 100f);
 		glUniform4fv(uniUiAlphaOverlay, ColorUtils.srgba(overlayColor));
@@ -3191,13 +3192,13 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			return;
 		// The game runs significantly slower with lower planes in Chambers of Xeric
 		client.getScene().setMinLevel(isInChambersOfXeric ? client.getPlane() : client.getScene().getMinLevel());
+
 	}
 
 	@Subscribe
 	public void onResizeableChanged(ResizeableChanged event) {
 		handleMinimapMask();
 	}
-
 	@Subscribe
 	public void onClientTick(ClientTick clientTick) {
 		elapsedClientTime += 1 / 50f;

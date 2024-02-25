@@ -1,10 +1,13 @@
 package rs117.hd.scene;
 
+import java.awt.Color;
+import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.util.Arrays;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import net.runelite.api.*;
+import net.runelite.api.coords.*;
 import net.runelite.client.callback.ClientThread;
 import rs117.hd.HdPlugin;
 import rs117.hd.HdPluginConfig;
@@ -20,6 +23,7 @@ import rs117.hd.utils.ColorUtils;
 
 import static net.runelite.api.Constants.*;
 import static net.runelite.api.Perspective.*;
+import static org.lwjgl.opengl.GL20C.*;
 import static rs117.hd.scene.SceneUploader.SCENE_OFFSET;
 import static rs117.hd.utils.HDUtils.clamp;
 
@@ -56,7 +60,13 @@ public class MinimapRenderer {
 	 * Saved image of the scene, no reason to draw the whole thing every
 	 * frame.
 	 */
-	public volatile BufferedImage minimiapImage;
+	public volatile BufferedImage miniMapImage;
+
+	/**
+	 * Saved image of the scene, no reason to draw the whole thing every
+	 * frame.
+	 */
+	public volatile BufferedImage miniMapImageCircle;
 
 	public Boolean mapCaptured = false;
 
@@ -117,11 +127,60 @@ public class MinimapRenderer {
 		BufferedImage image = minimapToBufferedImage(map, client.isResized() ? client.getExpandedMapLoading() : 0);
 		synchronized (this)
 		{
-			minimiapImage = image;
+			miniMapImage = image;
+			createSmallMap();
 			plugin.handleMinimapImageUpload();
 			mapCaptured = true;
 		}
 	}
+
+	private void createSmallMap() {
+		miniMapImageCircle = extractSquarePixels(miniMapImage);
+	}
+
+	public Point getPlayerMinimapLocation() {
+		if (client.getLocalPlayer() == null) {
+			return new Point(0,0);
+		}
+		LocalPoint playerLoc = client.getLocalPlayer().getLocalLocation();
+		int expandedChunks = client.isResized() ? client.getExpandedMapLoading() : 0;
+		int tileX = playerLoc.getSceneX() + expandedChunks * 8;
+		int tileY = playerLoc.getSceneY() + expandedChunks * 8;
+		int x = tileX * TILE_SIZE;
+		int y = tileY * TILE_SIZE;
+
+		return new Point(x,y);
+	}
+
+	private static BufferedImage extractSquarePixels(BufferedImage originalImage) {
+
+		//Creates a smaller image as the big one is not needed
+
+		int squareSize = 700;
+
+		BufferedImage squareImage = new BufferedImage(squareSize, squareSize, BufferedImage.TYPE_INT_ARGB);
+		Graphics2D g2d = squareImage.createGraphics();
+
+		// Draw the square on the new image
+		g2d.setColor(Color.RED);
+		g2d.fillRect(0, 0, squareSize, squareSize);
+
+		// Use the square as a mask to extract pixels from the original image
+		BufferedImage resultImage = new BufferedImage(squareSize, squareSize, BufferedImage.TYPE_INT_ARGB);
+		for (int i = 0; i < squareSize; i++) {
+			for (int j = 0; j < squareSize; j++) {
+				if (squareImage.getRGB(i, j) != 0) {
+					resultImage.setRGB(i, j, originalImage.getRGB(i, j));
+				}
+			}
+		}
+
+		// Dispose of the graphics context to free up resources
+		g2d.dispose();
+
+		return resultImage;
+	}
+
 
 	private static BufferedImage minimapToBufferedImage(SpritePixels spritePixels, int expandedChunks)
 	{
@@ -141,6 +200,8 @@ public class MinimapRenderer {
 				(Constants.SCENE_SIZE + expandedChunks * 8) * TILE_SIZE
 			);
 		}
+
+
 		return img;
 	}
 
@@ -625,8 +686,8 @@ public class MinimapRenderer {
 	}
 
 	public void drawTile(Tile tile, int tx, int ty, int px0, int py0, int px1, int py1) {
-		frameTimer.begin(Timer.MINIMAP_DRAW);
 
+		frameTimer.begin(Timer.MINIMAP_DRAW);
 		if (!mapCaptured) {
 			if (configUseShadedMinimap) {
 				drawMinimapShaded(tile, tx, ty, px0, py0, px1, py1);
@@ -636,7 +697,6 @@ public class MinimapRenderer {
 		} else {
 			client.getRasterizer().fillRectangle(px0, py0, px1 - px0, py1 - py0, 12345678);
 		}
-
 
 		frameTimer.end(Timer.MINIMAP_DRAW);
 	}

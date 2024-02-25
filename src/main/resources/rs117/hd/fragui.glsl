@@ -22,14 +22,18 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+
 #version 330
 
 #include UI_SCALING_MODE
 
+// Constants
 #define SAMPLING_MITCHELL 1
 #define SAMPLING_CATROM 2
 #define SAMPLING_XBR 3
+#define TRANSPARENCY_COLOR_PACKED 12345678
 
+// Uniforms
 uniform sampler2D uiTexture;
 uniform sampler2D minimapMask;
 uniform sampler2D minimapImage;
@@ -37,21 +41,20 @@ uniform int samplingMode;
 uniform ivec2 sourceDimensions;
 uniform ivec2 targetDimensions;
 uniform ivec2 minimapLocation;
-
+uniform ivec2 playerLocation;
 uniform float colorBlindnessIntensity;
 uniform vec4 alphaOverlay;
 
-#define TRANSPARENCY_COLOR_PACKED 12345678
 const ivec3 TRANSPARENCY_COLOR = ivec3(
     TRANSPARENCY_COLOR_PACKED >> 16 & 0xFF,
     TRANSPARENCY_COLOR_PACKED >> 8 & 0xFF,
     TRANSPARENCY_COLOR_PACKED & 0xFF
 );
 
+// Function to replace transparency with black
 vec4 replaceTransparency(vec4 c) {
     return ivec3(round(c.rgb * 0xFF)) == TRANSPARENCY_COLOR ? vec4(0) : c;
 }
-
 
 #include scaling/bicubic.glsl
 #include utils/constants.glsl
@@ -69,71 +72,71 @@ in XBRTable xbrTable;
 #endif
 
 in vec2 TexCoord;
-
 out vec4 FragColor;
 
+// Function for alpha blending
 vec4 alphaBlend(vec4 src, vec4 dst) {
      return dst * (1 - src.a) + src;
 }
 
+// Function to get minimap location in screen space
 vec2 getMinimapLocation() {
     return vec2(minimapLocation.x, sourceDimensions.y - minimapLocation.y - 152);
 }
 
+vec4 applyMinimapOverlay(vec4 originalColor);
+
 void main() {
-    // Size of the red square
-    vec2 squareSize = vec2(152.0, 152.0); // Adjust these values based on your needs
-
-    // Coordinates for the center of the top right corner
-    vec2 topRightCenter = vec2(1.0, 1.0) - squareSize * 0.5;
-
-    // Calculate the position of the red square in screen space
-    vec2 squarePosition = getMinimapLocation();
-
-    // Check if the current fragment is inside the red square
-    bool insideRedSquare = (
-        gl_FragCoord.x >= squarePosition.x &&
-        gl_FragCoord.x <= (squarePosition.x + squareSize.x) &&
-        gl_FragCoord.y >= squarePosition.y &&
-        gl_FragCoord.y <= (squarePosition.y + squareSize.y)
-    );
-
+       vec2 playerPos = vec2(playerLocation.x, playerLocation.y - 4) - vec2(106.0, 106.0);
+    // Original color sampling
     #if SHADOW_MAP_OVERLAY
-    {
-        vec2 uv = (gl_FragCoord.xy - shadowMapOverlayDimensions.xy) / shadowMapOverlayDimensions.zw;
-        if (0 <= uv.x && uv.x <= 1 && 0 <= uv.y && uv.y <= 1) {
-            FragColor = texture(shadowMap, uv);
-            return;
-        }
+    vec2 uv = (gl_FragCoord.xy - shadowMapOverlayDimensions.xy) / shadowMapOverlayDimensions.zw;
+    if (0 <= uv.x && uv.x <= 1 && 0 <= uv.y && uv.y <= 1) {
+        FragColor = texture(shadowMap, uv);
+        return;
     }
     #endif
 
     #if UI_SCALING_MODE == SAMPLING_MITCHELL || UI_SCALING_MODE == SAMPLING_CATROM
-    vec4 c = textureCubic(uiTexture, TexCoord);
-        #elif UI_SCALING_MODE == SAMPLING_XBR
-        vec4 c = textureXBR(uiTexture, TexCoord, xbrTable, ceil(1.0 * targetDimensions.x / sourceDimensions.x));
-        #else // NEAREST or LINEAR, which uses GL_TEXTURE_MIN_FILTER/GL_TEXTURE_MAG_FILTER to affect sampling
-        vec4 c = texture(uiTexture, TexCoord);
-        c = replaceTransparency(c); // TODO: Fix bilinear by implementing it in software
-        #endif
+    vec4 originalColor = textureCubic(uiTexture, TexCoord);
+    #elif UI_SCALING_MODE == SAMPLING_XBR
+    vec4 originalColor = textureXBR(uiTexture, TexCoord, xbrTable, ceil(1.0 * targetDimensions.x / sourceDimensions.x));
+    #else
+    vec4 originalColor = texture(uiTexture, TexCoord);
+    originalColor = replaceTransparency(originalColor);
+    #endif
 
-        // Apply vanilla game screen transition color overlay before UI
-        c = alphaBlend(c, alphaOverlay);
+    // Apply transition color overlay before UI
+    originalColor = alphaBlend(originalColor, alphaOverlay);
 
-        // Blend redSquareColor under the minimap color
-        if (insideRedSquare) {
-           vec4 redSquareColor = vec4(1.0, 0.0, 0.0, 1.0); // Red color with alpha of 1.0
-           vec2 textureCoord = (gl_FragCoord.xy - squarePosition) / squareSize;
-           vec4 minimapMaskColor = texture(minimapMask, textureCoord);
-           c = alphaBlend(c, redSquareColor * (1.0 - minimapMaskColor.a));  // Invert the mask
-        }
+    originalColor = applyMinimapOverlay(originalColor);
 
+    originalColor.rgb /= originalColor.a;
+    originalColor.rgb = colorBlindnessCompensation(originalColor.rgb);
 
-    c.rgb /= c.a; // Undo vanilla premultiplied alpha
+    FragColor = originalColor;
+}
 
-    c.rgb = colorBlindnessCompensation(c.rgb);
+vec4 applyMinimapOverlay(vec4 originalColor) {
+   vec2 minimapPosition = getMinimapLocation();
+   vec2 minimapImageSize = vec2(700.0, 700.0);
 
-    FragColor = c;
+   bool insideMinimapBounds = (
+     gl_FragCoord.x >= minimapPosition.x &&
+     gl_FragCoord.x <= (minimapPosition.x + minimapImageSize.x) &&
+     gl_FragCoord.y >= minimapPosition.y &&
+     gl_FragCoord.y <= (minimapPosition.y + minimapImageSize.y)
+   );
 
+   if (insideMinimapBounds) {
+       vec2 playerPos = vec2(playerLocation.x, playerLocation.y - 4) - (vec2(106.0 - 32.0, 106.0));
+       vec2 playerLoc = (gl_FragCoord.xy - minimapPosition + playerPos) / minimapImageSize;
+       vec4 minimapImageColor = texture(minimapImage, playerLoc);
+       vec2 textureCoord = (gl_FragCoord.xy - minimapPosition) / vec2(153.0, 153.0);
+       vec4 minimapMaskColor = texture(minimapMask, textureCoord);
 
+       // Invert the mask
+       originalColor = alphaBlend(originalColor, minimapImageColor * (1.0 - minimapMaskColor.a));
+   }
+   return originalColor;
 }
