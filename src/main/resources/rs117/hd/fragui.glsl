@@ -80,8 +80,8 @@ vec4 alphaBlend(vec4 src, vec4 dst) {
 }
 
 // Function to get minimap location in screen space
-vec2 getMinimapLocation() {
-    return vec2(minimapLocation.x, sourceDimensions.y - minimapLocation.y - 152);
+ivec2 getMinimapLocation() {
+    return ivec2(minimapLocation.x, sourceDimensions.y - minimapLocation.y - 152);
 }
 
 vec4 applyMinimapOverlay(vec4 originalColor);
@@ -118,25 +118,46 @@ void main() {
 }
 
 vec4 applyMinimapOverlay(vec4 originalColor) {
-   vec2 minimapPosition = getMinimapLocation();
-   vec2 minimapImageSize = vec2(700.0, 700.0);
+    ivec2 fragCoordInt = ivec2(gl_FragCoord.xy);
 
-   bool insideMinimapBounds = (
-     gl_FragCoord.x >= minimapPosition.x &&
-     gl_FragCoord.x <= (minimapPosition.x + minimapImageSize.x) &&
-     gl_FragCoord.y >= minimapPosition.y &&
-     gl_FragCoord.y <= (minimapPosition.y + minimapImageSize.y)
-   );
+    ivec2 minimapPosition = getMinimapLocation();
+    ivec2 minimapImageSize = ivec2(700, 700);
 
-   if (insideMinimapBounds) {
-       vec2 playerPos = vec2(playerLocation.x, playerLocation.y - 4) - (vec2(106.0 - 32.0, 106.0));
-       vec2 playerLoc = (gl_FragCoord.xy - minimapPosition + playerPos) / minimapImageSize;
-       vec4 minimapImageColor = texture(minimapImage, playerLoc);
-       vec2 textureCoord = (gl_FragCoord.xy - minimapPosition) / vec2(153.0, 153.0);
-       vec4 minimapMaskColor = texture(minimapMask, textureCoord);
+    // Align minimapPosition to the pixel grid
+    minimapPosition = ivec2(
+        int(floor(minimapPosition.x + 0.5)),
+        int(floor(minimapPosition.y + 0.5))
+    );
 
-       // Invert the mask
-       originalColor = alphaBlend(originalColor, minimapImageColor * (1.0 - minimapMaskColor.a));
-   }
-   return originalColor;
+    bool insideMinimapBounds = (
+        fragCoordInt.x >= minimapPosition.x &&
+        fragCoordInt.x <= (minimapPosition.x + minimapImageSize.x) &&
+        fragCoordInt.y >= minimapPosition.y &&
+        fragCoordInt.y <= (minimapPosition.y + minimapImageSize.y)
+    );
+
+    if (insideMinimapBounds) {
+        ivec2 playerPos = ivec2(
+            int(playerLocation.x),
+            int(playerLocation.y - 4)
+        ) - ivec2(
+            int(106.0 - 32.0),
+            int(106.0)
+        );
+
+        ivec2 playerLocInt = ivec2((gl_FragCoord.xy - minimapPosition + playerPos));
+
+        vec4 minimapImageColor = texelFetch(minimapImage, playerLocInt, 0);
+
+        ivec2 textureCoordInt = ivec2((gl_FragCoord.xy - minimapPosition));
+
+        textureCoordInt = ivec2(clamp(textureCoordInt.x, 0, textureSize(minimapMask, 0).x - 1),
+                        clamp(textureCoordInt.y, 0, textureSize(minimapMask, 0).y - 1));
+        vec4 minimapMaskColor = texelFetch(minimapMask, textureCoordInt, 0);
+
+        // Invert the mask
+        originalColor = alphaBlend(originalColor, minimapImageColor * (1.0 - minimapMaskColor.a));
+    }
+
+    return originalColor;
 }
