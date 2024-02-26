@@ -174,6 +174,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 	private static final float NEAR_PLANE = 1;
 
+	public static final boolean ENABLE_OPENGL_MINIMAP = false;
+
 	private static final int[] eightIntWrite = new int[8];
 
 	@Inject
@@ -403,6 +405,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	public int uniMinimapLocation;
 
 	public int uniPlayerLocation;
+
+	public int uniEnabledMinimap;
 
 	private int uniTexTargetDimensions;
 	private int uniUiAlphaOverlay;
@@ -916,6 +920,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		uniUiTexture = glGetUniformLocation(glUiProgram, "uiTexture");
 		uniMinimapLocation = glGetUniformLocation(glUiProgram, "minimapLocation");
 		uniPlayerLocation = glGetUniformLocation(glUiProgram, "playerLocation");
+		uniEnabledMinimap = glGetUniformLocation(glUiProgram, "enabledMinimap");
 		uniTexTargetDimensions = glGetUniformLocation(glUiProgram, "targetDimensions");
 		uniTexSourceDimensions = glGetUniformLocation(glUiProgram, "sourceDimensions");
 		uniUiColorBlindnessIntensity = glGetUniformLocation(glUiProgram, "colorBlindnessIntensity");
@@ -2270,6 +2275,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		glUniform2i(uniMinimapLocation, getMinimapLocation().getX(), getMinimapLocation().getY());
 		Point pos = minimapRenderer.getPlayerMinimapLocation();
 		glUniform2i(uniPlayerLocation, pos.getX(), pos.getY());
+		glUniform1f(uniEnabledMinimap, ENABLE_OPENGL_MINIMAP ? 1 : 0);
 		glUniform2i(uniTexSourceDimensions, canvasWidth, canvasHeight);
 		glUniform1f(uniUiColorBlindnessIntensity, config.colorBlindnessIntensity() / 100f);
 		glUniform4fv(uniUiAlphaOverlay, ColorUtils.srgba(overlayColor));

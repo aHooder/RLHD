@@ -688,7 +688,7 @@ public class MinimapRenderer {
 	public void drawTile(Tile tile, int tx, int ty, int px0, int py0, int px1, int py1) {
 
 		frameTimer.begin(Timer.MINIMAP_DRAW);
-		if (!mapCaptured) {
+		if (!mapCaptured || !plugin.ENABLE_OPENGL_MINIMAP) {
 			if (configUseShadedMinimap) {
 				drawMinimapShaded(tile, tx, ty, px0, py0, px1, py1);
 			} else {

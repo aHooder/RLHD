@@ -38,6 +38,7 @@ uniform sampler2D uiTexture;
 uniform sampler2D minimapMask;
 uniform sampler2D minimapImage;
 uniform int samplingMode;
+uniform float enabledMinimap;
 uniform ivec2 sourceDimensions;
 uniform ivec2 targetDimensions;
 uniform ivec2 minimapLocation;
@@ -109,7 +110,9 @@ void main() {
     // Apply transition color overlay before UI
     originalColor = alphaBlend(originalColor, alphaOverlay);
 
-    originalColor = applyMinimapOverlay(originalColor);
+    if(enabledMinimap == 1.0) {
+        originalColor = applyMinimapOverlay(originalColor);
+    }
 
     originalColor.rgb /= originalColor.a;
     originalColor.rgb = colorBlindnessCompensation(originalColor.rgb);
