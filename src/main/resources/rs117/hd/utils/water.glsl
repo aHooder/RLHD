@@ -145,7 +145,6 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
     vec3 waterColorMid = waterColorMid;
     vec3 waterColorLight = waterColorLight;
 
-    float fresnel = calculateFresnel(normals, viewDir, 1.333);
     if (waterReflectionEnabled && distance(waterHeight, IN.position.y) < 32) {
         // TODO: use actual viewport size here
         ivec2 screenSize = textureSize(waterReflectionMap, 0);
@@ -156,18 +155,19 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
         uv += distortion * 5;
         uv = clamp(uv, 0, 1);
 
-        vec3 reflection = (texture(waterReflectionMap, uv).rgb);
+        vec3 n = normals;
+        float fresnel = calculateFresnel(n, viewDir, 1.333);
+        fresnel = pow(fresnel, 1 / 5.);
+        vec3 reflection = srgbToLinear(texture(waterReflectionMap, uv).rgb);
 
-        waterColorMid = (mix(
-            (waterColorMid),
-            reflection,
-            fresnel
-        ));
-        waterColorLight = (mix(
-            (waterColorLight),
-            reflection,
-            fresnel
-        ));
+        waterColorMid = linearToSrgb(
+            reflection * fresnel +
+            srgbToLinear(waterColorMid) * (1 - fresnel)
+        );
+        waterColorLight = linearToSrgb(
+            reflection * fresnel +
+            srgbToLinear(waterColorLight) * (1 - fresnel)
+        );
     }
 
     // add sky gradient
