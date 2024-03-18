@@ -225,15 +225,12 @@ public class EnvironmentManager {
 		previousPosition = focalPoint;
 
 		boolean skipTransition = tileChange >= SKIP_TRANSITION_DISTANCE;
-
 		for (var environment : sceneContext.environments) {
 			if (environment.area.containsPoint(focalPoint)) {
 				changeEnvironment(environment, skipTransition);
 				break;
 			}
 		}
-
-
 
 		updateTargetSkyColor(); // Update every frame, since other plugins may control it
 
@@ -262,11 +259,15 @@ public class EnvironmentManager {
 				currentSunAngles[i] = hermite(startSunAngles[i], targetSunAngles[i], t);
 			currentUnderwaterCausticsColor = hermite(startUnderwaterCausticsColor, targetUnderwaterCausticsColor, t);
 			currentUnderwaterCausticsStrength = hermite(startUnderwaterCausticsStrength, targetUnderwaterCausticsStrength, t);
+
 			minimapRenderer.updateMinimapLighting = true;
 		}
-		if (minimapRenderer.updateMinimapLighting()) {
+
+		updateLightning();
+
+		if (minimapRenderer.shouldUpdateMinimapLighting()) {
 			minimapRenderer.applyLighting(sceneContext);
-			minimapRenderer.generateMiniMapImage();
+			minimapRenderer.generateMinimapImage();
 		}
 	}
 
@@ -290,11 +291,11 @@ public class EnvironmentManager {
 		}
 
 		log.debug("changing environment from {} to {} (instant: {})", currentEnvironment, newEnvironment, skipTransition);
-
 		currentEnvironment = newEnvironment;
-		minimapRenderer.generateMiniMapImage();
 		transitionComplete = false;
 		transitionStartTime = plugin.elapsedTime - (skipTransition ? TRANSITION_DURATION : 0);
+
+		minimapRenderer.generateMinimapImage();
 
 		// Start transitioning from the current values
 		startFogColor = currentFogColor;

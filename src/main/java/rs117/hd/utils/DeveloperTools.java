@@ -10,9 +10,9 @@ import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.input.KeyListener;
 import net.runelite.client.input.KeyManager;
-import rs117.hd.overlays.MiniMapOverlay;
 import rs117.hd.data.environments.Area;
 import rs117.hd.overlays.FrameTimingsOverlay;
+import rs117.hd.overlays.MinimapOverlay;
 import rs117.hd.overlays.ShadowMapOverlay;
 import rs117.hd.overlays.TileInfoOverlay;
 
@@ -41,13 +41,12 @@ public class DeveloperTools implements KeyListener {
 	private ShadowMapOverlay shadowMapOverlay;
 
 	@Inject
-	public MiniMapOverlay miniMapOverlay;
+	public MinimapOverlay minimapOverlay;
 
 	private boolean tileInfoOverlayEnabled = false;
 	private boolean frameTimingsOverlayEnabled = false;
 	private boolean shadowMapOverlayEnabled = false;
-
-	private boolean miniMapOverlayEnabled = false;
+	private boolean minimapOverlayEnabled = false;
 
 	public void activate() {
 		eventBus.register(this);
@@ -61,7 +60,7 @@ public class DeveloperTools implements KeyListener {
 		tileInfoOverlay.setActive(tileInfoOverlayEnabled);
 		frameTimingsOverlay.setActive(frameTimingsOverlayEnabled);
 		shadowMapOverlay.setActive(shadowMapOverlayEnabled);
-		miniMapOverlay.setActive(miniMapOverlayEnabled);
+		minimapOverlay.setActive(minimapOverlayEnabled);
 
 		// Check for any out of bounds areas
 		for (Area area : Area.values()) {
@@ -83,7 +82,7 @@ public class DeveloperTools implements KeyListener {
 		tileInfoOverlay.setActive(false);
 		frameTimingsOverlay.setActive(false);
 		shadowMapOverlay.setActive(false);
-		miniMapOverlay.setActive(false);
+		minimapOverlay.setActive(false);
 	}
 
 	@Subscribe
@@ -107,7 +106,7 @@ public class DeveloperTools implements KeyListener {
 				shadowMapOverlay.setActive(shadowMapOverlayEnabled = !shadowMapOverlayEnabled);
 				break;
 			case "minimap":
-				miniMapOverlay.setActive(miniMapOverlayEnabled = !miniMapOverlayEnabled);
+				minimapOverlay.setActive(minimapOverlayEnabled = !minimapOverlayEnabled);
 				break;
 		}
 	}
@@ -128,11 +127,11 @@ public class DeveloperTools implements KeyListener {
 			event.consume();
 			shadowMapOverlay.setActive(shadowMapOverlayEnabled = !shadowMapOverlayEnabled);
 		}
+
 		if (KEY_TOGGLE_MAP_OVERLAY.matches(event)) {
 			event.consume();
-			miniMapOverlay.setActive(miniMapOverlayEnabled = !miniMapOverlayEnabled);
+			minimapOverlay.setActive(minimapOverlayEnabled = !minimapOverlayEnabled);
 		}
-
 	}
 
 	@Override

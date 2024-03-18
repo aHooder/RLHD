@@ -22,29 +22,27 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-
 #version 330
 
 #include UI_SCALING_MODE
 
-// Constants
 #define SAMPLING_MITCHELL 1
 #define SAMPLING_CATROM 2
 #define SAMPLING_XBR 3
 #define TRANSPARENCY_COLOR_PACKED 12345678
 
-// Uniforms
 uniform sampler2D uiTexture;
 uniform sampler2D minimapMask;
 uniform sampler2D minimapImage;
+
 uniform int samplingMode;
-uniform float enabledMinimap;
 uniform ivec2 sourceDimensions;
 uniform ivec2 targetDimensions;
-uniform ivec2 minimapLocation;
-uniform ivec2 playerLocation;
 uniform float colorBlindnessIntensity;
 uniform vec4 alphaOverlay;
+uniform float minimapEnabled;
+uniform ivec2 minimapLocation;
+uniform ivec2 minimapPlayerLocation;
 
 const ivec3 TRANSPARENCY_COLOR = ivec3(
     TRANSPARENCY_COLOR_PACKED >> 16 & 0xFF,
@@ -73,11 +71,11 @@ in XBRTable xbrTable;
 #endif
 
 in vec2 TexCoord;
+
 out vec4 FragColor;
 
-// Function for alpha blending
 vec4 alphaBlend(vec4 src, vec4 dst) {
-     return dst * (1 - src.a) + src;
+     return src + dst * (1 - src.a);
 }
 
 // Function to get minimap location in screen space
@@ -88,7 +86,8 @@ ivec2 getMinimapLocation() {
 vec4 applyMinimapOverlay(vec4 originalColor);
 
 void main() {
-       vec2 playerPos = vec2(playerLocation.x, playerLocation.y - 4) - vec2(106.0, 106.0);
+    vec2 playerPos = vec2(minimapPlayerLocation.x, minimapPlayerLocation.y - 4) - vec2(106.0, 106.0);
+
     // Original color sampling
     #if SHADOW_MAP_OVERLAY
     vec2 uv = (gl_FragCoord.xy - shadowMapOverlayDimensions.xy) / shadowMapOverlayDimensions.zw;
@@ -110,7 +109,7 @@ void main() {
     // Apply transition color overlay before UI
     originalColor = alphaBlend(originalColor, alphaOverlay);
 
-    if(enabledMinimap == 1.0) {
+    if(minimapEnabled == 1.0) {
         originalColor = applyMinimapOverlay(originalColor);
     }
 
@@ -141,8 +140,8 @@ vec4 applyMinimapOverlay(vec4 originalColor) {
 
     if (insideMinimapBounds) {
         ivec2 playerPos = ivec2(
-            int(playerLocation.x),
-            int(playerLocation.y - 4)
+            int(minimapPlayerLocation.x),
+            int(minimapPlayerLocation.y - 4)
         ) - ivec2(
             int(106.0 - 32.0),
             int(106.0)

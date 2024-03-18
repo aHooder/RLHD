@@ -124,27 +124,27 @@ vec4 textureXBR(sampler2D image, vec2 texCoord, XBRTable t, float scale)
     // D0  D  E  F F4
     // G0  G  H  I I4
     //    G5 H5 I5
-    vec4 A1 = replaceTransparency(image, t.t1.xw );
-    vec4 B1 = replaceTransparency(image, t.t1.yw );
-    vec4 C1 = replaceTransparency(image, t.t1.zw );
-    vec4 A  = replaceTransparency(image, t.t2.xw );
-    vec4 B  = replaceTransparency(image, t.t2.yw );
-    vec4 C  = replaceTransparency(image, t.t2.zw );
-    vec4 D  = replaceTransparency(image, t.t3.xw );
-    vec4 E  = replaceTransparency(image, t.t3.yw );
-    vec4 F  = replaceTransparency(image, t.t3.zw );
-    vec4 G  = replaceTransparency(image, t.t4.xw );
-    vec4 H  = replaceTransparency(image, t.t4.yw );
-    vec4 I  = replaceTransparency(image, t.t4.zw );
-    vec4 G5 = replaceTransparency(image, t.t5.xw );
-    vec4 H5 = replaceTransparency(image, t.t5.yw );
-    vec4 I5 = replaceTransparency(image, t.t5.zw );
-    vec4 A0 = replaceTransparency(image, t.t6.xy );
-    vec4 D0 = replaceTransparency(image, t.t6.xz );
-    vec4 G0 = replaceTransparency(image, t.t6.xw );
-    vec4 C4 = replaceTransparency(image, t.t7.xy );
-    vec4 F4 = replaceTransparency(image, t.t7.xz );
-    vec4 I4 = replaceTransparency(image, t.t7.xw );
+    vec4 A1 = replaceTransparency(image, t.t1.xw);
+    vec4 B1 = replaceTransparency(image, t.t1.yw);
+    vec4 C1 = replaceTransparency(image, t.t1.zw);
+    vec4 A  = replaceTransparency(image, t.t2.xw);
+    vec4 B  = replaceTransparency(image, t.t2.yw);
+    vec4 C  = replaceTransparency(image, t.t2.zw);
+    vec4 D  = replaceTransparency(image, t.t3.xw);
+    vec4 E  = replaceTransparency(image, t.t3.yw);
+    vec4 F  = replaceTransparency(image, t.t3.zw);
+    vec4 G  = replaceTransparency(image, t.t4.xw);
+    vec4 H  = replaceTransparency(image, t.t4.yw);
+    vec4 I  = replaceTransparency(image, t.t4.zw);
+    vec4 G5 = replaceTransparency(image, t.t5.xw);
+    vec4 H5 = replaceTransparency(image, t.t5.yw);
+    vec4 I5 = replaceTransparency(image, t.t5.zw);
+    vec4 A0 = replaceTransparency(image, t.t6.xy);
+    vec4 D0 = replaceTransparency(image, t.t6.xz);
+    vec4 G0 = replaceTransparency(image, t.t6.xw);
+    vec4 C4 = replaceTransparency(image, t.t7.xy);
+    vec4 F4 = replaceTransparency(image, t.t7.xz);
+    vec4 I4 = replaceTransparency(image, t.t7.xw);
 
     vec4 b  = vec4(dot(B.xyz ,rgbw), dot(D.xyz ,rgbw), dot(H.xyz ,rgbw), dot(F.xyz ,rgbw));
     vec4 c  = vec4(dot(C.xyz ,rgbw), dot(A.xyz ,rgbw), dot(G.xyz ,rgbw), dot(I.xyz ,rgbw));

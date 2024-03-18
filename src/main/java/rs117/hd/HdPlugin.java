@@ -151,9 +151,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	public static final int TEXTURE_UNIT_GAME = TEXTURE_UNIT_BASE + 1;
 	public static final int TEXTURE_UNIT_SHADOW_MAP = TEXTURE_UNIT_BASE + 2;
 	public static final int TEXTURE_UNIT_TILE_HEIGHT_MAP = TEXTURE_UNIT_BASE + 3;
-
 	public static final int TEXTURE_UNIT_MINIMAP_IMAGE = TEXTURE_UNIT_BASE + 4;
-
 	public static final int TEXTURE_UNIT_MINIMAP_MASK = TEXTURE_UNIT_BASE + 5;
 
 	public static final int UNIFORM_BLOCK_CAMERA = 0;
@@ -181,15 +179,14 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	@Inject
 	private Client client;
 
-
-	@Inject
-	private SpriteManager spriteManager;
-
 	@Inject
 	private ClientUI clientUI;
 
 	@Inject
 	private ClientThread clientThread;
+
+	@Inject
+	private SpriteManager spriteManager;
 
 	@Inject
 	private DrawManager drawManager;
@@ -300,9 +297,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	private int fboShadowMap;
 	private int texShadowMap;
 
-	private int minimapMaskTexture;
-
-	private int minimapImageTexture;
+	private int texMinimapMask;
+	private int texMinimapImage;
 
 	private int texTileHeightMap;
 
@@ -394,20 +390,15 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	private int uniProjectionMatrix;
 	private int uniLightProjectionMatrix;
 	private int uniShadowMap;
-	
+
+	private int uniMinimapEnabled;
 	private int uniMinimapMask;
-
 	private int uniMinimapImage;
+	private int uniMinimapLocation;
+	private int uniMinimapPlayerLocation;
+
 	private int uniUiTexture;
-
 	private int uniTexSourceDimensions;
-
-	public int uniMinimapLocation;
-
-	public int uniPlayerLocation;
-
-	public int uniEnabledMinimap;
-
 	private int uniTexTargetDimensions;
 	private int uniUiAlphaOverlay;
 	private int uniTextureArray;
@@ -434,11 +425,9 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	public boolean configUndoVanillaShading;
 	public boolean configPreserveVanillaNormals;
 	public ShadowMode configShadowMode;
-	public SeasonalTheme configSeasonalTheme;
-
-	public MinimapStyle configMinimapStyle;
-
 	public VanillaShadowMode configVanillaShadowMode;
+	public SeasonalTheme configSeasonalTheme;
+	public MinimapStyle configMinimapStyle;
 	public int configMaxDynamicLights;
 
 	public boolean useLowMemoryMode;
@@ -603,11 +592,12 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				initShaderHotswapping();
 				initInterfaceTexture();
 				initShadowMapFbo();
-				handleMinimapMask();
+				initMinimapMask();
 
 				checkGLErrors();
 
-				client.setMinimapTileDrawer(minimapRenderer::drawTile);
+				if (configMinimapStyle != MinimapStyle.RUNELITE)
+					client.setMinimapTileDrawer(minimapRenderer::drawTile);
 				client.setDrawCallbacks(this);
 				client.setGpuFlags(DrawCallbacks.GPU | DrawCallbacks.HILLSKEW | DrawCallbacks.NORMALS);
 				client.setExpandedMapLoading(getExpandedMapLoadingChunks());
@@ -657,7 +647,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			if (scene != null)
 				scene.setMinLevel(0);
 
-			client.setMinimapTileDrawer(null);
+			if (configMinimapStyle != MinimapStyle.RUNELITE)
+				client.setMinimapTileDrawer(null);
 			client.setGpuFlags(0);
 			client.setDrawCallbacks(null);
 			client.setUnlockedFps(false);
@@ -744,13 +735,12 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	{
 		int length = to - from;
 		if (length <= 1)
-		{
 			return array + "[" + from + "]";
-		}
 		int middle = from + length / 2;
-		return "i < " + middle +
-			   " ? " + generateFetchCases(array, from, middle) +
-			   " : " + generateFetchCases(array, middle, to);
+		return
+			"i < " + middle +
+			" ? " + generateFetchCases(array, from, middle) +
+			" : " + generateFetchCases(array, middle, to);
 	}
 
 	private String generateGetter(String type, int arrayLength)
@@ -859,7 +849,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		glUniform1i(uniTextureArray, TEXTURE_UNIT_GAME - TEXTURE_UNIT_BASE);
 		glUniform1i(uniShadowMap, TEXTURE_UNIT_SHADOW_MAP - TEXTURE_UNIT_BASE);
 
-		
 		// Bind a VOA, else validation may fail on older Intel-based Macs
 		glBindVertexArray(vaoSceneHandle);
 
@@ -915,16 +904,16 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		uniTextureArray = glGetUniformLocation(glSceneProgram, "textureArray");
 		uniElapsedTime = glGetUniformLocation(glSceneProgram, "elapsedTime");
 
-		uniMinimapMask = glGetUniformLocation(glUiProgram, "minimapMask");
-		uniMinimapImage = glGetUniformLocation(glUiProgram, "minimapImage");
 		uniUiTexture = glGetUniformLocation(glUiProgram, "uiTexture");
-		uniMinimapLocation = glGetUniformLocation(glUiProgram, "minimapLocation");
-		uniPlayerLocation = glGetUniformLocation(glUiProgram, "playerLocation");
-		uniEnabledMinimap = glGetUniformLocation(glUiProgram, "enabledMinimap");
 		uniTexTargetDimensions = glGetUniformLocation(glUiProgram, "targetDimensions");
 		uniTexSourceDimensions = glGetUniformLocation(glUiProgram, "sourceDimensions");
 		uniUiColorBlindnessIntensity = glGetUniformLocation(glUiProgram, "colorBlindnessIntensity");
 		uniUiAlphaOverlay = glGetUniformLocation(glUiProgram, "alphaOverlay");
+		uniMinimapMask = glGetUniformLocation(glUiProgram, "minimapMask");
+		uniMinimapImage = glGetUniformLocation(glUiProgram, "minimapImage");
+		uniMinimapLocation = glGetUniformLocation(glUiProgram, "minimapLocation");
+		uniMinimapPlayerLocation = glGetUniformLocation(glUiProgram, "playerLocation");
+		uniMinimapEnabled = glGetUniformLocation(glUiProgram, "enabledMinimap");
 
 		uniBlockMaterials = glGetUniformBlockIndex(glSceneProgram, "MaterialUniforms");
 		uniBlockWaterTypes = glGetUniformBlockIndex(glSceneProgram, "WaterTypeUniforms");
@@ -1351,12 +1340,17 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		glActiveTexture(TEXTURE_UNIT_UI);
 	}
 
-	public void handleMinimapMask() {
+	public void initMinimapMask() {
+		texMinimapMask = glGenTextures();
 		glActiveTexture(TEXTURE_UNIT_MINIMAP_MASK);
-		minimapMaskTexture = glGenTextures();
-		glBindTexture(GL_TEXTURE_2D, minimapMaskTexture);
+		glBindTexture(GL_TEXTURE_2D, texMinimapMask);
 
-		BufferedImage image = spriteManager.getSprite(client.isResized() ? SpriteID.RESIZEABLE_MODE_MINIMAP_ALPHA_MASK : SpriteID.FIXED_MODE_MINIMAP_ALPHA_MASK, 0);
+		int minimapMaskSprite = client.isResized() ?
+			SpriteID.RESIZEABLE_MODE_MINIMAP_ALPHA_MASK :
+			SpriteID.FIXED_MODE_MINIMAP_ALPHA_MASK;
+		BufferedImage image = spriteManager.getSprite(minimapMaskSprite, 0);
+		if (image == null)
+			throw new RuntimeException("Failed to get minimap mask sprite");
 
 		int width = image.getWidth();
 		int height = image.getHeight();
@@ -1373,8 +1367,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		flippedBuffer.flip();
 
 		// Go from TYPE_4BYTE_ABGR in the BufferedImage to RGBA
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
-			GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, flippedBuffer);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, flippedBuffer);
 		checkGLErrors();
 
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -1387,14 +1380,12 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		glActiveTexture(TEXTURE_UNIT_UI);
 	}
 
-	public void handleMinimapImageUpload() {
-
+	public void uploadMinimapImage() {
+		texMinimapImage = glGenTextures();
 		glActiveTexture(TEXTURE_UNIT_MINIMAP_IMAGE);
-		minimapImageTexture = glGenTextures();
-		glBindTexture(GL_TEXTURE_2D, minimapImageTexture);
+		glBindTexture(GL_TEXTURE_2D, texMinimapImage);
 
 		BufferedImage image = minimapRenderer.miniMapImageCircle;
-
 		int width = image.getWidth();
 		int height = image.getHeight();
 
@@ -1410,8 +1401,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		flippedBuffer.flip();
 
 		// Go from TYPE_4BYTE_ABGR in the BufferedImage to RGBA
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
-			GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, flippedBuffer);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, flippedBuffer);
 		checkGLErrors();
 
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -1423,7 +1413,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		// Reset
 		glActiveTexture(TEXTURE_UNIT_UI);
 	}
-
 
 	private void initDummyShadowMap()
 	{
@@ -2130,7 +2119,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			glUniform3fv(uniUnderwaterCausticsColor, environmentManager.currentUnderwaterCausticsColor);
 			glUniform1f(uniUnderwaterCausticsStrength, environmentManager.currentUnderwaterCausticsStrength);
 			glUniform1f(uniElapsedTime, elapsedTime);
-
 			glUniform3fv(uniCameraPos, cameraPosition);
 
 			// Extract the 3rd column from the light view matrix (the float array is column-major)
@@ -2246,13 +2234,16 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		Widget minimapDrawWidget;
 
 		if (client.isResized()) {
+			// TODO: idk if these are right
 			if (client.getVarbitValue(Varbits.SIDE_PANELS) == 1) {
-				minimapDrawWidget = client.getWidget(WidgetInfo.RESIZABLE_MINIMAP_DRAW_AREA);
+//				minimapDrawWidget = client.getWidget(WidgetInfo.RESIZABLE_MINIMAP_DRAW_AREA);
+				minimapDrawWidget = client.getWidget(ComponentID.RESIZABLE_VIEWPORT_MINIMAP_DRAW_AREA);
 			} else {
-				minimapDrawWidget = client.getWidget(WidgetInfo.RESIZABLE_MINIMAP_STONES_DRAW_AREA);
+//				minimapDrawWidget = client.getWidget(WidgetInfo.RESIZABLE_MINIMAP_STONES_DRAW_AREA);
+				minimapDrawWidget = client.getWidget(ComponentID.RESIZABLE_VIEWPORT_BOTTOM_LINE_MINIMAP_DRAW_AREA);
 			}
 		} else {
-			minimapDrawWidget = client.getWidget(WidgetInfo.FIXED_VIEWPORT_MINIMAP_DRAW_AREA);
+			minimapDrawWidget = client.getWidget(ComponentID.FIXED_VIEWPORT_MINIMAP_DRAW_AREA);
 		}
 
 		return minimapDrawWidget == null ? new Point(0,0) : minimapDrawWidget.getCanvasLocation();
@@ -2265,20 +2256,19 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		if (client.getGameState().getState() < GameState.LOADING.getState())
 			overlayColor = 0;
 
+		// Use the texture bound in the first pass
 		glUseProgram(glUiProgram);
 
 		glBindTexture(GL_TEXTURE_2D, interfaceTexture);
 
-		// Use the texture bound in the first pass
-		glUseProgram(glUiProgram);
-
-		glUniform2i(uniMinimapLocation, getMinimapLocation().getX(), getMinimapLocation().getY());
-		Point pos = minimapRenderer.getPlayerMinimapLocation();
-		glUniform2i(uniPlayerLocation, pos.getX(), pos.getY());
-		glUniform1f(uniEnabledMinimap, ENABLE_OPENGL_MINIMAP ? 1 : 0);
 		glUniform2i(uniTexSourceDimensions, canvasWidth, canvasHeight);
 		glUniform1f(uniUiColorBlindnessIntensity, config.colorBlindnessIntensity() / 100f);
 		glUniform4fv(uniUiAlphaOverlay, ColorUtils.srgba(overlayColor));
+
+		glUniform1f(uniMinimapEnabled, ENABLE_OPENGL_MINIMAP ? 1 : 0);
+		glUniform2i(uniMinimapLocation, getMinimapLocation().getX(), getMinimapLocation().getY());
+		Point minimapPos = minimapRenderer.getPlayerMinimapLocation();
+		glUniform2i(uniMinimapPlayerLocation, minimapPos.getX(), minimapPos.getY());
 
 		if (client.isStretchedEnabled()) {
 			Dimension dim = client.getStretchedDimensions();
@@ -2288,7 +2278,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			glDpiAwareViewport(0, 0, canvasWidth, canvasHeight);
 			glUniform2i(uniTexTargetDimensions, canvasWidth, canvasHeight);
 		}
-
 
 		// Set the sampling function used when stretching the UI.
 		// This is probably better done with sampler objects instead of texture parameters, but this is easier and likely more portable.
@@ -2629,9 +2618,10 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 								recompilePrograms = true;
 								break;
 							case KEY_MINIMAP_STYLE:
+								// TODO: hook this in with the rest
 								configMinimapStyle = config.minimapType();
 								minimapRenderer.updateConfigs();
-								minimapRenderer.generateMiniMapImage();
+								minimapRenderer.generateMinimapImage();
 							case KEY_SHADOW_MODE:
 							case KEY_SHADOW_TRANSPARENCY:
 								recompilePrograms = true;
@@ -2735,9 +2725,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		client.setUnlockedFps(unlockFps);
 
 		// Without unlocked fps, the client manages sync on its 20ms timer
-		HdPluginConfig.SyncMode syncMode = unlockFps
-			? this.config.syncMode()
-			: HdPluginConfig.SyncMode.OFF;
+		HdPluginConfig.SyncMode syncMode = unlockFps ? config.syncMode() : HdPluginConfig.SyncMode.OFF;
 
 		int swapInterval;
 		switch (syncMode)
@@ -3192,19 +3180,19 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		}
 	}
 
+	@Subscribe
+	public void onResizeableChanged(ResizeableChanged event) {
+		initMinimapMask();
+	}
+
 	@Subscribe(priority = -1) // Run after the low detail plugin
 	public void onBeforeRender(BeforeRender beforeRender) {
 		if (client.getScene() == null)
 			return;
 		// The game runs significantly slower with lower planes in Chambers of Xeric
 		client.getScene().setMinLevel(isInChambersOfXeric ? client.getPlane() : client.getScene().getMinLevel());
-
 	}
 
-	@Subscribe
-	public void onResizeableChanged(ResizeableChanged event) {
-		handleMinimapMask();
-	}
 	@Subscribe
 	public void onClientTick(ClientTick clientTick) {
 		elapsedClientTime += 1 / 50f;

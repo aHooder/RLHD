@@ -4,10 +4,8 @@ import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.io.File;
-import java.io.IOException;
 import javax.imageio.ImageIO;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Test;
 import rs117.hd.data.materials.Material;
 import rs117.hd.utils.ResourcePath;
 
@@ -16,10 +14,9 @@ import static rs117.hd.scene.TextureManager.TEXTURE_PATH;
 
 @Slf4j
 public class TextureAverageColorTest {
-
 	public static final File DIR = new File("./textureAverageColor/");
 
-	public static void main(String[] args) throws IOException {
+	public static void main(String[] args) {
 		if (DIR.exists()) {
 			if (!DIR.delete()) {
 				log.info("Unable to delete {}:", DIR.getAbsolutePath());
@@ -42,12 +39,11 @@ public class TextureAverageColorTest {
 						File outputFile = new File(DIR, material.name() + "." + ext);
 						ImageIO.write(image, "png", outputFile);
 					}
-				} catch (Exception e) {
+				} catch (Exception ignored) {
 				}
 			}
 		}
 	}
-
 
 	private static Color calculateAverageHSL(BufferedImage image) {
 		BufferedImage scaledImage = new BufferedImage(1, 1, BufferedImage.TYPE_INT_RGB);
@@ -62,5 +58,4 @@ public class TextureAverageColorTest {
 
 		return new Color(red, green, blue);
 	}
-
 }

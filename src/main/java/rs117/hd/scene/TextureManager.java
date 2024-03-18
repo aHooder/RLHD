@@ -40,7 +40,6 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Singleton;
-import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
@@ -308,6 +307,7 @@ public class TextureManager {
 			} else {
 				hdTextureCount++;
 			}
+
 			try {
 				uploadTexture(textureLayer, image);
 				averageColor[textureLayer.material.ordinal()] = calculateAverageHSL(image);
@@ -364,8 +364,7 @@ public class TextureManager {
 
 		return null;
 	}
-
-
+	
 	/**
 	 * Calculates the average Hue, Saturation, and Lightness (HSL Jagex Format) value of a given image.
 	 * This method first scales the input image down to a 1x1 pixel image, effectively

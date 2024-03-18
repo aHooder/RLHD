@@ -6,7 +6,7 @@
     <option name="VM_PARAMETERS" value="-ea -Xmx768M" />
     <extension name="coverage">
       <pattern>
-        <option name="PATTERN" value="rs117.hd.overlays.*" />
+        <option name="PATTERN" value="rs117.hd.*" />
         <option name="ENABLED" value="true" />
       </pattern>
     </extension>

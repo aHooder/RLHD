@@ -5,7 +5,6 @@ import net.runelite.api.*;
 
 @Getter
 public class SceneTileModelCustom implements SceneTileModel {
-
 	public static final int[][] SHAPE_POINTS = {
 		{1, 3, 5, 7},
 		{1, 3, 5, 7},
@@ -46,8 +45,27 @@ public class SceneTileModelCustom implements SceneTileModel {
 	int[] vertexX;
 	int[] vertexZ;
 
-	SceneTileModelCustom(final int shape, final int rotation, final int unused, final int tileX, final int tileY, final int posSW, final int posSE, final int northeastY, final int posNW, final int colorSW, final int colorSE, final int colorNE, final int colorNW, final int colorSW2, final int colorSE2, final int colorNE2, final int colorNW2, final int underlayRgb, final int overlayRgb) {
-
+	SceneTileModelCustom(
+		final int shape,
+		final int rotation,
+		final int unused,
+		final int tileX,
+		final int tileY,
+		final int posSW,
+		final int posSE,
+		final int northeastY,
+		final int posNW,
+		final int colorSW,
+		final int colorSE,
+		final int colorNE,
+		final int colorNW,
+		final int colorSW2,
+		final int colorSE2,
+		final int colorNE2,
+		final int colorNW2,
+		final int underlayRgb,
+		final int overlayRgb
+	) {
 		final int SIZE = 128;
 		final int HALF_SIZE = SIZE / 2;
 		final int QUARTER_SIZE = SIZE / 4;
@@ -105,13 +123,13 @@ public class SceneTileModelCustom implements SceneTileModel {
 				}
 			}
 		}
+
 		final int[] shapeFaces = SceneTileModelCustom.SHAPE_PATHS[shape];
 		final int faceCount = shapeFaces .length / 4;
 		this.faceX = new int[faceCount];
 		this.faceY = new int[faceCount];
 		this.faceZ = new int[faceCount];
 		this.triangleColorA = new int[faceCount];
-
 
 		int index = 0;
 		for (int i = 0; i < faceCount; ++i) {
@@ -130,29 +148,42 @@ public class SceneTileModelCustom implements SceneTileModel {
 			this.faceZ[i] = v3;
 			this.triangleColorA[i] = type == 0 ? colors[v1] : elevations[v1];
 		}
-
 	}
 
 	@Override
-	public int getModelUnderlay() { return 0; }
+	public int getModelUnderlay() {
+		return 0;
+	}
 
 	@Override
-	public int getModelOverlay() { return 0; }
+	public int getModelOverlay() {
+		return 0;
+	}
 
 	@Override
-	public int getShape() { return 0; }
+	public int getShape() {
+		return 0;
+	}
 
 	@Override
-	public int getRotation() { return 0; }
+	public int getRotation() {
+		return 0;
+	}
 
 	@Override
-	public int[] getTriangleColorB() { return new int[0]; }
+	public int[] getTriangleColorB() {
+		return new int[0];
+	}
 
 	@Override
-	public int[] getTriangleColorC() { return new int[0]; }
+	public int[] getTriangleColorC() {
+		return new int[0];
+	}
 
 	@Override
-	public int[] getTriangleTextureId() { return new int[0]; }
+	public int[] getTriangleTextureId() {
+		return new int[0];
+	}
 
 	@Override
 	public boolean isFlat() {
@@ -160,20 +191,26 @@ public class SceneTileModelCustom implements SceneTileModel {
 	}
 
 	@Override
-	public int getBufferOffset() { return 0; }
+	public int getBufferOffset() {
+		return 0;
+	}
 
 	@Override
-	public void setBufferOffset(int i) { }
+	public void setBufferOffset(int i) {}
 
 	@Override
-	public int getUvBufferOffset() { return 0; }
+	public int getUvBufferOffset() {
+		return 0;
+	}
 
 	@Override
-	public void setUvBufferOffset(int i) { }
+	public void setUvBufferOffset(int i) {}
 
 	@Override
-	public int getBufferLen() { return 0; }
+	public int getBufferLen() {
+		return 0;
+	}
 
 	@Override
-	public void setBufferLen(int i) { }
+	public void setBufferLen(int i) {}
 }

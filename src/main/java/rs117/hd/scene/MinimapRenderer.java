@@ -23,7 +23,6 @@ import rs117.hd.utils.ColorUtils;
 
 import static net.runelite.api.Constants.*;
 import static net.runelite.api.Perspective.*;
-import static org.lwjgl.opengl.GL20C.*;
 import static rs117.hd.scene.SceneUploader.SCENE_OFFSET;
 import static rs117.hd.utils.HDUtils.clamp;
 
@@ -44,12 +43,12 @@ public class MinimapRenderer {
 
 	public boolean configUseShadedMinimap;
 
-	public boolean configUse117Miniamp;
+	public boolean configUse117Minimap;
 
 	public boolean updateMinimapLighting;
 
-	public boolean updateMinimapLighting() {
-		return updateMinimapLighting && configUse117Miniamp;
+	public boolean shouldUpdateMinimapLighting() {
+		return updateMinimapLighting && configUse117Minimap;
 	}
 
 	public int[][][][] minimapTilePaintColorsLighting = new int[MAX_Z][EXTENDED_SCENE_SIZE][EXTENDED_SCENE_SIZE][8];
@@ -108,14 +107,14 @@ public class MinimapRenderer {
 	private FrameTimer frameTimer;
 
 	public void updateConfigs() {
-		configUse117Miniamp = config.minimapType() == MinimapStyle.DEFAULT;
-		configUseShadedMinimap = configUse117Miniamp || config.minimapType() == MinimapStyle.HD2008;
-		if (configUse117Miniamp) {
+		configUse117Minimap = config.minimapType() == MinimapStyle.DEFAULT;
+		configUseShadedMinimap = configUse117Minimap || config.minimapType() == MinimapStyle.HD2008;
+		if (configUse117Minimap) {
 			updateMinimapLighting = true;
 		}
 	}
 
-	public void generateMiniMapImage() {
+	public void generateMinimapImage() {
 		mapCaptured = false;
 		captureMinimap();
 	}
@@ -129,7 +128,7 @@ public class MinimapRenderer {
 		{
 			miniMapImage = image;
 			createSmallMap();
-			plugin.handleMinimapImageUpload();
+			plugin.uploadMinimapImage();
 			mapCaptured = true;
 		}
 	}
@@ -674,13 +673,13 @@ public class MinimapRenderer {
 
 
 	public int[] getTileModelColor(SceneContext sceneContext, int plane, int tileExX, int tileExY, int face) {
-		return (!configUse117Miniamp)
+		return (!configUse117Minimap)
 			? sceneContext.minimapTileModelColors[plane][tileExX][tileExY][face]
 			: minimapTileModelColorsLighting[plane][tileExX][tileExY][face];
 	}
 
 	public int[] getTilePaintColor(SceneContext sceneContext, int plane, int tileExX, int tileExY) {
-		return (!configUse117Miniamp)
+		return (!configUse117Minimap)
 			? sceneContext.minimapTilePaintColors[plane][tileExX][tileExY]
 			: minimapTilePaintColorsLighting[plane][tileExX][tileExY];
 	}
