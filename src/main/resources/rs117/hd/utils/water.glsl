@@ -24,6 +24,19 @@
  */
 #include utils/misc.glsl
 
+float calculateFresnel(const vec3 I, const vec3 N, const float ior) {
+    float cosi = dot(I, N);
+    float etai = 1, etat = ior;
+    if (cosi > 0) {
+        etai = ior;
+        etat = 1;
+    }
+
+    float R0 = (etai - etat) / (etai + etat);
+    R0 *= R0;
+    return R0 + (1 - R0) * pow(1 - cosi, 5);
+}
+
 vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
     WaterType waterType = getWaterType(waterTypeIndex);
 
@@ -122,39 +135,46 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
     // underglow
     vec3 underglowOut = underglowColor * max(normals.y, 0) * underglowStrength;
 
-
     // fresnel reflection
     float baseOpacity = 0.4;
-    float fresnel = 1.0 - clamp(viewDotNormals, 0.0, 1.0);
+    float oldFresnel = 1.0 - clamp(viewDotNormals, 0.0, 1.0);
+    float finalFresnel = clamp(mix(baseOpacity, 1.0, oldFresnel * 1.2), 0.0, 1.0);
     vec3 surfaceColor = vec3(0);
 
-    // add sky gradient
-    if (fresnel < 0.5) {
-        surfaceColor = mix(waterColorDark, waterColorMid, fresnel * 2);
-    } else {
-        vec3 I = viewDir; // incident
-        vec3 N = normals.xyz; // normal
+    vec3 waterColorDark = waterColorDark;
+    vec3 waterColorMid = waterColorMid;
+    vec3 waterColorLight = waterColorLight;
 
+    float fresnel = calculateFresnel(normals, viewDir, 1.333);
+    if (waterReflectionEnabled && distance(waterHeight, IN.position.y) < 32) {
         // TODO: use actual viewport size here
         ivec2 screenSize = textureSize(waterReflectionMap, 0);
         vec2 uv = gl_FragCoord.xy / vec2(screenSize);
         uv.y = 1 - uv.y;
         vec3 norm1 = n1 * 2 - 1;
         vec3 norm2 = n2 * 2 - 1;
-        vec3 distortion = normalize((norm1 - norm2) * waterType.normalStrength);
-        uv += distortion.xz / 1000;
+        uv += distortion * 5;
         uv = clamp(uv, 0, 1);
 
-        vec3 c = waterColorLight;
+        vec3 reflection = (texture(waterReflectionMap, uv).rgb);
 
-        if (waterReflectionEnabled && distance(waterHeight, IN.position.y) < 32)
-            c = texture(waterReflectionMap, uv).rgb;
-            c.rgb = c.rgb *0.9; // Dim water reflections, should be done properly via fresnel
+        waterColorMid = (mix(
+            (waterColorMid),
+            reflection,
+            fresnel
+        ));
+        waterColorLight = (mix(
+            (waterColorLight),
+            reflection,
+            fresnel
+        ));
+    }
 
-        surfaceColor = mix(waterColorMid, c, (fresnel - 0.5) * 2);
-
-        shadow *= (1 - fresnel);
-        inverseShadow = (1 - shadow);  // this does nothing? the reference to this that used to be after is now gone :(
+    // add sky gradient
+    if (finalFresnel < 0.5) {
+        surfaceColor = mix(waterColorDark, waterColorMid, finalFresnel * 2);
+    } else {
+        surfaceColor = mix(waterColorMid, waterColorLight, (finalFresnel - 0.5) * 2);
     }
 
     vec3 surfaceColorOut = surfaceColor * max(combinedSpecularStrength, 0.2);
@@ -167,7 +187,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
     vec3 baseColor = waterType.surfaceColor * compositeLight;
     baseColor = mix(baseColor, surfaceColor, waterType.fresnelAmount);
     float shoreLineMask = 1 - dot(IN.texBlend, vec3(vColor[0].x, vColor[1].x, vColor[2].x));
-    float maxFoamAmount = 0.0;
+    float maxFoamAmount = 0.8;
     float foamAmount = min(shoreLineMask, maxFoamAmount);
     float foamDistance = 0.7;
     vec3 foamColor = waterType.foamColor;
@@ -177,11 +197,11 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
     baseColor = mix(baseColor, foamColor, foamAmount);
     vec3 specularComposite = mix(lightSpecularOut, vec3(0.0), foamAmount);
     float flatFresnel = (1.0 - dot(viewDir, vec3(0, -1, 0))) * 1.0;
-    fresnel = max(fresnel, flatFresnel);
-    fresnel -= fresnel * shadow * 0.2;
+    finalFresnel = max(finalFresnel, flatFresnel);
+    finalFresnel -= finalFresnel * shadow * 0.2;
     baseColor += pointLightsSpecularOut + lightSpecularOut / 3;
 
-    float alpha = max(waterType.baseOpacity, max(foamAmount, max(fresnel, length(specularComposite / 3))));
+    float alpha = max(waterType.baseOpacity, max(foamAmount, max(finalFresnel, length(specularComposite / 3))));
 
     if (waterType.isFlat) {
         baseColor = mix(waterType.depthColor, baseColor, alpha);
