@@ -276,8 +276,13 @@ public class TileInfoOverlay extends Overlay implements MouseListener, MouseWhee
 
 		lines.add("Scene point: " + tileX + ", " + tileY + ", " + tileZ);
 		lines.add("World point: " + Arrays.toString(worldPos));
-		lines.add("Region ID: " + HDUtils.worldToRegionID(worldPos));
 		lines.add("Height: " + scene.getTileHeights()[tileZ][tileExX][tileExY]);
+		lines.add(String.format(
+			"Region ID: %d (%d, %d)",
+			HDUtils.worldToRegionID(worldPos),
+			worldPos[0] >> 6,
+			worldPos[1] >> 6
+		));
 
 		int overlayId = scene.getOverlayIds()[tileZ][tileExX][tileExY];
 		var overlay = tileOverrideManager.getOverrideBeforeReplacements(worldPos, OVERLAY_FLAG | overlayId);
@@ -402,24 +407,22 @@ public class TileInfoOverlay extends Overlay implements MouseListener, MouseWhee
 		}
 
 		GameObject[] gameObjects = tile.getGameObjects();
-		if (gameObjects.length > 0) {
-			int counter = 0;
-			for (GameObject gameObject : gameObjects) {
-				if (gameObject == null)
-					continue;
-				counter++;
-				int height = -1;
-				var renderable = gameObject.getRenderable();
-				if (renderable != null)
-					height = renderable.getModelHeight();
-				lines.add(String.format(
-					"%s: ID=%s ori=%d height=%d",
-					ModelHash.getTypeName(ModelHash.getType(gameObject.getHash())),
-					getIdAndImpostorId(gameObject, renderable),
-					gameObject.getModelOrientation(),
-					height
-				));
-			}
+		for (GameObject gameObject : gameObjects) {
+			if (gameObject == null)
+				continue;
+			int height = -1;
+			var renderable = gameObject.getRenderable();
+			if (renderable != null)
+				height = renderable.getModelHeight();
+
+			lines.add(String.format(
+				"%s: ID=%s preori=%d ori=%d height=%d",
+				ModelHash.getTypeName(ModelHash.getType(gameObject.getHash())),
+				getIdAndImpostorId(gameObject, renderable),
+				HDUtils.getBakedOrientation(gameObject.getConfig()),
+				gameObject.getModelOrientation(),
+				height
+			));
 		}
 
 		for (int i = 0; i < lines.size(); i++) {

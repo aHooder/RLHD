@@ -46,6 +46,7 @@ import rs117.hd.config.ShadowResolution;
 import rs117.hd.config.TextureResolution;
 import rs117.hd.config.UIScalingMode;
 import rs117.hd.config.VanillaShadowMode;
+import rs117.hd.config.WaterTransparencyType;
 
 import static rs117.hd.HdPlugin.MAX_DISTANCE;
 import static rs117.hd.HdPlugin.MAX_FOG_DEPTH;
@@ -618,28 +619,184 @@ public interface HdPluginConfig extends Config
 		return true;
 	}
 
+	String KEY_HD_TZHAAR_RESKIN = "tzhaarHD";
+	@ConfigItem(
+		keyName = KEY_HD_TZHAAR_RESKIN,
+		name = "HD TzHaar Reskin",
+		description = "Recolors the TzHaar city of Mor Ul Rek to give it an appearance similar to that of its 2008 HD variant.",
+		position = 10,
+		section = environmentSettings
+	)
+	default boolean hdTzHaarReskin() {
+		return true;
+	}
+
+	/*====== Water settings ======*/
+
+	@ConfigSection(
+		name = "Water",
+		description = "Water settings",
+		position = 3
+	)
+	String waterSettings = "waterSettings";
+
+	@ConfigItem(
+		keyName = "waterTransparencyType",
+		name = "Water Type",
+		description =
+			"Choose between a default of transparent or opaque water<br>" +
+			"'Transparent' shows underwater terrain and effects, while<br>" +
+			"'Static' does not.",
+		position = 1,
+		section = waterSettings
+	)
+	default WaterTransparencyType waterTransparencyType()
+	{
+		return WaterTransparencyType.TRANSPARENT;
+	}
+
+	String KEY_LIGHT_PENETRATION = "lightPenetrationPercentage";
+	@ConfigItem(
+		keyName = KEY_LIGHT_PENETRATION,
+		name = "Light Penetration",
+		description = "Amount of light that can pass through transparent water. <br> Default 75%.",
+		position = 2,
+		section = waterSettings
+	)
+	@Units(Units.PERCENT)
+	@Range(min = 0, max = 130)
+	default int lightPenetrationPercentage() {
+		return 75;
+	}
+
+	String KEY_PLANAR_REFLECTIONS = "planarReflections";
+	@ConfigItem(
+		keyName = KEY_PLANAR_REFLECTIONS,
+		name = "Planar Reflections",
+		description = "Render a highly detailed reflection of the game world on bodies of water. <br> GPU intensive.",
+		position = 3,
+		section = waterSettings
+	)
+	default boolean enablePlanarReflections() {
+		return true;
+	}
+
+	String KEY_PLANAR_REFLECTION_RESOLUTION = "planarReflectionResolution";
+	@ConfigItem(
+		keyName = KEY_PLANAR_REFLECTION_RESOLUTION,
+		name = "Reflection Resolution",
+		description = "Percentage of screen resolution to render reflections at. <br> 50% is a good balance of performance and quality.",
+		position = 4,
+		section = waterSettings
+	)
+	@Units(Units.PERCENT)
+	@Range(min = 25, max = 100)
+	default int reflectionResolution() {
+		return 50;
+	}
+
+	@ConfigItem(
+		keyName = "shorelineCaustics",
+		name = "Shoreline Caustics",
+		description = "Apply underwater lighting effects to imitate sunlight passing through waves on the surface.",
+		position = 5,
+		section = waterSettings
+	)
+	default boolean shorelineCaustics()
+	{
+		return true;
+	}
+
 	@ConfigItem(
 		keyName = "underwaterCaustics",
 		name = "Underwater Caustics",
 		description = "Apply underwater lighting effects to imitate sunlight passing through waves on the surface.",
-		position = 10,
-		section = environmentSettings
+		position = 6,
+		section = waterSettings
 	)
 	default boolean underwaterCaustics()
 	{
 		return true;
 	}
 
-	String KEY_HD_TZHAAR_RESKIN = "tzhaarHD";
+	String KEY_WATER_CAUSTICS_STRENGTH_CONFIG = "waterCausticsStrengthConfig";
 	@ConfigItem(
-		keyName = KEY_HD_TZHAAR_RESKIN,
-		name = "HD TzHaar Reskin",
-		description = "Recolors the TzHaar city of Mor Ul Rek to give it an appearance similar to that of its 2008 HD variant.",
-		position = 11,
-		section = environmentSettings
+		keyName = KEY_WATER_CAUSTICS_STRENGTH_CONFIG,
+		name = "Caustics Strength",
+		description = "Light strength for caustics.",
+		position = 7,
+		section = waterSettings
 	)
-	default boolean hdTzHaarReskin() {
+	@Units(Units.PERCENT)
+	@Range(min = 1, max = 200)
+	default int waterCausticsStrengthConfig() {
+		return 100;
+	}
+
+	String KEY_WATER_WAVE_SIZE_CONFIG = "waterWaveSizeConfig";
+	@ConfigItem(
+		keyName = KEY_WATER_WAVE_SIZE_CONFIG,
+		name = "Wave Size",
+		description = "The size of waves.",
+		position = 8,
+		section = waterSettings
+	)
+	@Units(Units.PERCENT)
+	@Range(min = 25, max = 200)
+	default int waterWaveSizeConfig() {
+		return 100;
+	}
+
+	String KEY_WATER_WAVE_SPEED_CONFIG = "waterWaveSpeedConfig";
+	@ConfigItem(
+		keyName = KEY_WATER_WAVE_SPEED_CONFIG,
+		name = "Wave Speed",
+		description = "The speed of waves.",
+		position = 9,
+		section = waterSettings
+	)
+	@Units(Units.PERCENT)
+	@Range(min = 50, max = 200)
+	default int waterWaveSpeedConfig() {
+		return 100;
+	}
+
+	String KEY_WATER_LIGHT_SCATTERING = "waterLightScattering";
+	@ConfigItem(
+		keyName = KEY_WATER_LIGHT_SCATTERING,
+		name = "Light Scattering",
+		description = "Approximate light scattering on water surface/waves.",
+		position = 10,
+		section = waterSettings
+	)
+	default boolean waterLightScattering() {
 		return true;
+	}
+
+	String KEY_WATER_FOAM = "waterFoam";
+	@ConfigItem(
+		keyName = KEY_WATER_FOAM,
+		name = "Foam",
+		description = "Render foam around the edges of water bodies.",
+		position = 11,
+		section = waterSettings
+	)
+	default boolean enableWaterFoam() {
+		return true;
+	}
+
+	String KEY_WATER_FOAM_AMOUNT_CONFIG = "waterFoamAmountConfig";
+	@ConfigItem(
+		keyName = KEY_WATER_FOAM_AMOUNT_CONFIG,
+		name = "Foam Amount",
+		description = "The amount of foam around shorelines.",
+		position = 12,
+		section = waterSettings
+	)
+	@Units(Units.PERCENT)
+	@Range(min = 1, max = 300)
+	default int waterFoamAmountConfig() {
+		return 100;
 	}
 
 
@@ -648,7 +805,7 @@ public interface HdPluginConfig extends Config
 	@ConfigSection(
 		name = "Model caching",
 		description = "Improve performance by reusing model data",
-		position = 3,
+		position = 4,
 		closedByDefault = true
 	)
 	String modelCachingSettings = "modelCachingSettings";
@@ -707,7 +864,7 @@ public interface HdPluginConfig extends Config
 	@ConfigSection(
 		name = "Miscellaneous",
 		description = "Miscellaneous settings",
-		position = 4,
+		position = 5,
 		closedByDefault = true
 	)
 	String miscellaneousSettings = "miscellaneousSettings";
@@ -785,13 +942,25 @@ public interface HdPluginConfig extends Config
 		return false;
 	}
 
+	String KEY_REPLACE_FISHING_SPOTS = "replaceFishingSpots";
+	@ConfigItem(
+		keyName = KEY_REPLACE_FISHING_SPOTS,
+		name = "Replace Fishing Spots",
+		description = "Replace certain fishing spots with more appropriate models that are easier to see.",
+		position = 7,
+		section = miscellaneousSettings
+	)
+	default boolean replaceFishingSpots() {
+		return true;
+	}
+
 
 	/*====== Experimental settings ======*/
 
 	@ConfigSection(
 		name = "Experimental",
 		description = "Experimental features - if you're experiencing issues you should consider disabling these",
-		position = 5,
+		position = 6,
 		closedByDefault = true
 	)
 	String experimentalSettings = "experimentalSettings";
@@ -862,32 +1031,6 @@ public interface HdPluginConfig extends Config
 	)
 	default boolean decoupleSkyAndWaterColor() {
 		return false;
-	}
-
-	String KEY_PLANAR_REFLECTIONS = "planarReflections";
-	@ConfigItem(
-		keyName = KEY_PLANAR_REFLECTIONS,
-		name = "Planar Reflections",
-		description = "Render a highly detailed reflection of the game world on bodies of water. EXPENSIVE and WIP.",
-		position = 403,
-		section = experimentalSettings
-	)
-	default boolean enablePlanarReflections() {
-		return false;
-	}
-
-	String KEY_PLANAR_REFLECTION_RESOLUTION = "planarReflectionResolution";
-	@ConfigItem(
-		keyName = KEY_PLANAR_REFLECTION_RESOLUTION,
-		name = "Reflection Resolution",
-		description = "Percentage of screen resolution",
-		position = 404,
-		section = experimentalSettings
-	)
-	@Units(Units.PERCENT)
-	@Range(min = 1)
-	default int reflectionResolution() {
-		return 100;
 	}
 
 	String KEY_LINEAR_ALPHA_BLENDING = "experimentalLinearAlphaBlending";

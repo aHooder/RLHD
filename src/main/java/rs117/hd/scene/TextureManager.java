@@ -146,7 +146,7 @@ public class TextureManager {
 	private int[] vanillaTextureIndexToMaterialUniformIndex = {};
 
 	public int getMaterialIndex(@Nonnull Material material, int vanillaTextureIndex) {
-		if (material == Material.NONE &&
+		if (material == Material.VANILLA &&
 			vanillaTextureIndex >= 0 &&
 			vanillaTextureIndex < vanillaTextureIndexToMaterialUniformIndex.length)
 			return vanillaTextureIndexToMaterialUniformIndex[vanillaTextureIndex];
@@ -466,7 +466,8 @@ public class TextureManager {
 			.putFloat(scrollSpeedY)
 			.putFloat(1 / m.textureScale[0])
 			.putFloat(1 / m.textureScale[1])
-			.putFloat(0).putFloat(0); // align vec4
+			.putFloat(1 / m.textureScale[2])
+			.putFloat(0); // align vec4
 	}
 
 	private ByteBuffer generateWaterTypeUniformBuffer() {

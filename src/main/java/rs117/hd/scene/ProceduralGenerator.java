@@ -43,17 +43,17 @@ import static net.runelite.api.Constants.*;
 import static net.runelite.api.Perspective.*;
 import static rs117.hd.scene.SceneUploader.SCENE_OFFSET;
 import static rs117.hd.scene.tile_overrides.TileOverride.OVERLAY_FLAG;
-import static rs117.hd.utils.HDUtils.add;
 import static rs117.hd.utils.HDUtils.calculateSurfaceNormals;
 import static rs117.hd.utils.HDUtils.clamp;
 import static rs117.hd.utils.HDUtils.dotLightDirectionTile;
 import static rs117.hd.utils.HDUtils.lerp;
 import static rs117.hd.utils.HDUtils.vertexHash;
+import static rs117.hd.utils.Vector.add;
 
 @Slf4j
 @Singleton
 public class ProceduralGenerator {
-	public static final int[] DEPTH_LEVEL_SLOPE = new int[] { 150, 300, 470, 610, 700, 750, 820, 920, 1080, 1300, 1350, 1380 };
+	public static final int[] DEPTH_LEVEL_SLOPE = new int[] {384, 666, 818, 1056, 1142, 1224, 1303, 1379, 1452, 1522, 1589, 1645, 1700, 1775, 1860, 1994, 2175, 2329, 2459, 2571, 2665, 2745, 2825, 2890, 2945, 2996, 3047, 3085, 3114, 3140, 3158, 3170, 3200};
 
 	public static final int VERTICES_PER_FACE = 3;
 	public static final boolean[][] TILE_OVERLAY_TRIS = new boolean[][]
@@ -607,18 +607,8 @@ public class ProceduralGenerator {
 					{
 						continue;
 					}
-					int maxRange = DEPTH_LEVEL_SLOPE[sceneContext.underwaterDepthLevels[z][x][y] - 1];
-					int minRange = (int) (DEPTH_LEVEL_SLOPE[sceneContext.underwaterDepthLevels[z][x][y] - 1] * 0.1f);
-					// Range from noise-generated terrain is 10-60.
-					// Translate the result from range 0-1.
-//					float noiseOffset = (HeightCalc.calculate(baseX + x + 0xe3b7b, baseY + y + 0x87cce) - 10) / 50f;
-					float noiseOffset = 0.5f;
-					// limit range of variation
-					float minOffset = 0.25f;
-					float maxOffset = 0.75f;
-					noiseOffset = lerp(minOffset, maxOffset, noiseOffset);
-					// apply offset to vertex height range
-					int heightOffset = (int) lerp(minRange, maxRange, noiseOffset);
+					int depth = DEPTH_LEVEL_SLOPE[sceneContext.underwaterDepthLevels[z][x][y] - 1];
+					int heightOffset = (int) (depth * .55f); // legacy weirdness
 					underwaterDepths[z][x][y] = heightOffset;
 				}
 			}
