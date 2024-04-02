@@ -206,6 +206,59 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
     n2 = normalize(n2);
     vec3 normals = normalize(n1+n2);
     normals = normalize(vec3(n1.xy + n2.xy, n1.z + n2.z));
+
+    float height = 0;
+
+    {
+        const float waveHeight = .25;
+        const float speed = .25;
+        const float cascades[] = float[]( 64, 16, 4, 1 );
+        const float cascadeHeights[] = float[]( 44.5283, 3.36367, 0.216041, 0.0102663 );
+        const vec2 cascadeDirs[] = vec2[](
+            vec2(1, 1),
+            vec2(1, 1),
+            vec2(1, 1),
+            vec2(1, 1)
+        );
+        int cascadeNormalMaps[] = int[](
+            MAT_WATER_NORMAL_MAP_1.colorMap,
+            MAT_WATER_NORMAL_MAP_2.colorMap,
+            MAT_WATER_NORMAL_MAP_3.colorMap,
+            MAT_WATER_NORMAL_MAP_4.colorMap
+        );
+        int cascadeHeightMaps[] = int[](
+            MAT_OCEAN_HEIGHT_1.colorMap,
+            MAT_OCEAN_HEIGHT_2.colorMap,
+            MAT_OCEAN_HEIGHT_3.colorMap,
+            MAT_OCEAN_HEIGHT_4.colorMap
+        );
+
+        // Only sample the first height map. Bump it up to 4 if you want all
+        for (int i = 0; i < 2; i++) {
+            vec2 uv = worldUvs(cascades[i]);
+            uv += animationFrame(sqrt(cascades[i]) / speed * waterType.duration) * cascadeDirs[i];
+            float h = linearToSrgb(textureBicubic(textureArray, vec3(uv, cascadeHeightMaps[i])).r);
+            height += h * cascadeHeights[i];
+        }
+
+        vec3 normal = vec3(0);
+        for (int i = 0; i < 4; i++) {
+            vec2 uv = worldUvs(cascades[i]);
+            uv += animationFrame(sqrt(cascades[i]) / speed * waterType.duration) * cascadeDirs[i];
+            vec3 n = linearToSrgb(textureBicubic(textureArray, vec3(uv, cascadeNormalMaps[i])).xyz);
+            // Normalize
+            n.xy = n.xy * 2 - 1;
+            // Tangent space to world
+            n.z *= -1;
+            n.yz = n.zy;
+            // Add this cascade's contribution to the overall surface normal
+            normal += n;// * cascadeHeights[i];
+        }
+
+        normal.y /= waveHeight;
+        normals = normalize(normal);
+    }
+
     vec3 normalScatter = normals;
 
     vec3 fragToCam = viewDir;
@@ -382,7 +435,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
             float waveStrength = -normalScatter.y;
             waveStrength = 1 - waveStrength;
             waveStrength = pow(waveStrength, 1 / 1.4f);
-            waveStrength *=0.3;
+            waveStrength *= 0.01;
             //return vec4(vec3(waveStrength), 1);
 
             d.r = (scatterStrength * scatterExtinction.r * waveStrength);
@@ -600,13 +653,11 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
     dst = reflection * reflection.a + dst * (1 - reflection.a); // blend in reflection
     foam.rgb *= 1.5; // foam otherwise looks disproportionately weak on transparent water due to reduced alpha
 
-    dst.rgb += foam; // add foam on top
-
-    // TODO: This isn't right, as it affects the reflection too, but the look is based upon this currently
-    dst.rgb /= dst.a;
+    dst.rgb += foam / dst.a; // add foam on top
 
     float specularGloss = waterType.specularGloss;
     float specularStrength = waterType.specularStrength;
+    specularGloss = 250;
     vec3 specular = pow(max(0, dot(R, lightDir)), specularGloss) * lightStrength * lightColor * specularStrength;
     dst.rgb += lightColor * lightStrength * specular / dst.a;
 
@@ -630,6 +681,39 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
         // }
     }
     dst.rgb += pointLightsSpecular / dst.a;
+
+    {
+        float cosUp = -normals.y;
+
+        vec3 C_ss = vec3(0, .32, .32); // water scatter color
+        vec3 C_f = vec3(1); // air bubble color
+
+        float k_1 = 30;  // ~tall wave scatter
+        float k_2 = .01; // ~refraction scatter
+        float k_3 = .01; // ~ambient scatter
+        float k_4 = .1;  // ~air bubble scatter
+
+        float P_f = .01; // density of air bubbles
+
+//        float H = (1 - pow(cosUp, 1.f)) * 50; // wave height
+        float H = height / 50; // use height from height maps
+
+        vec3 omega_i = lightDir; // incoming = sun to frag
+        vec3 omega_o = viewDir; // outgoing = frag to camera
+        vec3 omega_h = normalize(omega_o - omega_i); // half-way between incoming and outgoing
+        vec3 omega_n = IN.normal.xzy; // macro scale normal
+        vec3 w_n = normals; // presumably wave normal?
+        omega_n = w_n;
+
+        vec3 L_sun = lightColor * lightStrength;
+        vec3 L_scatter = (
+            k_1*H*pow(max(0, dot(omega_i, -omega_o)), 4.f) * pow(.5 - .5*dot(omega_i, omega_n), 3.f)
+            + k_2*pow(max(0, dot(omega_o, omega_n)), 2.f)
+        ) * C_ss*L_sun;
+        L_scatter += k_3*max(0, dot(omega_i, w_n))*C_ss*L_sun + k_4*P_f*C_f*L_sun;
+
+        dst.rgb += L_scatter / dst.a;
+    }
 
     // Adjust alpha to try to clip colors as little as possible
     // This should allow for additive blending without too much consideration of the alpha channel

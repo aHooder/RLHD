@@ -60,6 +60,12 @@ public enum Material {
 	LEGACY_WATER_NORMAL_MAP_2,
 	WATER_NORMAL_MAP_1,
 	WATER_NORMAL_MAP_2,
+	WATER_NORMAL_MAP_3,
+	WATER_NORMAL_MAP_4,
+	OCEAN_HEIGHT_1,
+	OCEAN_HEIGHT_2,
+	OCEAN_HEIGHT_3,
+	OCEAN_HEIGHT_4,
 	WATER_FOAM,
 
 	// Reserve materials for known vanilla texture IDs
