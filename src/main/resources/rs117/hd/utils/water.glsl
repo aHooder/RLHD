@@ -45,7 +45,7 @@
 #define WATER_TYPE_DARK_BLUE_WATER  14
 //#define DEVELOPMENT_WATER_TYPE 7 // DEVELOPMENT OVERRIDE
 
-#define HOODER_WATER
+//#define HOODER_WATER
 #ifdef HOODER_WATER
 #include utils/hooder_water.glsl
 #elif LEGACY_WATER > 0
@@ -73,10 +73,12 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
     WaterType waterType = getWaterType(waterTypeIndex);
 
     // VARIABLES
+    bool isOpaque = !waterTransparency || waterType.isFlat;
     vec3 fragToCam = viewDir;
     vec4 d = vec4(0);
     vec3 I = -viewDir; // incident
-
+    vec3 ambientLight = ambientColor * ambientStrength;
+    vec3 directionalLight = lightColor * lightStrength;
 
 
 
@@ -246,36 +248,102 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
     // SCATTERING STUFF
     float cosUp = -N.y;
 
-    vec3 C_ss = vec3(0, .32, .32); // water scatter color
-    vec3 C_f = vec3(1); // air bubble color
+    vec3 C_ss = vec3(0, .32, .32); // directional scatter color
+    vec3 C_f = vec3(1); // ambient scatter color
 
-//    float k_1 = 20;  // ~tall wave scatter
-    float k_2 = 0.01; // ~refraction scatter
-    float k_3 = 0.008; // ~ambient scatter
-    float k_4 = 0.1;  // ~air bubble scatter
+    // float k_1 = 20;  // ~tall wave scatter
+    float k_2 = 0.01; // straight on sun scatter (C_ss)
+    float k_3 = 0.008; // directional sun scatter (C_ss)
+    float k_4 = 0.01;  // ambient scatter (C_f)
 
-    float P_f = .01; // density of air bubbles
+    // Opaque setting or flat water
+    if (isOpaque)
+    {
+        switch (waterTypeIndex) {
+            case 2: // Flat cave water
+                C_ss = C_f = vec3(0.15, 0.37, 0.4);
+                break;
+            case 3: // Swamp water
+            case 4: // Swamp water flat
+                C_ss = C_f = vec3(0.15, 0.37, 0.4);
+                break;
+            case 5: // toxic waste flat
+                C_ss = C_f = vec3(0.15, 0.37, 0.4);
+                break;
+            case 6: // black tar flat
+                C_ss = C_f = vec3(0.15, 0.37, 0.4);
+                break;
+            case 7: // Blood
+            case 15: // Blood flat
+                C_ss = C_f = vec3(.016, 0, 0);
+                break;
+            case 8:
+            case 9: // Ice flat
+                C_ss = C_f = vec3(0.15, 0.37, 0.4);
+                break;
+            case 10: // Muddy water flat
+                C_ss = C_f = vec3(0.15, 0.37, 0.4);
+                break;
+            case 11: // Scar Sludge flat
+                C_ss = C_f = vec3(0.15, 0.37, 0.4);
+                break;
+            case 12: // abyss bile flat
+                C_ss = C_f = vec3(0.15, 0.37, 0.4);
+                break;
+            case 1: // water
+            case 13: // plain water flat
+            case 14: // dark blue water
+                C_ss = C_f = vec3(0);
+                break;
+        }
+    }
+    else // Transparent water
+    {
+        switch (waterTypeIndex) {
+            case 3: // swamp water
+                reflection.rgb *= 0.3; // dim reflection
+                C_ss = C_f = vec3(0.1, 0.1, 0.05); // inject color
+                break;
+            case 5: // toxic waste
+                reflection.rgb *= 0.3; // dim reflection
+                C_ss = C_f = vec3(0.05, 0.05, 0.05); // inject color
+                break;
+             case 7: // blood
+                reflection.rgb *= 0.75; // dim reflection
+                C_ss = C_f = vec3(0.16, 0, 0); // inject color
+                break;
+            case 8: // ice
+                reflection.rgb *= 0.8; // dim reflection
+                C_ss = C_f = vec3(0.07, 0.07, 0.1); // inject color
+                break;
+            case 10: // muddy water
+                reflection.rgb *= 0.4; // dim reflection
+                C_ss = C_f = vec3(0.13, 0.06, 0); // inject color
+                break;
+            case 11: // scar sludge
+                reflection.rgb *= 0.9;
+                C_ss = C_f = vec3(0.3, 0.37, 0.3); // inject color
+                break;
+            case 12: // abyss bile
+                reflection.rgb *= 0.9;
+                C_ss = C_f = vec3(0.42, 0.29, 0.075); // inject color
+                break;
+        }
+    }
 
-//    float H = (1 - pow(cosUp, 1.f)) * 50; // wave height
-//    float H = height / 50;
-
+    // float H = (1 - pow(cosUp, 1.f)) * 50; // wave height
+    // float H = height / 50;
     vec3 omega_i = lightDir; // incoming = sun to frag
     vec3 omega_o = viewDir; // outgoing = frag to camera
     vec3 omega_h = normalize(omega_o - omega_i); // half-way between incoming and outgoing
-    vec3 omega_n = IN.normal.xzy; // macro scale normal
-    vec3 w_n = N; // presumably wave normal?
-    omega_n = w_n;
+    vec3 omega_n = N; // wave normal
 
-    vec3 L_sun = lightColor * lightStrength;
     vec3 L_scatter = (
-//        k_1*H*pow(max(0, dot(omega_i, -omega_o)), 4.f) * pow(.5 - .5*dot(omega_i, omega_n), 3.f)
-        + k_2*pow(max(0, dot(omega_o, omega_n)), 2.f)
-    ) * C_ss*L_sun;
-    L_scatter += k_3*max(0, dot(omega_i, w_n))*C_ss*L_sun + k_4*P_f*C_f*L_sun;
-
-
-
-
+    //  k_1 * H * pow(max(0, dot(omega_i, -omega_o)), 4.f) * pow(.5 - .5*dot(omega_i, omega_n), 3.f) +
+        k_2 * pow(max(0, dot(omega_o, omega_n)), 2.f) +
+        k_3 * max(0, dot(omega_i, omega_n))
+    ) * C_ss * directionalLight;
+    L_scatter += k_4 * C_f * (ambientLight + directionalLight);
 
 
 
@@ -335,95 +403,6 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
 
 
 
-
-
-
-
-
-
-
-
-    bool isOpaque = !waterTransparency || waterType.isFlat;
-    vec3 waterTypeColor = vec3(0);
-
-    // Opaque setting or flat water
-    if (isOpaque)
-    {
-        switch (waterTypeIndex) {
-            case 2: // Flat cave water
-                waterTypeColor += vec3(0.15, 0.37, 0.4);
-                break;
-            case 3: // Swamp water
-            case 4: // Swamp water flat
-                waterTypeColor += vec3(0.15, 0.37, 0.4);
-                break;
-            case 5: // toxic waste flat
-                waterTypeColor += vec3(0.15, 0.37, 0.4);
-                break;
-            case 6: // black tar flat
-                waterTypeColor += vec3(0.15, 0.37, 0.4);
-                break;
-            case 7: // Blood
-            case 15: // Blood flat
-                waterTypeColor += vec3(0.15, 0.37, 0.4);
-                break;
-            case 8:
-            case 9: // Ice flat
-                waterTypeColor += vec3(0.15, 0.37, 0.4);
-                break;
-            case 10: // Muddy water flat
-                waterTypeColor += vec3(0.15, 0.37, 0.4);
-                break;
-            case 11: // Scar Sludge flat
-                waterTypeColor += vec3(0.15, 0.37, 0.4);
-                break;
-            case 12: // abyss bile flat
-                waterTypeColor += vec3(0.15, 0.37, 0.4);
-                break;
-            case 1: // water
-            case 13: // plain water flat
-            case 14: // dark blue water
-                waterTypeColor += vec3(0);
-                break;
-        }
-    }
-    else // Transparent water
-    {
-        switch (waterTypeIndex) {
-            case 3: // swamp water
-                reflection.rgb *= 0.3; // dim reflection
-                waterTypeColor += vec3(0.1, 0.1, 0.05); // inject color
-                break;
-            case 5: // toxic waste
-                reflection.rgb *= 0.3; // dim reflection
-                waterTypeColor += vec3(0.05, 0.05, 0.05); // inject color
-                break;
-             case 7: // blood
-                reflection.rgb *= 0.75; // dim reflection
-                waterTypeColor += vec3(0.16, 0, 0); // inject color
-                break;
-            case 8: // ice
-                reflection.rgb *= 0.8; // dim reflection
-                waterTypeColor += vec3(0.07, 0.07, 0.1); // inject color
-                break;
-            case 10: // muddy water
-                reflection.rgb *= 0.4; // dim reflection
-                waterTypeColor += vec3(0.13, 0.06, 0); // inject color
-                break;
-            case 11: // scar sludge
-                reflection.rgb *= 0.9;
-                waterTypeColor += vec3(0.3, 0.37, 0.3); // inject color
-                break;
-            case 12: // abyss bile
-                reflection.rgb *= 0.9;
-                waterTypeColor += vec3(0.42, 0.29, 0.075); // inject color
-                break;
-        }
-    }
-
-    // Hack for special water types, artificially adding light
-    // For flat water, this could be improved by sampling underwater at a fixed vertical depth // how?
-    L_scatter += waterTypeColor;
 
 
 
