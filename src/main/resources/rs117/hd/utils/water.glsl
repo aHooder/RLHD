@@ -28,29 +28,29 @@
 #include utils/water_reflection.glsl
 #include utils/texture_bicubic.glsl
 
-//#define HOODER_WATER
+#define WATER_TYPE_NONE              0
+#define WATER_TYPE_WATER             1
+#define WATER_TYPE_WATER_FLAT        2
+#define WATER_TYPE_SWAMP_WATER       3
+#define WATER_TYPE_SWAMP_WATER_FLAT  4
+#define WATER_TYPE_POISON_WASTE      5
+#define WATER_TYPE_BLACK_TAR_FLAT    6
+#define WATER_TYPE_BLOOD             7
+#define WATER_TYPE_ICE               8
+#define WATER_TYPE_ICE_FLAT          9
+#define WATER_TYPE_MUDDY_WATER      10
+#define WATER_TYPE_SCAR_SLUDGE      11
+#define WATER_TYPE_ABYSS_BILE       12
+#define WATER_TYPE_PLAIN_WATER      13 // #2 is color-matched to model-water in caves etc, while this one isn't
+#define WATER_TYPE_DARK_BLUE_WATER  14
+//#define DEVELOPMENT_WATER_TYPE 7 // DEVELOPMENT OVERRIDE
+
+#define HOODER_WATER
 #ifdef HOODER_WATER
 #include utils/hooder_water.glsl
 #elif LEGACY_WATER > 0
 #include utils/legacy_water.glsl
 #else
-
-//#define DEVELOPMENT_WATER_TYPE 7 // DEVELOPMENT OVERRIDE - ALSO SET IN SAMPLEWATER
-// 1 = water
-// 2 = flat water
-// 3 = swamp water
-// 4 = swamp water flat
-// 5 = poison waste
-// 6 = black tar flat
-// 7 = blood water
-// 8 = ice
-// 9 = ice flat
-// 10 = muddy water
-// 11 = scar sludge
-// 12 = abyss bile
-// 13 = plain flat water --- #2 is color-matched to model-water in caves etc, while this one isn't
-// 14 = dark blue water
-// 15 = flat blood
 
 float calculateFresnel(const vec3 I, const vec3 N, const float ior) {
     float cosi = dot(I, N);
