@@ -12,11 +12,10 @@ vec4 cubic(float v){
 }
 
 vec4 textureBicubic(sampler2D sampler, vec2 texCoords) {
-   vec2 texSize = textureSize(sampler, 0).xy;
-   vec2 invTexSize = 1.0 / texSize;
+    vec2 texSize = textureSize(sampler, 0).xy;
+    vec2 invTexSize = 1.0 / texSize;
 
-   texCoords = texCoords * texSize - 0.5;
-
+    texCoords = texCoords * texSize - 0.5;
 
     vec2 fxy = fract(texCoords);
     texCoords -= fxy;
@@ -40,18 +39,51 @@ vec4 textureBicubic(sampler2D sampler, vec2 texCoords) {
     float sy = s.z / (s.z + s.w);
 
     return mix(
-       mix(sample3, sample2, sx),
-       mix(sample1, sample0, sx),
-       sy
-   );
+        mix(sample3, sample2, sx),
+        mix(sample1, sample0, sx),
+        sy
+    );
+}
+
+vec4 textureBicubicSrgb(sampler2D sampler, vec2 texCoords) {
+    vec2 texSize = textureSize(sampler, 0).xy;
+    vec2 invTexSize = 1.0 / texSize;
+
+    texCoords = texCoords * texSize - 0.5;
+
+    vec2 fxy = fract(texCoords);
+    texCoords -= fxy;
+
+    vec4 xcubic = cubic(fxy.x);
+    vec4 ycubic = cubic(fxy.y);
+
+    vec4 c = texCoords.xxyy + vec2 (-0.5, +1.5).xyxy;
+
+    vec4 s = vec4(xcubic.xz + xcubic.yw, ycubic.xz + ycubic.yw);
+    vec4 offset = c + vec4 (xcubic.yw, ycubic.yw) / s;
+
+    offset *= invTexSize.xxyy;
+
+    vec4 sample0 = linearToSrgb(texture(sampler, offset.xz));
+    vec4 sample1 = linearToSrgb(texture(sampler, offset.yz));
+    vec4 sample2 = linearToSrgb(texture(sampler, offset.xw));
+    vec4 sample3 = linearToSrgb(texture(sampler, offset.yw));
+
+    float sx = s.x / (s.x + s.y);
+    float sy = s.z / (s.z + s.w);
+
+    return mix(
+        mix(sample3, sample2, sx),
+        mix(sample1, sample0, sx),
+        sy
+    );
 }
 
 vec4 textureBicubic(sampler2DArray sampler, vec3 texCoords) {
-   vec2 texSize = textureSize(sampler, 0).xy;
-   vec2 invTexSize = 1.0 / texSize;
+    vec2 texSize = textureSize(sampler, 0).xy;
+    vec2 invTexSize = 1.0 / texSize;
 
-   texCoords.xy = texCoords.xy * texSize - 0.5;
-
+    texCoords.xy = texCoords.xy * texSize - 0.5;
 
     vec2 fxy = fract(texCoords.xy);
     texCoords.xy -= fxy;
@@ -75,8 +107,42 @@ vec4 textureBicubic(sampler2DArray sampler, vec3 texCoords) {
     float sy = s.z / (s.z + s.w);
 
     return mix(
-       mix(sample3, sample2, sx),
-       mix(sample1, sample0, sx),
-       sy
-   );
+        mix(sample3, sample2, sx),
+        mix(sample1, sample0, sx),
+        sy
+    );
+}
+
+vec4 textureBicubicSrgb(sampler2DArray sampler, vec3 texCoords) {
+    vec2 texSize = textureSize(sampler, 0).xy;
+    vec2 invTexSize = 1.0 / texSize;
+
+    texCoords.xy = texCoords.xy * texSize - 0.5;
+
+    vec2 fxy = fract(texCoords.xy);
+    texCoords.xy -= fxy;
+
+    vec4 xcubic = cubic(fxy.x);
+    vec4 ycubic = cubic(fxy.y);
+
+    vec4 c = texCoords.xxyy + vec2 (-0.5, +1.5).xyxy;
+
+    vec4 s = vec4(xcubic.xz + xcubic.yw, ycubic.xz + ycubic.yw);
+    vec4 offset = c + vec4 (xcubic.yw, ycubic.yw) / s;
+
+    offset *= invTexSize.xxyy;
+
+    vec4 sample0 = linearToSrgb(texture(sampler, vec3(offset.xz, texCoords.z)));
+    vec4 sample1 = linearToSrgb(texture(sampler, vec3(offset.yz, texCoords.z)));
+    vec4 sample2 = linearToSrgb(texture(sampler, vec3(offset.xw, texCoords.z)));
+    vec4 sample3 = linearToSrgb(texture(sampler, vec3(offset.yw, texCoords.z)));
+
+    float sx = s.x / (s.x + s.y);
+    float sy = s.z / (s.z + s.w);
+
+    return mix(
+        mix(sample3, sample2, sx),
+        mix(sample1, sample0, sx),
+        sy
+    );
 }
