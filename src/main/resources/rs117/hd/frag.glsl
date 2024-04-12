@@ -156,6 +156,7 @@ void main() {
     vec4 outputColor = vec4(1);
 
     // Hide underwater tiles in the reflection
+    // TODO: don't use discard
     if (renderPass == RENDER_PASS_WATER_REFLECTION && isUnderwaterTile)
         discard;
 
