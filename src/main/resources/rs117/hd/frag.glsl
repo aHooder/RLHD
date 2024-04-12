@@ -526,22 +526,20 @@ void main() {
             getMaterialIsUnlit(material3)
         ));
 
-        #ifdef HOODER_WATER
+        #if LEGACY_WATER
+            outputColor.rgb *= mix(compositeLight, vec3(1), unlit);
+            if (isUnderwaterTile)
+                sampleLegacyUnderwater(outputColor.rgb, waterType.depthColor, waterDepth, lightDotNormals);
+        #elif defined HOODER_WATER
             if (isUnderwaterTile) {
                 sampleUnderwater(outputColor.rgb, waterTypeIndex, waterDepth);
             } else {
                 outputColor.rgb *= mix(compositeLight, vec3(1), unlit);
             }
         #else
-            #if LEGACY_WATER
-                outputColor.rgb *= mix(compositeLight, vec3(1), unlit);
-                if (isUnderwaterTile)
-                    sampleLegacyUnderwater(outputColor.rgb, waterType.depthColor, waterDepth, lightDotNormals);
-            #else
-                outputColor.rgb *= mix(compositeLight, vec3(1), unlit);
-                if (isUnderwaterTile)
-                    sampleUnderwater(outputColor.rgb, waterTypeIndex, waterDepth, lightDotNormals);
-            #endif
+            outputColor.rgb *= mix(compositeLight, vec3(1), unlit);
+            if (isUnderwaterTile)
+                sampleUnderwater(outputColor.rgb, waterTypeIndex, waterDepth, lightDotNormals);
         #endif
     }
 

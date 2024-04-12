@@ -46,10 +46,11 @@
 //#define DEVELOPMENT_WATER_TYPE 7 // DEVELOPMENT OVERRIDE
 
 //#define HOODER_WATER
-#ifdef HOODER_WATER
-#include utils/hooder_water.glsl
-#elif LEGACY_WATER > 0
+
+#if LEGACY_WATER > 0
 #include utils/legacy_water.glsl
+#elif defined HOODER_WATER
+#include utils/hooder_water.glsl
 #else
 
 float calculateFresnel(const vec3 I, const vec3 N, const float ior) {
