@@ -27,6 +27,8 @@
 #include utils/shadows.glsl
 #include utils/texture_bicubic.glsl
 
+#define IDENTICAL_WAVES
+
 // Index of refraction and the cosine of the angle between the normal vector and a vector towards the camera
 float calculateFresnel(const float cosi, const float iorFrom, const float iorTo) {
     float R0 = (iorFrom - iorTo) / (iorFrom + iorTo);
@@ -223,33 +225,78 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
 vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
     WaterType waterType = getWaterType(waterTypeIndex);
 
-    const float scale = 1;
-    float waveHeight = 1;
-    float speed = .1 / sqrt(scale);
+    vec3 N;
+    #ifdef IDENTICAL_WAVES
+        float speed = .024;
+        if(waterTypeIndex == 8 || waterTypeIndex == 9) // ice
+            speed = 0.00000001; // 0 speed bugs out the normals code, glacier speed is fine
+        speed *= waterWaveSpeed;
+        vec2 uv1 = worldUvs(26) - animationFrame(sqrt(11.) / speed * waterType.duration / vec2(-1, 4));
+        vec2 uv2 = worldUvs(6) - animationFrame(sqrt(3.) / speed * waterType.duration * 1.5 /vec2(2, -1));
 
-    waveHeight *= waterWaveSize;
-    speed *= waterWaveSpeed;
+        // get diffuse textures
+        vec3 n1 = linearToSrgb(texture(textureArray, vec3(uv1, MAT_WATER_NORMAL_MAP_1.colorMap)).xyz);
+        vec3 n2 = linearToSrgb(texture(textureArray, vec3(uv2, MAT_WATER_NORMAL_MAP_2.colorMap)).xyz);
 
-    vec2 uv1 = worldUvs(26 * scale) + animationFrame(sqrt(26. * scale) / speed * waterType.duration);
-    vec2 uv2 = worldUvs(6 * scale) + animationFrame(sqrt(6. * scale) / speed * waterType.duration) * vec2(-2, 3);
+        // Normalize
+        n1.xy = (n1.xy * 2 - 1);
+        n2.xy = (n2.xy * 2 - 1);
+        // Tangent space to world
+        n1.z *= -1;
+        n2.z *= -1;
+        n1.xyz = n1.xzy;
+        n2.xyz = n2.xzy;
+        n1.y /= 0.225; // scale normals
 
-    // get diffuse textures
-//    vec3 n1 = linearToSrgb(texture(textureArray, vec3(uv1, MAT_WATER_NORMAL_MAP_1.colorMap)).xyz);
-    vec3 n2 = linearToSrgb(texture(textureArray, vec3(uv2, MAT_WATER_NORMAL_MAP_2.colorMap)).xyz);
-    vec3 n1 = linearToSrgb(textureBicubic(textureArray, vec3(uv1, MAT_WATER_NORMAL_MAP_1.colorMap)).xyz);
-//    vec3 n2 = linearToSrgb(textureBicubic(textureArray, vec3(uv2, MAT_WATER_NORMAL_MAP_2.colorMap)).xyz);
+        // black tar, ice, ice flat, abyss bile
+        if(waterTypeIndex == 6 || waterTypeIndex == 8 || waterTypeIndex == 9 || waterTypeIndex == 12)
+            n1.y /= 0.3;
 
-    // Normalize
-    n1.xy = (n1.xy * 2 - 1);
-    n2.xy = (n2.xy * 2 - 1);
-    // Tangent space to world
-    n1.z *= -1;
-    n2.z *= -1;
-    n1.xyz = n1.xzy;
-    n2.xyz = n2.xzy;
-    n1 = normalize(vec3(1, 1 / waveHeight, 1) * n1);
-    n2 = normalize(vec3(1, 1 / waveHeight, 1) * n2);
-    vec3 N = normalize(n1 + n2);
+        n1.y /= waterWaveSize;
+        n1 = normalize(n1);
+        n2.y /= 0.8; // scale normals
+
+        // black tar, ice, ice flat, abyss bile
+        if(waterTypeIndex == 6 || waterTypeIndex == 8 || waterTypeIndex == 9 || waterTypeIndex == 12)
+            n2.y /= 0.3;
+
+        n2.y /= waterWaveSize;
+        n2 = normalize(n2);
+        N = normalize(n1 + n2);
+    #else
+        float waveHeight = waterWaveSize * .5;
+        float scale1 = 26;
+        float scale2 = 6;
+        vec2 dir1 = vec2(2, 1);
+        vec2 dir2 = vec2(-1, 4);
+        float speed1 = .01 * length(dir1) * waterWaveSpeed;
+        float speed2 = .008 * length(dir2) * waterWaveSpeed;
+    //    float elapsedTime = 0;
+        vec2 uv1 = worldUvs(scale1) + dir1 * speed1 * elapsedTime;
+        vec2 uv2 = worldUvs(scale2) + dir2 * speed2 * elapsedTime;
+
+        // get diffuse textures
+    //    vec3 n1 = linearToSrgb(texture(textureArray, vec3(uv1, MAT_WATER_NORMAL_MAP_1.colorMap), 1).xyz);
+    //    vec3 n2 = linearToSrgb(texture(textureArray, vec3(uv2, MAT_WATER_NORMAL_MAP_2.colorMap), 1).xyz);
+    //    vec3 n1 = linearToSrgb(textureBicubic(textureArray, vec3(uv1, MAT_WATER_NORMAL_MAP_1.colorMap)).xyz);
+    //    vec3 n2 = linearToSrgb(textureBicubic(textureArray, vec3(uv2, MAT_WATER_NORMAL_MAP_2.colorMap)).xyz);
+        vec3 n1 = textureBicubicSrgb(textureArray, vec3(uv1, MAT_WATER_NORMAL_MAP_1.colorMap)).xyz;
+        vec3 n2 = textureBicubicSrgb(textureArray, vec3(uv2, MAT_WATER_NORMAL_MAP_2.colorMap)).xyz;
+    //    vec3 n1 = textureFxaaSrgb(textureArray, vec3(uv1, MAT_WATER_NORMAL_MAP_1.colorMap)).xyz;
+    //    vec3 n2 = textureFxaaSrgb(textureArray, vec3(uv2, MAT_WATER_NORMAL_MAP_2.colorMap)).xyz;
+
+        // Normalize
+        n1.xy = (n1.xy * 2 - 1);
+        n2.xy = (n2.xy * 2 - 1);
+        // Tangent space to world
+        n1.z *= -1;
+        n2.z *= -1;
+        n1.xyz = n1.xzy;
+        n2.xyz = n2.xzy;
+        n1 = normalize(vec3(1, 1 / waveHeight, 1) * n1);
+        n2 = normalize(vec3(1, 1 / waveHeight, 1) * n2);
+        N = normalize(n1 + n2);
+    #endif
 
     vec3 fragToCam = viewDir;
     vec3 I = -viewDir; // incident
