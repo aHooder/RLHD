@@ -311,7 +311,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
     // Assume the water is level
     vec3 flatR = reflect(I, vec3(0, -1, 0));
     vec3 R = reflect(I, N);
-    float distortionFactor = 20;
+    float distortionFactor = 50;
 
     // Initialize the reflection with a fake sky reflection
     vec4 reflection = vec4(
