@@ -66,8 +66,8 @@ float calculateFresnelTIR(const vec3 I, const vec3 N, const float ior) {
 void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
     WaterType waterType = getWaterType(waterTypeIndex);
 
-    // Make the color appear like wet sand to start off with
-    outputColor *= vec3(2.5, 3.5, 3.5);
+    // Make the color appear like wet sand/dirt to start off with
+    outputColor *= vec3(.84, 1.2, 1.2);
 
     // The idea is to approximate light absorption using 3 frequency bands.
     // To accomplish this, we must transform linear RGB into linear XYZ,
@@ -89,11 +89,18 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
 //    );
 
     // Attempt #1 at picking some numbers which look nice
+//    extinctionCoefficients = vec3(
+//        .1,
+//        .1,
+//        .00922
+//    );
+
+    // Try to match water.glsl appearance
     extinctionCoefficients = vec3(
-        .1,
-        .1,
-        .00922
-    );
+        .309,
+        .1981,
+        .1548
+    ) * .4;
 
     // Convert extinction coefficients to in-game units
     extinctionCoefficients /= 128.f;
@@ -135,13 +142,13 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
 
     // Add underwater caustics as additional directional light
     if (underwaterCaustics) {
-        vec2 causticsUv = worldUvs(2.5);
+        vec2 causticsUv = worldUvs(3.333);
         const vec2 direction = vec2(1, -2);
         vec2 flow1 = causticsUv + animationFrame(13) * direction;
         vec2 flow2 = causticsUv * 1.5 + animationFrame(17) * -direction;
-        // Chromatic abberation makes it appear like caustics are adding shadows, so don't use it
-        // vec3 caustics = sampleCaustics(flow1, flow2, depth * .00001);
-        vec3 caustics = sampleCaustics(flow1, flow2);
+        // TODO: Chromatic abberation can make it appear like caustics are adding shadows
+         vec3 caustics = sampleCaustics(flow1, flow2, depth * .00003);
+//        vec3 caustics = sampleCaustics(flow1, flow2);
 
         // Apply caustics color based on the environment
         // Usually this falls back to directional lighting
@@ -154,7 +161,7 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
         caustics *= max(0, 1 - smoothstep(0, 1, depth / 768));
 
         // Artificially boost strength
-        caustics *= 15;
+        caustics *= 7.5;
 
         directionalLight += caustics;
     }
@@ -314,53 +321,70 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
 
     vec3 additionalLight = vec3(0);
 
-    // Scattering approximation
-//    const float k_1 = 0; // This doesn't work for our normal map-based waves unfortunately
-    const float k_2 = .01;
-    const float k_3 = .02;
-    const float k_4 = 0;
-    const vec3 C_ss = vec3(0, .32, .32); // water scatter color
-    const vec3 C_f = vec3(1); // air bubble color
-    const float P_f = .01; // density of air bubbles
+    vec3 ambientLight = ambientColor * ambientStrength;
+    vec3 directionalLight = lightColor * lightStrength;
 
-//    float H = (1 + N.y) * 50; // wave height
+    // Scattering approximation
+    // float k_1 = 0; // This doesn't work for our normal map-based waves unfortunately
+    float k_2 = .001;
+    float k_3 = .002;
+    float k_4 = .00001;
+    vec3 C_ss = srgbToLinear(vec3(0.332, .708, .728));
+    vec3 C_f = vec3(1); // air bubble color
+
+    // From water.glsl
+    C_ss = vec3(0, .28, .32); // directional scatter color
+    C_f = vec3(1); // ambient scatter color
+    k_2 = 0.01; // straight on sun scatter (C_ss)
+    k_3 = 0.008; // directional sun scatter (C_ss)
+    k_4 = 0.0001;  // ambient scatter (C_f)
+
+    // scatter needs tuning, and probably fog color instead of ambient, since ambient often looks incorrect
+    // or perhaps scattered ambient
+    if (waterTypeIndex == WATER_TYPE_BLOOD) {
+//        if (dot(reflection.rgb, reflection.rgb) == 0) {
+//            dst.rgb = srgbToLinear(vec3(100, 0, 0) / 255.f) * 2.5;
+//        }
+    }
+
+//  float H = (1 + N.y) * 50; // wave height
     vec3 omega_i = lightDir; // incoming = sun to frag
     vec3 omega_o = viewDir; // outgoing = frag to camera
     vec3 omega_h = normalize(omega_o - omega_i); // half-way between incoming and outgoing
-    vec3 omega_n = IN.normal.xzy; // macro scale normal
-    vec3 w_n = N; // presumably wave normal?
+    vec3 omega_n = N; // surface normal
 
-    vec3 L_sun = lightColor * lightStrength;
     vec3 L_scatter = (
-//        k_1*H*pow(max(0, dot(omega_i, -omega_o)), 4.f) * pow(.5 - .5*dot(omega_i, omega_n), 3.f)
-        + k_2*pow(max(0, dot(omega_o, omega_n)), 2.f)
-    ) * C_ss*L_sun;
-    L_scatter += k_3*max(0, dot(omega_i, w_n))*C_ss*L_sun + k_4*P_f*C_f*L_sun;
+//      k_1*H*pow(max(0, dot(omega_i, -omega_o)), 4.f) * pow(.5 - .5*dot(omega_i, omega_n), 3.f) +
+        k_2 * pow(max(0, dot(omega_o, omega_n)), 2.f) +
+        k_3 * max(0, dot(omega_i, omega_n))
+    ) * C_ss * directionalLight;
+    L_scatter += k_4 * C_f * (ambientLight + directionalLight);
     additionalLight += L_scatter;
 
     float specularGloss = waterType.specularGloss;
     float specularStrength = waterType.specularStrength;
+    specularStrength *= .4; // reduce intensity TODO: fresnel maybe?
     vec3 sunSpecular = pow(max(0, dot(R, lightDir)), specularGloss) * lightStrength * lightColor * specularStrength;
     additionalLight += sunSpecular;
 
     // Point lights
     vec3 pointLightsSpecular = vec3(0);
+    float fragToCamDist = length(IN.position - cameraPos);
+    // TODO: optimize by precomputing falloff radius
     for (int i = 0; i < pointLightsCount; i++) {
         vec4 pos = PointLightArray[i].position;
         vec3 lightToFrag = pos.xyz - IN.position;
-        float distanceSquared = dot(lightToFrag, lightToFrag);
+        float distSq = length(lightToFrag) + fragToCamDist;
+        distSq *= distSq;
         float radiusSquared = pos.w;
-        // TODO: decide whether we want to restrict this. It doesn't really make sense to, but might help with performance
-        // if (distanceSquared <= radiusSquared) {
-            vec3 pointLightColor = PointLightArray[i].color;
-            vec3 pointLightDir = normalize(lightToFrag);
 
-            float attenuation = 1 - min(distanceSquared / radiusSquared, 1);
-            pointLightColor *= attenuation * attenuation;
+        vec3 pointLightColor = PointLightArray[i].color;
+        vec3 pointLightDir = normalize(lightToFrag);
 
-            vec3 pointLightReflectDir = reflect(-pointLightDir, N);
-            pointLightsSpecular += pointLightColor * pow(max(0, dot(pointLightReflectDir, viewDir)), specularGloss) * specularStrength;
-        // }
+        pointLightColor *= 1 / (1 + distSq) * 1e5;
+
+        vec3 pointLightReflectDir = reflect(-pointLightDir, N);
+        pointLightsSpecular += pointLightColor * pow(max(0, dot(pointLightReflectDir, viewDir)), specularGloss) * specularStrength;
     }
     additionalLight += pointLightsSpecular;
 
@@ -387,12 +411,6 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
         dst.a = min(1, dst.a);
     }
 
-    if (waterTypeIndex == 7) {
-        if (dot(reflection.rgb, reflection.rgb) == 0) {
-            dst.rgb = srgbToLinear(vec3(100, 0, 0) / 255.f) * 2.5;
-        }
-    }
-
     // If the water is opaque, blend in a fake underwater surface
     if (waterType.isFlat || !waterTransparency) {
         // Computed from packedHslToSrgb(6676)
@@ -406,6 +424,27 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
         dst.rgb = mix(dst.rgb, src.rgb, src.a);
         dst.a = 1;
     }
+
+    #if WATER_FOAM
+        vec2 flowMapUv = worldUvs(15) + animationFrame(50 * waterType.duration);
+        float flowMapStrength = 0.025;
+        vec2 uvFlow = texture(textureArray, vec3(flowMapUv, waterType.flowMap)).xy;
+        vec2 uv3 = vUv[0].xy * IN.texBlend.x + vUv[1].xy * IN.texBlend.y + vUv[2].xy * IN.texBlend.z + uvFlow * flowMapStrength;
+        float foamMask = texture(textureArray, vec3(uv3, waterType.foamMap)).r;
+        float foamAmount = 1 - dot(IN.texBlend, vec3(vColor[0].x, vColor[1].x, vColor[2].x));
+        float foamDistance = 1;
+        vec3 foamColor = vec3(0.5);
+        foamColor = srgbToLinear(foamColor) * foamMask * (ambientColor * ambientStrength + lightColor * lightStrength);
+        foamAmount = clamp(pow(1.0 - ((1.0 - foamAmount) / foamDistance), 3), 0.0, 1.0) * waterType.hasFoam;
+        foamAmount *= waterFoamAmount;
+        foamAmount *= 0.12; // rescale foam so that 100% is a good default amount
+        vec4 foam = vec4(foamColor, foamAmount);
+
+        // Blend in foam at the very end as an overlay
+        dst.rgb = foam.rgb * foam.a + dst.rgb * dst.a * (1 - foam.a);
+        dst.a = foam.a + dst.a * (1 - foam.a);
+        dst.rgb /= dst.a;
+    #endif
 
     return dst;
 }
