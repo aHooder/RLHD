@@ -363,6 +363,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
     // SPECULAR STUFF
     float specularGloss = waterType.specularGloss;
     float specularStrength = waterType.specularStrength;
+    specularStrength *= 0.4; // reduce intensity
     vec3 sunSpecular = pow(max(0, dot(R, lightDir)), specularGloss) * lightStrength * lightColor * specularStrength;
 
 //    #define PHYSICAL_LIGHT_FALLOFF
