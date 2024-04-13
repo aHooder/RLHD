@@ -249,7 +249,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
     // SCATTERING STUFF
     float cosUp = -N.y;
 
-    vec3 C_ss = vec3(0, .32, .32); // directional scatter color
+    vec3 C_ss = vec3(0, .28, .32); // directional scatter color
     vec3 C_f = vec3(1); // ambient scatter color
 
     // float k_1 = 20;  // ~tall wave scatter
