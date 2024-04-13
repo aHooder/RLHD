@@ -98,9 +98,9 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
     // Try to match water.glsl appearance
     extinctionCoefficients = vec3(
         .309,
-        .1981,
+        .3,
         .1548
-    ) * .4;
+    ) * .35;
 
     // Convert extinction coefficients to in-game units
     extinctionCoefficients /= 128.f;
