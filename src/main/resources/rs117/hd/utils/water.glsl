@@ -45,7 +45,7 @@
 #define WATER_TYPE_DARK_BLUE_WATER  14
 //#define DEVELOPMENT_WATER_TYPE 7 // DEVELOPMENT OVERRIDE
 
-//#define HOODER_WATER
+#define HOODER_WATER
 
 #if LEGACY_WATER > 0
 #include utils/legacy_water.glsl
