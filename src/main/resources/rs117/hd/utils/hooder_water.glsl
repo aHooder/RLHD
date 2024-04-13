@@ -206,10 +206,10 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
         surfaceSunPos += refractedSunDir * 32; // Push the position a short distance below the surface
         vec2 distortion = vec2(0);
         {
-            vec2 flowMapUv = worldUvs(15) + animationFrame(50 * waterType.duration);
+            vec2 flowMapUv = worldUvs(26) + animationFrame(26 * waterType.duration);
             float flowMapStrength = 0.025;
             vec2 uvFlow = textureBicubic(textureArray, vec3(flowMapUv, waterType.flowMap)).xy;
-            distortion = uvFlow * .0015 * (1 - exp(-depth));
+            distortion = uvFlow * .001 * (1 - exp(-.01 * depth));
         }
         float shadow = sampleShadowMap(surfaceSunPos, distortion, dot(-sunDir, underwaterNormal));
         // Attenuate directional by shadowing
