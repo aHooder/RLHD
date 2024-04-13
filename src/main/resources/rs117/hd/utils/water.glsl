@@ -258,7 +258,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
     // float k_1 = 20;  // ~tall wave scatter
     float k_2 = 0.01; // straight on sun scatter (C_ss)
     float k_3 = 0.008; // directional sun scatter (C_ss)
-    float k_4 = 0.01;  // ambient scatter (C_f)
+    float k_4 = 0.0001;  // ambient scatter (C_f)
 
     // Opaque setting or flat water
     if (isOpaque)
