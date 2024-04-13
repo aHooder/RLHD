@@ -107,6 +107,11 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
             extinctionCoefficients = vec3(10); // basically opaque
             break;
         case WATER_TYPE_POISON_WASTE:
+            extinctionCoefficients = vec3(
+                .309,
+                .3,
+                .1548
+            ) * .35;
             extinctionCoefficients += vec3(
                 0.0275,
                 0.0175,
@@ -115,6 +120,21 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
             break;
         case WATER_TYPE_BLOOD:
             extinctionCoefficients = vec3(2, 4, 5) * 5;
+            break;
+        case WATER_TYPE_MUDDY_WATER:
+            extinctionCoefficients = vec3(10); // basically opaque
+            break;
+        case WATER_TYPE_SCAR_SLUDGE:
+            extinctionCoefficients = vec3(
+                .309,
+                .3,
+                .1548
+            ) * .35;
+            extinctionCoefficients += vec3(
+                0.0275,
+                0.0175,
+                0.005
+            ) * 20;
             break;
     }
 
@@ -247,12 +267,31 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
 
 vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
     WaterType waterType = getWaterType(waterTypeIndex);
+    float specularGloss = waterType.specularGloss;
+    float specularStrength = waterType.specularStrength;
+
+    specularStrength *= .4; // reduce intensity TODO: fresnel maybe?
 
     vec3 N;
     #ifdef IDENTICAL_WAVES
+        float waveHeight = waterWaveSize;
         float speed = .024;
-        if(waterTypeIndex == 8 || waterTypeIndex == 9) // ice
-            speed = 0.00000001; // 0 speed bugs out the normals code, glacier speed is fine
+
+        switch (waterTypeIndex) {
+            case WATER_TYPE_ICE:
+            case WATER_TYPE_ICE_FLAT:
+                waveHeight = .1;
+                speed = 0.00000001;
+                break;
+            case WATER_TYPE_MUDDY_WATER:
+                waveHeight = .3;
+                speed = .08;
+                break;
+            case WATER_TYPE_ABYSS_BILE:
+                waveHeight = .7;
+                break;
+        }
+
         speed *= waterWaveSpeed;
         vec2 uv1 = worldUvs(26) - animationFrame(sqrt(11.) / speed * waterType.duration / vec2(-1, 4));
         vec2 uv2 = worldUvs(6) - animationFrame(sqrt(3.) / speed * waterType.duration * 1.5 /vec2(2, -1));
@@ -271,19 +310,11 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
         n2.xyz = n2.xzy;
         n1.y /= 0.225; // scale normals
 
-        // black tar, ice, ice flat, abyss bile
-        if(waterTypeIndex == 6 || waterTypeIndex == 8 || waterTypeIndex == 9 || waterTypeIndex == 12)
-            n1.y /= 0.3;
-
-        n1.y /= waterWaveSize;
+        n1.y /= waveHeight;
         n1 = normalize(n1);
         n2.y /= 0.8; // scale normals
 
-        // black tar, ice, ice flat, abyss bile
-        if(waterTypeIndex == 6 || waterTypeIndex == 8 || waterTypeIndex == 9 || waterTypeIndex == 12)
-            n2.y /= 0.3;
-
-        n2.y /= waterWaveSize;
+        n2.y /= waveHeight;
         n2 = normalize(n2);
         N = normalize(n1 + n2);
     #else
@@ -294,7 +325,6 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
         vec2 dir2 = vec2(-1, 4);
         float speed1 = .01 * length(dir1) * waterWaveSpeed;
         float speed2 = .008 * length(dir2) * waterWaveSpeed;
-    //    float elapsedTime = 0;
         vec2 uv1 = worldUvs(scale1) + dir1 * speed1 * elapsedTime;
         vec2 uv2 = worldUvs(scale2) + dir2 * speed2 * elapsedTime;
 
@@ -368,6 +398,9 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
             k_3 = .002;
             k_4 = .15;
             break;
+        case WATER_TYPE_BLACK_TAR_FLAT:
+            k_2 = k_3 = k_4 = 0;
+            break;
         case WATER_TYPE_BLOOD:
             C_ss = C_f = vec3(1, 0, 0); // inject color
             k_2 = .25;
@@ -375,27 +408,40 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
             k_4 = .01;
             break;
         case WATER_TYPE_ICE:
-//            reflection.rgb *= 0.8; // dim reflection
-            C_ss = C_f = vec3(0.07, 0.07, 0.1); // inject color
+        case WATER_TYPE_ICE_FLAT:
+            C_f = vec3(1);
+            k_4 = .003;
             break;
         case WATER_TYPE_MUDDY_WATER:
-//            reflection.rgb *= 0.4; // dim reflection
-            C_ss = C_f = vec3(0.13, 0.06, 0); // inject color
+            C_ss = C_f = unpackSrgb(0x684e22);
+            k_2 = 0;
+            k_3 = .1;
+            k_4 = .1;
             break;
         case WATER_TYPE_SCAR_SLUDGE:
-//            reflection.rgb *= 0.9;
-            C_ss = C_f = vec3(0.3, 0.37, 0.3); // inject color
+            C_f = srgbToLinear(vec3(.234, .266, .184));
+            k_2 = .001;
+            k_3 = .002;
+            k_4 = .25;
             break;
         case WATER_TYPE_ABYSS_BILE:
-//            reflection.rgb *= 0.9;
-            C_ss = C_f = vec3(0.42, 0.29, 0.075); // inject color
+            C_f = unpackSrgb(0x728963);
+            k_2 = .001;
+            k_3 = .002;
+            k_4 = .1;
+            break;
+        case WATER_TYPE_DARK_BLUE_WATER:
+            C_f = unpackSrgb(0x00515e);
+            k_2 = .1;
+            k_3 = .01;
+            k_4 = .02;
             break;
     }
 
 //  float H = (1 + N.y) * 50; // wave height
-    vec3 omega_i = lightDir; // incoming = sun to frag
+    vec3 omega_i = lightDir; // incoming = frag to sun
     vec3 omega_o = viewDir; // outgoing = frag to camera
-    vec3 omega_h = normalize(omega_o - omega_i); // half-way between incoming and outgoing
+    vec3 omega_h = normalize(omega_o + omega_i); // half-way vector
     vec3 omega_n = N; // surface normal
 
     vec3 L_scatter = (
@@ -406,10 +452,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
     L_scatter += k_4 * C_f * (ambientLight + directionalLight);
     additionalLight += L_scatter;
 
-    float specularGloss = waterType.specularGloss;
-    float specularStrength = waterType.specularStrength;
-    specularStrength *= .4; // reduce intensity TODO: fresnel maybe?
-    vec3 sunSpecular = pow(max(0, dot(R, lightDir)), specularGloss) * lightStrength * lightColor * specularStrength;
+    vec3 sunSpecular = pow(max(0, dot(N, omega_h)), specularGloss) * lightStrength * lightColor * specularStrength;
     additionalLight += sunSpecular;
 
     // Point lights
@@ -418,18 +461,19 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
     // TODO: optimize by precomputing falloff radius
     for (int i = 0; i < pointLightsCount; i++) {
         vec4 pos = PointLightArray[i].position;
-        vec3 lightToFrag = pos.xyz - IN.position;
-        float distSq = length(lightToFrag) + fragToCamDist;
+        vec3 fragToLight = pos.xyz - IN.position;
+        float fragToLightDist = length(fragToLight);
+        float distSq = fragToLightDist + fragToCamDist;
         distSq *= distSq;
         float radiusSquared = pos.w;
 
         vec3 pointLightColor = PointLightArray[i].color;
-        vec3 pointLightDir = normalize(lightToFrag);
+        vec3 pointLightDir = fragToLight / fragToLightDist;
 
         pointLightColor *= 1 / (1 + distSq) * 1e5;
 
-        vec3 pointLightReflectDir = reflect(-pointLightDir, N);
-        pointLightsSpecular += pointLightColor * pow(max(0, dot(pointLightReflectDir, viewDir)), specularGloss) * specularStrength;
+        vec3 halfway = normalize(omega_o + pointLightDir);
+        pointLightsSpecular += pointLightColor * pow(max(0, dot(halfway, N)), specularGloss) * specularStrength;
     }
     additionalLight += pointLightsSpecular;
 
@@ -457,10 +501,14 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
     }
 
     // If the water is opaque, blend in a fake underwater surface
-    if (waterType.isFlat || !waterTransparency) {
+    // TODO: make abyssal bile flat, and maybe change hard-coded depth to per environment, tile or water type
+    if (waterType.isFlat || !waterTransparency || waterTypeIndex == WATER_TYPE_ABYSS_BILE) {
         // Computed from packedHslToSrgb(6676)
         const vec3 underwaterColor = vec3(0.04856183, 0.025971446, 0.005794384);
-        const int depth = 600;
+        int depth = 600;
+
+        if (waterTypeIndex == WATER_TYPE_ABYSS_BILE)
+            depth = 16;
 
         vec4 src = dst;
         dst.rgb = underwaterColor;
@@ -511,7 +559,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
                 foam.rgb *= vec3(1.0, 0.5, 0.5);
                 break;
             case WATER_TYPE_SCAR_SLUDGE:
-                foam.rgb *= vec3(0.9, 1.2, 0.9);
+                foam.a *= .5;
                 break;
             case WATER_TYPE_ABYSS_BILE:
                 foam.rgb *= vec3(1.0, 0.7, 0.3);
