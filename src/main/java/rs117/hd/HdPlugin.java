@@ -154,6 +154,10 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	public static final int TEXTURE_UNIT_SHADOW_MAP = TEXTURE_UNIT_BASE + 2;
 	public static final int TEXTURE_UNIT_TILE_HEIGHT_MAP = TEXTURE_UNIT_BASE + 3;
 	public static final int TEXTURE_UNIT_WATER_REFLECTION_MAP = TEXTURE_UNIT_BASE + 4;
+	// TODO: implement separate texture unit for larger water normal maps
+	// TODO: probably reduce texture res max back down to 256, since we don't have room for higher res anyway
+	// TODO: see if bicubic texture filtering works properly with linear normal maps
+	public static final int TEXTURE_UNIT_WATER_NORMAL_MAPS = TEXTURE_UNIT_BASE + 5;
 
 	public static final int UNIFORM_BLOCK_CAMERA = 0;
 	public static final int UNIFORM_BLOCK_MATERIALS = 1;
