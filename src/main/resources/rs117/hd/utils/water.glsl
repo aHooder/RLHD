@@ -73,6 +73,9 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
 {
     WaterType waterType = getWaterType(waterTypeIndex);
 
+    // TODO: increase brightness somehow for environments with little to no directional light
+    float lightStrength = max(lightStrength, 4);
+
     // VARIABLES
     bool isOpaque = !waterTransparency || waterType.isFlat;
     vec3 fragToCam = viewDir;
