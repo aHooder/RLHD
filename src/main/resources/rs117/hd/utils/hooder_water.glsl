@@ -518,6 +518,10 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
                 break;
         }
 
+        float maxfoam = max(max(foam.r, foam.g), foam.b);
+        foam.a *= maxfoam;
+        foam.rgb /= maxfoam;
+
         // Blend in foam at the very end as an overlay
         dst.rgb = foam.rgb * foam.a + dst.rgb * dst.a * (1 - foam.a);
         dst.a = foam.a + dst.a * (1 - foam.a);
