@@ -104,16 +104,14 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
 
     switch (waterTypeIndex) {
         case WATER_TYPE_SWAMP_WATER:
-            extinctionCoefficients = vec3(
-                .10815,
-                .105,
-                .05418
-            );
+            extinctionCoefficients = vec3(10); // basically opaque
+            break;
+        case WATER_TYPE_POISON_WASTE:
             extinctionCoefficients += vec3(
                 0.0275,
                 0.0175,
                 0.005
-            ) * 10;
+            ) * 20;
             break;
         case WATER_TYPE_BLOOD:
             extinctionCoefficients = vec3(2, 4, 5) * 5;
@@ -359,12 +357,16 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
 
     switch (waterTypeIndex) {
         case WATER_TYPE_SWAMP_WATER:
-//            reflection.rgb *= 0.3; // dim reflection
-//            C_ss = C_f = vec3(0.1, 0.1, 0.05); // inject color
+            C_f = srgbToLinear(vec3(.382, .539, .432));
+            k_2 = .001;
+            k_3 = .002;
+            k_4 = .15;
             break;
         case WATER_TYPE_POISON_WASTE:
-//            reflection.rgb *= 0.3; // dim reflection
-            C_ss = C_f = vec3(0.05, 0.05, 0.05); // inject color
+            C_f = srgbToLinear(vec3(.234, .266, .184));
+            k_2 = .001;
+            k_3 = .002;
+            k_4 = .15;
             break;
         case WATER_TYPE_BLOOD:
             C_ss = C_f = vec3(1, 0, 0); // inject color
@@ -490,6 +492,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
                 break;
             case WATER_TYPE_POISON_WASTE:
                 foam.rgb *= vec3(0.7, 0.7, 0.7);
+                foam.a *= .25;
                 break;
             case WATER_TYPE_BLACK_TAR_FLAT:
                 foam.rgb *= vec3(1.0, 1.0, 1.0);
