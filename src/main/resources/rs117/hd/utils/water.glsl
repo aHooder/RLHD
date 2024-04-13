@@ -350,6 +350,9 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
     L_scatter += k_4 * C_f * (ambientLight + directionalLight);
 
 
+    if (isOpaque)
+        L_scatter *= 1.5; // artificially bump up scatter when there's no underwater geometry
+
 
 
 
