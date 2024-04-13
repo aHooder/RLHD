@@ -104,7 +104,7 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
 
     switch (waterTypeIndex) {
         case WATER_TYPE_SWAMP_WATER:
-            extinctionCoefficients = vec3(10); // basically opaque
+            extinctionCoefficients = vec3(100); // basically opaque
             break;
         case WATER_TYPE_POISON_WASTE:
             extinctionCoefficients = vec3(
@@ -119,10 +119,11 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
             ) * 20;
             break;
         case WATER_TYPE_BLOOD:
-            extinctionCoefficients = vec3(2, 4, 5) * 5;
+            // TODO: should just make this opaque
+            extinctionCoefficients = vec3(100); // basically opaque
             break;
         case WATER_TYPE_MUDDY_WATER:
-            extinctionCoefficients = vec3(10); // basically opaque
+            extinctionCoefficients = vec3(100); // basically opaque
             break;
         case WATER_TYPE_SCAR_SLUDGE:
             extinctionCoefficients = vec3(
@@ -402,10 +403,11 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
             k_2 = k_3 = k_4 = 0;
             break;
         case WATER_TYPE_BLOOD:
-            C_ss = C_f = vec3(1, 0, 0); // inject color
-            k_2 = .25;
-            k_3 = .25;
-            k_4 = .01;
+            C_ss = C_f = vec3(.35, .0, .0);
+            k_2 = .001;
+            k_3 = .002;
+            k_4 = .02;
+            k_2 = k_3 = k_4 = 0;
             break;
         case WATER_TYPE_ICE:
         case WATER_TYPE_ICE_FLAT:
@@ -546,8 +548,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
                 foam.rgb *= vec3(1.0, 1.0, 1.0);
                 break;
             case WATER_TYPE_BLOOD:
-//                foam.rgb *= vec3(1.6, 0.7, 0.7);
-                foam.a *= .5;
+                foam.a = 0;
                 break;
             case WATER_TYPE_ICE:
                 foam.rgb *= vec3(0.5, 0.5, 0.5);
