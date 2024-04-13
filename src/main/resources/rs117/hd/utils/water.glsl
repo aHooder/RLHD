@@ -43,7 +43,9 @@
 #define WATER_TYPE_ABYSS_BILE       12
 #define WATER_TYPE_PLAIN_WATER      13 // #2 is color-matched to model-water in caves etc, while this one isn't
 #define WATER_TYPE_DARK_BLUE_WATER  14
-//#define DEVELOPMENT_WATER_TYPE 7 // DEVELOPMENT OVERRIDE
+
+// DEVELOPMENT OVERRIDE
+//#define DEVELOPMENT_WATER_TYPE WATER_TYPE_BLOOD
 
 #define HOODER_WATER
 

@@ -102,6 +102,24 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
         .1548
     ) * .35;
 
+    switch (waterTypeIndex) {
+        case WATER_TYPE_SWAMP_WATER:
+            extinctionCoefficients = vec3(
+                .10815,
+                .105,
+                .05418
+            );
+            extinctionCoefficients += vec3(
+                0.0275,
+                0.0175,
+                0.005
+            ) * 10;
+            break;
+        case WATER_TYPE_BLOOD:
+            extinctionCoefficients = vec3(2, 4, 5) * 5;
+            break;
+    }
+
     // Convert extinction coefficients to in-game units
     extinctionCoefficients /= 128.f;
 
@@ -339,12 +357,37 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
     k_3 = 0.008; // directional sun scatter (C_ss)
     k_4 = 0.0001;  // ambient scatter (C_f)
 
-    // scatter needs tuning, and probably fog color instead of ambient, since ambient often looks incorrect
-    // or perhaps scattered ambient
-    if (waterTypeIndex == WATER_TYPE_BLOOD) {
-//        if (dot(reflection.rgb, reflection.rgb) == 0) {
-//            dst.rgb = srgbToLinear(vec3(100, 0, 0) / 255.f) * 2.5;
-//        }
+    switch (waterTypeIndex) {
+        case WATER_TYPE_SWAMP_WATER:
+//            reflection.rgb *= 0.3; // dim reflection
+//            C_ss = C_f = vec3(0.1, 0.1, 0.05); // inject color
+            break;
+        case WATER_TYPE_POISON_WASTE:
+//            reflection.rgb *= 0.3; // dim reflection
+            C_ss = C_f = vec3(0.05, 0.05, 0.05); // inject color
+            break;
+        case WATER_TYPE_BLOOD:
+            C_ss = C_f = vec3(1, 0, 0); // inject color
+            k_2 = .25;
+            k_3 = .25;
+            k_4 = .01;
+            break;
+        case WATER_TYPE_ICE:
+//            reflection.rgb *= 0.8; // dim reflection
+            C_ss = C_f = vec3(0.07, 0.07, 0.1); // inject color
+            break;
+        case WATER_TYPE_MUDDY_WATER:
+//            reflection.rgb *= 0.4; // dim reflection
+            C_ss = C_f = vec3(0.13, 0.06, 0); // inject color
+            break;
+        case WATER_TYPE_SCAR_SLUDGE:
+//            reflection.rgb *= 0.9;
+            C_ss = C_f = vec3(0.3, 0.37, 0.3); // inject color
+            break;
+        case WATER_TYPE_ABYSS_BILE:
+//            reflection.rgb *= 0.9;
+            C_ss = C_f = vec3(0.42, 0.29, 0.075); // inject color
+            break;
     }
 
 //  float H = (1 + N.y) * 50; // wave height
@@ -439,6 +482,41 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
         foamAmount *= waterFoamAmount;
         foamAmount *= 0.12; // rescale foam so that 100% is a good default amount
         vec4 foam = vec4(foamColor, foamAmount);
+
+        switch (waterTypeIndex) {
+            case WATER_TYPE_SWAMP_WATER:
+            case WATER_TYPE_SWAMP_WATER_FLAT:
+                foam.rgb *= vec3(1.3, 1.3, 0.4);
+                break;
+            case WATER_TYPE_POISON_WASTE:
+                foam.rgb *= vec3(0.7, 0.7, 0.7);
+                break;
+            case WATER_TYPE_BLACK_TAR_FLAT:
+                foam.rgb *= vec3(1.0, 1.0, 1.0);
+                break;
+            case WATER_TYPE_BLOOD:
+//                foam.rgb *= vec3(1.6, 0.7, 0.7);
+                foam.a *= .5;
+                break;
+            case WATER_TYPE_ICE:
+                foam.rgb *= vec3(0.5, 0.5, 0.5);
+                break;
+            case WATER_TYPE_ICE_FLAT:
+                foam.rgb *= vec3(0.5, 0.5, 0.5);
+                break;
+            case WATER_TYPE_MUDDY_WATER:
+                foam.rgb *= vec3(1.0, 0.5, 0.5);
+                break;
+            case WATER_TYPE_SCAR_SLUDGE:
+                foam.rgb *= vec3(0.9, 1.2, 0.9);
+                break;
+            case WATER_TYPE_ABYSS_BILE:
+                foam.rgb *= vec3(1.0, 0.7, 0.3);
+                break;
+            case WATER_TYPE_PLAIN_WATER:
+                foam.rgb *= vec3(1);
+                break;
+        }
 
         // Blend in foam at the very end as an overlay
         dst.rgb = foam.rgb * foam.a + dst.rgb * dst.a * (1 - foam.a);
