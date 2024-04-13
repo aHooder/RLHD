@@ -1028,9 +1028,7 @@ class SceneUploader {
 
 			// underwater terrain
 			for (int face = 0; face < faceCount; ++face) {
-				int colorA = UNDERWATER_HSL;
-				int colorB = UNDERWATER_HSL;
-				int colorC = UNDERWATER_HSL;
+				int color = UNDERWATER_HSL;
 
 				if (faceColorA[face] == INVISIBLE_HSL)
 					continue;
@@ -1085,9 +1083,9 @@ class SceneUploader {
 				sceneContext.stagingBufferNormals.put(normalsC[0], normalsC[2], normalsC[1], cTerrainData);
 
 				sceneContext.stagingBufferVertices.ensureCapacity(12);
-				sceneContext.stagingBufferVertices.put(localVertices[0][0], localVertices[0][2] + depthA, localVertices[0][1], colorA);
-				sceneContext.stagingBufferVertices.put(localVertices[1][0], localVertices[1][2] + depthB, localVertices[1][1], colorB);
-				sceneContext.stagingBufferVertices.put(localVertices[2][0], localVertices[2][2] + depthC, localVertices[2][1], colorC);
+				sceneContext.stagingBufferVertices.put(localVertices[0][0], localVertices[0][2] + depthA, localVertices[0][1], color);
+				sceneContext.stagingBufferVertices.put(localVertices[1][0], localVertices[1][2] + depthB, localVertices[1][1], color);
+				sceneContext.stagingBufferVertices.put(localVertices[2][0], localVertices[2][2] + depthC, localVertices[2][1], color);
 
 				bufferLength += 3;
 
