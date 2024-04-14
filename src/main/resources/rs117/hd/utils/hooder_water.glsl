@@ -28,6 +28,7 @@
 #include utils/texture_bicubic.glsl
 
 #define IDENTICAL_WAVES
+//#define ALMOST_IDENTICAL_APPEARANCE
 
 // Index of refraction and the cosine of the angle between the normal vector and a vector towards the camera
 float calculateFresnel(const float cosi, const float iorFrom, const float iorTo) {
@@ -82,25 +83,21 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
         0.00922 // ~blue  450 nm
     );
     // Approximate some kind of ocean water with phytoplankton absorption based on https://www.oceanopticsbook.info/view/absorption/absorption-by-oceanic-constituents
-//    extinctionCoefficients += vec3(
-//        0.0275,
-//        0.0175,
-//        0.005
-//    );
+    extinctionCoefficients += vec3(
+        0.005,  // 600 nm
+        0.0175, // 550 nm
+        0.0275  // 450 nm
+    );
+    extinctionCoefficients *= 2.5;
 
-    // Attempt #1 at picking some numbers which look nice
-//    extinctionCoefficients = vec3(
-//        .1,
-//        .1,
-//        .00922
-//    );
-
+    #ifdef ALMOST_IDENTICAL_APPEARANCE
     // Try to match water.glsl appearance
     extinctionCoefficients = vec3(
         .309,
         .3,
         .1548
     ) * .35;
+    #endif
 
     switch (waterTypeIndex) {
         case WATER_TYPE_SWAMP_WATER:
@@ -116,9 +113,9 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
                 .1548
             ) * .35;
             extinctionCoefficients += vec3(
-                0.0275,
+                0.005,
                 0.0175,
-                0.005
+                0.0275
             ) * 20;
             break;
         case WATER_TYPE_SCAR_SLUDGE:
@@ -128,9 +125,9 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
                 .1548
             ) * .35;
             extinctionCoefficients += vec3(
-                0.0275,
+                0.005,
                 0.0175,
-                0.005
+                0.0275
             ) * 20;
             break;
     }
