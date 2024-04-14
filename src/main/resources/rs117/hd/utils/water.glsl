@@ -527,7 +527,7 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth, f
     extinctionColors.g = exp(-totalDistance * (0.001981 / lightPenetration) * waterTypeExtinction.g);
     extinctionColors.b = exp(-totalDistance * (0.001548 / lightPenetration) * waterTypeExtinction.b);
 
-    if (shorelineCaustics && (!waterTransparency || depth <= 500)) {
+    if (shorelineCaustics && (waterTransparency || depth <= 500)) {
         const float scale = 2.5;
         vec2 causticsUv = worldUvs(scale);
         causticsUv *= 0.75;
@@ -536,7 +536,7 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth, f
         vec2 flow2 = causticsUv * 1.5 + animationFrame(23) * -direction;
         vec3 caustics = sampleCaustics(flow1, flow2, .005);
         vec3 causticsColor = underwaterCausticsColor * underwaterCausticsStrength;
-        if (waterTransparency && depth <= 500) // reduce caustics brightness for shallow opaque water
+        if (!waterTransparency && depth <= 500) // reduce caustics brightness for shallow opaque water
         {
             causticsColor *= 0.5;
         }
