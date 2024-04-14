@@ -472,6 +472,13 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
 void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth, float lightDotNormals) {
     outputColor.r *= 0.7; // dirt texture looks unnaturally dry/bright/red in shallow water, remove some before further blending
 
+    // we need to normalise the underwater terrain brightness
+    // so that tuning is correct across different scenes
+    // and also process the main light strength so that
+    // the water behaves okay even with bad environment inputs
+    float outputColorMax = max(max(outputColor.r, outputColor.g), outputColor.b);
+    outputColor *= outputColorMax / .15;
+
     float underwaterLightStrength = lightStrength;
     if (underwaterLightStrength < 4)
         underwaterLightStrength = 3 + underwaterLightStrength * .25;
