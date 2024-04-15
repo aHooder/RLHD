@@ -1,5 +1,6 @@
-// Written by theagentd, from https://web.archive.org/web/20200417234120/http://www.java-gaming.org/index.php?topic=35123.0
 #pragma once
+
+// Adapted from code written by theagentd, from https://web.archive.org/web/20200417234120/http://www.java-gaming.org/index.php?topic=35123.0
 
 vec4 cubic(float v){
     vec4 n = vec4(1.0, 2.0, 3.0, 4.0) - v;

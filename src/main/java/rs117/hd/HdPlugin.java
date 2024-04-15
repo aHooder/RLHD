@@ -33,6 +33,7 @@ import java.awt.Dimension;
 import java.awt.GraphicsConfiguration;
 import java.awt.Image;
 import java.awt.geom.AffineTransform;
+import java.awt.image.AffineTransformOp;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferInt;
 import java.io.IOException;
@@ -155,9 +156,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	public static final int TEXTURE_UNIT_SHADOW_MAP = TEXTURE_UNIT_BASE + 2;
 	public static final int TEXTURE_UNIT_TILE_HEIGHT_MAP = TEXTURE_UNIT_BASE + 3;
 	public static final int TEXTURE_UNIT_WATER_REFLECTION_MAP = TEXTURE_UNIT_BASE + 4;
-	// TODO: implement separate texture unit for larger water normal maps
-	// TODO: probably reduce texture res max back down to 256, since we don't have room for higher res anyway
-	// TODO: see if bicubic texture filtering works properly with linear normal maps
 	public static final int TEXTURE_UNIT_WATER_NORMAL_MAPS = TEXTURE_UNIT_BASE + 5;
 
 	public static final int UNIFORM_BLOCK_CAMERA = 0;
@@ -324,11 +322,13 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	private int fboShadowMap;
 	private int texShadowMap;
 
-	private int fboWaterReflection = -1;
-	private int texWaterReflection = -1;
-	private int texWaterReflectionDepthMap = -1;
+	private int fboWaterReflection;
+	private int texWaterReflection;
+	private int texWaterReflectionDepthMap;
 
 	private int texTileHeightMap;
+
+	private int texWaterNormalMaps;
 
 	private final GLBuffer hStagingBufferVertices = new GLBuffer(); // temporary scene vertex buffer
 	private final GLBuffer hStagingBufferUvs = new GLBuffer(); // temporary scene uv buffer
@@ -442,6 +442,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	private int uniTexTargetDimensions;
 	private int uniUiAlphaOverlay;
 	private int uniTextureArray;
+	private int uniWaterNormalMaps;
 	private int uniElapsedTime;
 
 	private int uniBlockMaterials;
@@ -638,6 +639,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				initShaderHotswapping();
 				initInterfaceTexture();
 				initShadowMapFbo();
+				initWaterNormalMaps();
 
 				checkGLErrors();
 
@@ -723,6 +725,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				destroyShadowMapFbo();
 				destroyTileHeightMap();
 				destroyPlanarReflectionFbo();
+				destroyWaterNormalMaps();
 				destroyModelSortingBins();
 
 				openCLManager.shutDown();
@@ -913,6 +916,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		glUniform1i(uniTextureArray, TEXTURE_UNIT_GAME - TEXTURE_UNIT_BASE);
 		glUniform1i(uniShadowMap, TEXTURE_UNIT_SHADOW_MAP - TEXTURE_UNIT_BASE);
 		glUniform1i(uniWaterReflectionMap, TEXTURE_UNIT_WATER_REFLECTION_MAP - TEXTURE_UNIT_BASE);
+		glUniform1i(uniWaterNormalMaps, TEXTURE_UNIT_WATER_NORMAL_MAPS - TEXTURE_UNIT_BASE);
 
 		// Bind a VOA, else validation may fail on older Intel-based Macs
 		glBindVertexArray(vaoSceneHandle);
@@ -976,6 +980,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		uniWaterDistortionAmount = glGetUniformLocation(glSceneProgram, "waterDistortionAmount");
 		uniCameraPos = glGetUniformLocation(glSceneProgram, "cameraPos");
 		uniTextureArray = glGetUniformLocation(glSceneProgram, "textureArray");
+		uniWaterNormalMaps = glGetUniformLocation(glSceneProgram, "waterNormalMaps");
 		uniElapsedTime = glGetUniformLocation(glSceneProgram, "elapsedTime");
 
 		if (configColorFilter != ColorFilter.NONE) {
@@ -1553,17 +1558,87 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	}
 
 	private void destroyPlanarReflectionFbo() {
-		if (texWaterReflection != -1)
+		if (texWaterReflection != 0)
 			glDeleteTextures(texWaterReflection);
-		texWaterReflection = -1;
+		texWaterReflection = 0;
 
-		if (texWaterReflectionDepthMap != -1)
+		if (texWaterReflectionDepthMap != 0)
 			glDeleteTextures(texWaterReflectionDepthMap);
-		texWaterReflectionDepthMap = -1;
+		texWaterReflectionDepthMap = 0;
 
-		if (fboWaterReflection != -1)
+		if (fboWaterReflection != 0)
 			glDeleteFramebuffers(fboWaterReflection);
-		fboWaterReflection = -1;
+		fboWaterReflection = 0;
+	}
+
+	private void initWaterNormalMaps() {
+		if (configLegacyWater != LegacyWater.OFF || texWaterNormalMaps != 0)
+			return;
+
+		glActiveTexture(TEXTURE_UNIT_WATER_NORMAL_MAPS);
+
+		texWaterNormalMaps = glGenTextures();
+		glBindTexture(GL_TEXTURE_2D_ARRAY, texWaterNormalMaps);
+
+		int numCascades = 2;
+		int format = GL_RGB8;
+		int textureSize = 512;
+		int mipLevels = 1 + (int) Math.floor(HDUtils.log2(textureSize));
+
+		if (glCaps.glTexStorage3D != 0) {
+			glTexStorage3D(GL_TEXTURE_2D_ARRAY, mipLevels, format, textureSize, textureSize, numCascades);
+		} else {
+			// Allocate each mip level separately
+			for (int i = 0; i < mipLevels; i++) {
+				int size = textureSize >> i;
+				glTexImage3D(GL_TEXTURE_2D_ARRAY, i, format, size, size, numCascades, 0, GL_RGB, GL_UNSIGNED_BYTE, 0);
+			}
+		}
+
+		for (int i = 0; i < numCascades; i++) {
+			var image = textureManager.loadTextureImage(String.format("water_normal_map_%d", i + 1));
+
+			if (image.getType() != BufferedImage.TYPE_INT_ARGB ||
+				image.getWidth() != textureSize ||
+				image.getHeight() != textureSize
+			) {
+				var resized = new BufferedImage(textureSize, textureSize, BufferedImage.TYPE_INT_ARGB);
+				var t = new AffineTransform();
+				t.scale((double) textureSize / image.getWidth(), (double) textureSize / image.getHeight());
+				var scaleOp = new AffineTransformOp(t, AffineTransformOp.TYPE_BILINEAR);
+				scaleOp.filter(image, resized);
+				image = resized;
+			}
+
+			int[] pixels = ((DataBufferInt) image.getRaster().getDataBuffer()).getData();
+			glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0,
+				i, textureSize, textureSize, 1,
+				GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, pixels
+			);
+		}
+
+		glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_REPEAT);
+		glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+		// TODO: decide whether we prefer with or without anisotropic filtering. With it on, more detail is kept
+		if (GL.getCapabilities().GL_EXT_texture_filter_anisotropic) {
+			float anisotropicFilteringLevel = 16;
+			final float maxSamples = glGetFloat(EXTTextureFilterAnisotropic.GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT);
+			anisotropicFilteringLevel = clamp(anisotropicFilteringLevel, 1, maxSamples);
+			glTexParameterf(GL_TEXTURE_2D_ARRAY, EXTTextureFilterAnisotropic.GL_TEXTURE_MAX_ANISOTROPY_EXT, anisotropicFilteringLevel);
+		}
+
+		glGenerateMipmap(GL_TEXTURE_2D_ARRAY);
+
+		glActiveTexture(TEXTURE_UNIT_UI); // default state
+	}
+
+	private void destroyWaterNormalMaps() {
+		if (texWaterNormalMaps != 0)
+			glDeleteTextures(texWaterNormalMaps);
+		texWaterNormalMaps = 0;
 	}
 
 	@Override
@@ -2747,6 +2822,13 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 							case KEY_GROUND_BLENDING:
 							case KEY_GROUND_TEXTURES:
 								reloadTileOverrides = true;
+								break;
+							case KEY_LEGACY_WATER:
+								if (configLegacyWater == LegacyWater.OFF) {
+									initWaterNormalMaps();
+								} else {
+									destroyWaterNormalMaps();
+								}
 								break;
 						}
 

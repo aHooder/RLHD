@@ -34,6 +34,7 @@
 uniform sampler2DArray textureArray;
 uniform sampler2D shadowMap;
 uniform sampler2D waterReflectionMap;
+uniform sampler2DArray waterNormalMaps;
 
 uniform int renderPass;
 uniform ivec4 viewport;

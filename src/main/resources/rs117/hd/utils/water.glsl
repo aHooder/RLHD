@@ -109,9 +109,11 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
     vec2 uv1 = worldUvs(26) - animationFrame(sqrt(11.) / speed * waterType.duration / vec2(-1, 4));
     vec2 uv2 = worldUvs(6) - animationFrame(sqrt(3.) / speed * waterType.duration * 1.5 /vec2(2, -1));
 
-    // get diffuse textures
-    vec3 n1 = linearToSrgb(texture(textureArray, vec3(uv1, MAT_WATER_NORMAL_MAP_1.colorMap)).xyz);
-    vec3 n2 = linearToSrgb(texture(textureArray, vec3(uv2, MAT_WATER_NORMAL_MAP_2.colorMap)).xyz);
+    // Flip UVs horizontally, since our water normal maps aren't oriented like vanilla textures
+    uv1.x = 1 - uv1.x;
+    uv2.x = 1 - uv2.x;
+    vec3 n1 = textureBicubic(waterNormalMaps, vec3(uv1, 0)).xyz;
+    vec3 n2 = textureBicubic(waterNormalMaps, vec3(uv2, 1)).xyz;
 
     // Normalize
     n1.xy = (n1.xy * 2 - 1);
