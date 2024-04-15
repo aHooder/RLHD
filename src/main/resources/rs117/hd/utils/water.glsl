@@ -84,8 +84,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
     vec4 d = vec4(0);
     vec3 I = -viewDir; // incident
     vec3 ambientLight = ambientColor * ambientStrength;
-    vec3 directionalLight = lightColor * lightStrength;
-
+    vec3 directionalLight = lightColor * max(lightStrength, 3);
 
 
 
@@ -254,7 +253,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
     // SCATTERING STUFF
     float cosUp = -N.y;
 
-    vec3 C_ss = vec3(0, .28, .32); // directional scatter color
+    vec3 C_ss = vec3(0.06, .28, .32); // directional scatter color
     vec3 C_f = vec3(1); // ambient scatter color
 
     // float k_1 = 20;  // ~tall wave scatter
@@ -265,6 +264,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
     // Opaque setting or flat water
     if (isOpaque)
     {
+        L_scatter *= 2; // more surface lighting
         switch (waterTypeIndex) {
             case 2: // Flat cave water
                 C_ss = C_f = vec3(0.15, 0.37, 0.4);
@@ -470,7 +470,21 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
 }
 
 void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth, float lightDotNormals) {
-    outputColor.r *= 0.7; // dirt texture looks unnaturally dry/bright/red in shallow water, remove some before further blending
+
+    outputColor *= vec3(0.57, 0.85, 1) * 2; // tune underwater terrain color
+
+
+    float underWaterLightStrength;
+    if(lightStrength < 4)
+    {
+        underWaterLightStrength = 4;
+    }
+    else
+    {
+        underWaterLightStrength = lightStrength;
+    }
+
+    outputColor *= (underWaterLightStrength / 4);
 
     // we need to normalise the underwater terrain brightness
     // so that tuning is correct across different scenes
@@ -489,7 +503,8 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth, f
     float totalDistance = depth + distanceToSurface;
 
     // Scale from a range of 0% = 0.5, 100% = 2.75, 130% = 3.425
-    float lightPenetration = 0.5 + 2.25 * waterTransparencyAmount;
+    float lightPenetration = 0.5 + 2.25 * waterTransparencyAmount / 1.35;
+    // divide by tuning factor during testing
 
     // Exponential falloff of light intensity when penetrating water, different for each color
     vec3 extinctionColors = vec3(0);
