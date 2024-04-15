@@ -604,7 +604,7 @@ public interface HdPluginConfig extends Config
 	)
 	default TextureResolution textureResolution()
 	{
-		return TextureResolution.RES_512;
+		return TextureResolution.RES_256;
 	}
 
 	String KEY_GROUND_BLENDING = "groundBlending";
