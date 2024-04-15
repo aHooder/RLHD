@@ -75,15 +75,13 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
 {
     WaterType waterType = getWaterType(waterTypeIndex);
 
-    // TODO: increase brightness somehow for environments with little to no directional light
-    float lightStrength = max(lightStrength, 4);
-
     // VARIABLES
     bool isOpaque = !waterTransparency || waterType.isFlat;
     vec3 fragToCam = viewDir;
     vec4 d = vec4(0);
     vec3 I = -viewDir; // incident
     vec3 ambientLight = ambientColor * ambientStrength;
+    // TODO: increase brightness somehow for environments with little to no directional light
     vec3 directionalLight = lightColor * max(lightStrength, 3);
 
 
@@ -484,18 +482,6 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth, f
     }
 
     outputColor *= (underWaterLightStrength / 4);
-
-    // we need to normalise the underwater terrain brightness
-    // so that tuning is correct across different scenes
-    // and also process the main light strength so that
-    // the water behaves okay even with bad environment inputs
-    float outputColorMax = max(max(outputColor.r, outputColor.g), outputColor.b);
-    outputColor *= outputColorMax / .15;
-
-    float underwaterLightStrength = lightStrength;
-    if (underwaterLightStrength < 4)
-        underwaterLightStrength = 3 + underwaterLightStrength * .25;
-    outputColor *= underwaterLightStrength / 4;
 
     vec3 camToFrag = normalize(IN.position - cameraPos);
     float distanceToSurface = abs(depth / camToFrag.y); // abs = hack for viewing underwater geometry from below in waterfalls
