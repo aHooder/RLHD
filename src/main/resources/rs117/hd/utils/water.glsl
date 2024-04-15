@@ -264,7 +264,6 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
     // Opaque setting or flat water
     if (isOpaque)
     {
-        L_scatter *= 2; // more surface lighting
         switch (waterTypeIndex) {
             case 2: // Flat cave water
                 C_ss = C_f = vec3(0.15, 0.37, 0.4);
@@ -353,7 +352,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
 
 
     if (isOpaque)
-        L_scatter *= 1.5; // artificially bump up scatter when there's no underwater geometry
+        L_scatter *= 2; // artificially bump up scatter when there's no underwater geometry
 
 
 
