@@ -50,6 +50,7 @@ import rs117.hd.HdPlugin;
 import rs117.hd.HdPluginConfig;
 import rs117.hd.data.WaterType;
 import rs117.hd.data.materials.Material;
+import rs117.hd.utils.HDUtils;
 import rs117.hd.utils.Props;
 import rs117.hd.utils.ResourcePath;
 
@@ -57,13 +58,13 @@ import static org.lwjgl.opengl.GL43C.*;
 import static rs117.hd.HdPlugin.SCALAR_BYTES;
 import static rs117.hd.HdPlugin.TEXTURE_UNIT_GAME;
 import static rs117.hd.HdPlugin.TEXTURE_UNIT_UI;
+import static rs117.hd.utils.HDUtils.HALF_PI;
 import static rs117.hd.utils.ResourcePath.path;
 
 @Singleton
 @Slf4j
 public class TextureManager {
 	private static final String[] SUPPORTED_IMAGE_EXTENSIONS = { "png", "jpg" };
-	private static final float HALF_PI = (float) (Math.PI / 2);
 	private static final ResourcePath TEXTURE_PATH = Props.getPathOrDefault(
 		"rlhd.texture-path",
 		() -> path(TextureManager.class, "textures")
@@ -225,22 +226,19 @@ public class TextureManager {
 		textureArray = glGenTextures();
 		glActiveTexture(TEXTURE_UNIT_GAME);
 		glBindTexture(GL_TEXTURE_2D_ARRAY, textureArray);
+
+		int mipLevels = 1 + (int) Math.floor(HDUtils.log2(textureSize));
+		int format = GL_SRGB8_ALPHA8;
 		if (plugin.glCaps.glTexStorage3D != 0) {
-			glTexStorage3D(GL_TEXTURE_2D_ARRAY, 8, GL_SRGB8_ALPHA8,
-				textureSize, textureSize, textureLayers.size()
-			);
+			glTexStorage3D(GL_TEXTURE_2D_ARRAY, mipLevels, format, textureSize, textureSize, textureLayers.size());
 		} else {
 			// Allocate each mip level separately
-			for (int i = 0, size = textureSize; size >= 1; i++, size /= 2) {
-				glTexImage3D(GL_TEXTURE_2D_ARRAY, i, GL_SRGB8_ALPHA8,
-					size, size, textureLayers.size(),
-					0, GL_RGBA, GL_UNSIGNED_BYTE, 0
-				);
+			for (int i = 0; i < mipLevels; i++) {
+				int size = textureSize >> i;
+				glTexImage3D(GL_TEXTURE_2D_ARRAY, i, format, size, size, textureLayers.size(), 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
 			}
 		}
 
-		glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 		glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_REPEAT);
 		glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_REPEAT);
 		setAnisotropicFilteringLevel();
@@ -267,7 +265,7 @@ public class TextureManager {
 			BufferedImage image = null;
 			// Check if HD provides a texture for the material
 			if (material != Material.VANILLA) {
-				image = loadTextureImage(material);
+				image = loadTextureImage(material.name().toLowerCase());
 				if (image == null && material.vanillaTextureIndex == -1) {
 					log.warn("No texture found for material: {}", material);
 					continue;
@@ -349,8 +347,7 @@ public class TextureManager {
 		log.debug("Texture load time: {}", stopwatch);
 	}
 
-	private BufferedImage loadTextureImage(Material material) {
-		String textureName = material.name().toLowerCase();
+	public BufferedImage loadTextureImage(String textureName) {
 		for (String ext : SUPPORTED_IMAGE_EXTENSIONS) {
 			ResourcePath path = TEXTURE_PATH.resolve(textureName + "." + ext);
 			try {
@@ -390,6 +387,7 @@ public class TextureManager {
 		if (level == 0) {
 			//level = 0 means no mipmaps and no anisotropic filtering
 			glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+			glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 		} else {
 			// level = 1 means with mipmaps but without anisotropic filtering GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT defaults to 1.0 which is off
 			// level > 1 enables anisotropic filtering. It's up to the vendor what the values mean
@@ -397,6 +395,7 @@ public class TextureManager {
 			// Trilinear filtering is used for HD textures as linear filtering produces noisy textures
 			// that are very noticeable on terrain
 			glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 		}
 
 		if (GL.getCapabilities().GL_EXT_texture_filter_anisotropic) {
