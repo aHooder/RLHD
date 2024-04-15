@@ -129,6 +129,7 @@ import static org.lwjgl.opencl.CL10.*;
 import static org.lwjgl.opengl.GL43C.*;
 import static rs117.hd.HdPluginConfig.*;
 import static rs117.hd.scene.SceneUploader.SCENE_OFFSET;
+import static rs117.hd.utils.HDUtils.MAX_FLOAT_WITH_128TH_PRECISION;
 import static rs117.hd.utils.HDUtils.PI;
 import static rs117.hd.utils.HDUtils.clamp;
 import static rs117.hd.utils.ResourcePath.path;
@@ -499,12 +500,12 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	public final int[] cameraFocalPoint = new int[2];
 	public final int[] cameraShift = new int[2];
 
+	public double elapsedTime;
+	public double elapsedClientTime;
 	public float deltaTime;
-	public float elapsedTime;
 	public float deltaClientTime;
-	public float elapsedClientTime;
 	private long lastFrameTimeMillis;
-	private float lastFrameClientTime;
+	private double lastFrameClientTime;
 	private int gameTicksUntilSceneReload = 0;
 	private long colorFilterChangedAt;
 
@@ -527,10 +528,10 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				fboShadowMap = 0;
 				numPassthroughModels = 0;
 				numModelsToSort = null;
-				deltaTime = 0;
 				elapsedTime = 0;
-				deltaClientTime = 0;
 				elapsedClientTime = 0;
+				deltaTime = 0;
+				deltaClientTime = 0;
 				lastFrameTimeMillis = 0;
 				lastFrameClientTime = 0;
 
@@ -1958,7 +1959,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			elapsedTime += deltaTime;
 
 			// The client delta doesn't need clamping
-			deltaClientTime = elapsedClientTime - lastFrameClientTime;
+			deltaClientTime = (float) (elapsedClientTime - lastFrameClientTime);
 		}
 		lastFrameTimeMillis = System.currentTimeMillis();
 		lastFrameClientTime = elapsedClientTime;
@@ -2073,7 +2074,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 				// bind uniforms
 				if (configShadowMode == ShadowMode.DETAILED) {
-					glUniform1f(uniShadowElapsedTime, elapsedTime);
+					glUniform1f(uniShadowElapsedTime, (float) (elapsedTime % MAX_FLOAT_WITH_128TH_PRECISION));
 					glUniform3fv(uniShadowCameraPos, cameraPosition);
 				}
 
@@ -2189,8 +2190,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			glUniform1i(uniUnderwaterCaustics, config.underwaterCaustics() ? 1 : 0);
 			glUniform1i(uniUnderwaterEnvironment, environmentManager.isUnderwater() ? 1 : 0);
 			glUniform3fv(uniUnderwaterCausticsColor, environmentManager.currentUnderwaterCausticsColor);
-			glUniform1f(uniUnderwaterCausticsStrength, environmentManager.currentUnderwaterCausticsStrength * brightness);
-			glUniform1f(uniElapsedTime, elapsedTime);
+			glUniform1f(uniUnderwaterCausticsStrength, environmentManager.currentUnderwaterCausticsStrength);
+			glUniform1f(uniElapsedTime, (float) (elapsedTime % MAX_FLOAT_WITH_128TH_PRECISION));
 
 			glUniform1i(uniWaterTransparency, configWaterTransparency ? 1 : 0);
 			glUniform1f(uniWaterTransparencyAmount, clamp(configWaterTransparencyAmount, 0, 130) / 100f);
