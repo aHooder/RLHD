@@ -642,6 +642,21 @@ public interface HdPluginConfig extends Config
 	)
 	String waterSettings = "waterSettings";
 
+	// TODO: remove
+	String KEY_WATER_STYLE = "devWaterStyle";
+	@ConfigItem(
+		keyName = KEY_WATER_STYLE,
+		name = "Dev Water Style",
+		description = "Temporary option so it's easier to view different styles.",
+		position = 0,
+		section = waterSettings
+	)
+	default WaterStyle waterStyle() {
+		return WaterStyle.AERYN;
+	}
+
+	enum WaterStyle {AERYN, HOODER, LEGACY}
+
 	@ConfigItem(
 		keyName = "waterTransparency",
 		name = "Water Transparency",

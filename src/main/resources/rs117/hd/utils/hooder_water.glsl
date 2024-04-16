@@ -388,7 +388,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
     float k_4 = .0005;
 
     switch (waterTypeIndex) {
-        case WATER_TYPE_WATER_FLAT:
+        case WATER_TYPE_WATER_FLAT: // TODO: make a separate water type for turquoise water
             C_ss = vec3(0.026, .45, .8);
             C_f = vec3(1);
             k_2 = .15;

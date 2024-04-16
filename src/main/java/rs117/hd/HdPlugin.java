@@ -877,6 +877,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			.define("LINEAR_ALPHA_BLENDING", configLinearAlphaBlending)
 			.define("WATER_FOAM", config.enableWaterFoam())
 			.define("PLANAR_REFLECTIONS", configPlanarReflections)
+			.define("WATER_STYLE", config.waterStyle())
 			.addIncludePath(SHADER_PATH);
 
 		glSceneProgram = PROGRAM.compile(template);
@@ -2857,6 +2858,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 							case KEY_PLANAR_REFLECTIONS:
 							case KEY_LEGACY_WATER:
 							case KEY_WATER_FOAM:
+							case KEY_WATER_STYLE:
 								recompilePrograms = true;
 								break;
 							case KEY_SHADOW_MODE:
