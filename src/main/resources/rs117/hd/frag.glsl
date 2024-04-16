@@ -203,6 +203,9 @@ void main() {
 
         // Set up tangent-space transformation matrix
         vec3 N = normalize(IN.normal);
+        // Account for face orientation when not culling back-faces
+        if (renderPass == RENDER_PASS_WATER_REFLECTION && gl_FrontFacing)
+            N *= -1;
         mat3 TBN = mat3(T, B, N * min(length(T), length(B)));
 
         float selfShadowing = 0;

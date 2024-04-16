@@ -88,7 +88,7 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
         0.0175, // 550 nm
         0.0275  // 450 nm
     );
-    extinctionCoefficients *= 4;
+    extinctionCoefficients *= 3;
 
     #ifdef ALMOST_IDENTICAL_APPEARANCE
     // Try to match water.glsl appearance

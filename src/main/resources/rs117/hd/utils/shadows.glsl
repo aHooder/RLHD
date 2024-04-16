@@ -43,9 +43,6 @@ float sampleShadowMap(vec3 fragPos, vec2 distortion, float lightDotNormals) {
     vec2 shadowRes = textureSize(shadowMap, 0);
     float shadowMinBias = 0.0009f;
     float shadowBias = shadowMinBias * max(1, (1.0 - lightDotNormals));
-    // Account for face orientation when not culling back-faces
-    if (renderPass == RENDER_PASS_WATER_REFLECTION && !gl_FrontFacing)
-        shadowBias *= -1;
 
     float fragDepth = shadowPos.z - shadowBias;
     float shadow = 0;
