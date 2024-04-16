@@ -672,6 +672,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
     }
 
     // If the water should be opaque, premultiply alpha and set it to 1
+    // TODO: flat water should probably remain opaque, since it's probably used to hide underwater weirdness
     if (isOpaque && waterTypeIndex != 2) {
         dst.rgb *= dst.a;
         dst.a = 1;
