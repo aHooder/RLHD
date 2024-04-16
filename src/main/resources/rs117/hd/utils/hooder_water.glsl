@@ -154,6 +154,7 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
     // Refraction is not precalculated for the underwater position
     vec3 fragPos = IN.position;
     vec3 underwaterNormal = normalize(IN.normal);
+    underwaterNormal = underwaterNormal.xzy; // TODO: this is horrible
     const vec3 surfaceNormal = vec3(0, -1, 0); // Assume a flat surface
 
     vec3 sunDir = -lightDir; // the light's direction from the sun towards any fragment
@@ -226,13 +227,18 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
     // Attenuate based on the direction light hits the underwater surface
     directionalLight *= max(0, dot(-refractedSunDir, underwaterNormal));
     // This is a bit questionable, since ambient comes from all directions, but here we assume it goes down
-    ambientLight *= -underwaterNormal.y;
+    ambientLight *= max(0, -underwaterNormal.y);
 
     // Scale colors to safe ranges for conversion to XYZ
     float intensityFactor = max(
         max(max(directionalLight.r, directionalLight.g), directionalLight.b),
         max(max(ambientLight.r, ambientLight.g), ambientLight.b)
     );
+    if (intensityFactor <= .00001) {
+        // Exit early if there's no incoming light
+        outputColor = vec3(0);
+        return;
+    }
     directionalLight /= intensityFactor;
     ambientLight /= intensityFactor;
 

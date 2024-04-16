@@ -65,6 +65,7 @@ class SceneUploader {
 
 	private static final int INVISIBLE_HSL = 12345678;
 	private static final int UNDERWATER_HSL = 6676;
+	// TODO: normals are written XZY, so this is wrong. But we should write them XYZ instead
 	private static final float[] UP_NORMAL = { 0, -1, 0 };
 
 	@Inject

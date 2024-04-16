@@ -198,7 +198,7 @@ void main() {
 
         // Set up tangent-space transformation matrix
         vec3 N = normalize(IN.normal);
-        // Account for face orientation when not culling back-faces
+        // Account for face orientation when not culling back-faces TODO: proj matrix is maybe inverted
         if (renderPass == RENDER_PASS_WATER_REFLECTION && gl_FrontFacing)
             N *= -1;
         mat3 TBN = mat3(T, B, N * min(length(T), length(B)));
@@ -584,9 +584,13 @@ void main() {
         float combinedFog = 1 - (1 - IN.fogAmount) * (1 - groundFog);
 
         #if LINEAR_ALPHA_BLENDING
-        outputColor.rgb = mix(outputColor.rgb * outputColor.a, srgbToLinear(fogColor), srgbToLinear(combinedFog));
-        outputColor.a = mix(outputColor.a, 1, combinedFog);
-        outputColor.rgb /= outputColor.a;
+//        outputColor.rgb = mix(outputColor.rgb * outputColor.a, srgbToLinear(fogColor), srgbToLinear(combinedFog));
+//        outputColor.a = mix(outputColor.a, 1, combinedFog);
+//        outputColor.rgb /= outputColor.a;
+        // TODO: decide if we want ~identical behaviour as before
+        if (isWaterSurface)
+            outputColor.a = combinedFog + outputColor.a * (1 - combinedFog);
+        outputColor.rgb = srgbToLinear(mix(linearToSrgb(outputColor.rgb), fogColor, combinedFog));
         #else
         if (isWaterSurface)
             outputColor.a = combinedFog + outputColor.a * (1 - combinedFog);

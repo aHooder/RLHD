@@ -542,7 +542,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
     vec3 omega_i = lightDir; // incoming = sun to frag
     vec3 omega_o = viewDir; // outgoing = frag to camera
     vec3 omega_h = normalize(omega_o - omega_i); // half-way between incoming and outgoing
-    vec3 omega_n = IN.normal.xzy; // macro scale normal
+    vec3 omega_n = IN.normal.xzy; // macro scale normal TODO: swap XZY for XYZ when fixed in SceneUploader
     vec3 w_n = N; // presumably wave normal?
     omega_n = w_n;
 
