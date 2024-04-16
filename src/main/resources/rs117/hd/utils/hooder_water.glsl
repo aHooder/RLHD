@@ -198,6 +198,7 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
     }
 
     // Disable shadows for flat water, as it needs more work
+    // TODO: weirdness at docks in Kourend when toggling water transparency. Maybe surface tiles are included in reflection?
     if (waterTransparency && !waterType.isFlat) {
         // For shadows, we can take refraction into account, since sunlight is parallel
         vec3 surfaceSunPos = fragPos - refractedSunDir * sunToFragDist;
