@@ -85,7 +85,8 @@ public enum WaterType
 		.foamColor(srgb(117, 63, 45))
 		.depthColor(srgb(50, 26, 22))
 		.causticsStrength(0)
-		.duration(2)),
+		.duration(2)
+		.flat(true)),
 	ICE(b -> b
 		.specularStrength(.3f)
 		.specularGloss(200)
@@ -131,7 +132,8 @@ public enum WaterType
 		.foamColor(rgb(120, 81, 0))
 		.depthColor(rgb(120, 59, 0))
 		.causticsStrength(0.4f)
-		.duration(2.2f)),
+		.duration(2.2f)
+		.flat(true)),
 	PLAIN_WATER(b -> b
 		.depthColor(rgb(0, 0, 0))
 		.foamColor(rgb(64, 64, 64))
