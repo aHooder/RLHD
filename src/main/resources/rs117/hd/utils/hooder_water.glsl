@@ -536,12 +536,12 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
     }
 
     // If the water is opaque, blend in a fake underwater surface
-    // TODO: maybe change hard-coded depth to per environment, tile or water type
     if (waterType.isFlat || !waterTransparency) {
         // Computed from packedHslToSrgb(6676)
         const vec3 underwaterColor = vec3(0.04856183, 0.025971446, 0.005794384);
         int depth = 600;
 
+        // TODO: maybe change hard-coded depth to per environment, tile or water type
         if (waterTypeIndex == WATER_TYPE_ABYSS_BILE)
             depth = 16;
 
