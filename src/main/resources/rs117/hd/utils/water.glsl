@@ -220,8 +220,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
         float foamMask = texture(textureArray, vec3(uv3, waterType.foamMap)).r;
         float foamAmount = 1 - dot(IN.texBlend, vec3(vColor[0].x, vColor[1].x, vColor[2].x));
         float foamDistance = 1;
-        vec3 foamColor = vec3(0.5);
-        foamColor = srgbToLinear(foamColor) * foamMask * (ambientColor * ambientStrength + lightColor * lightStrength);
+        vec3 foamColor = .214 * foamMask * (ambientColor * ambientStrength + lightColor * lightStrength);
         foamAmount = clamp(pow(1.0 - ((1.0 - foamAmount) / foamDistance), 3), 0.0, 1.0) * waterType.hasFoam;
         foamAmount *= waterFoamAmount;
         foamAmount *= 0.12; // rescale foam so that 100% is a good default amount

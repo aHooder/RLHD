@@ -378,9 +378,8 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
     vec3 additionalLight = vec3(0);
 
     // Scattering approximation
-    // TODO: hard-code sRGB to linear
-    vec3 C_ss = srgbToLinear(vec3(0, .843, 1));
-    vec3 C_f = srgbToLinear(vec3(.555, .988, 1));
+    vec3 C_ss = vec3(0, .6792933, 1);
+    vec3 C_f = vec3(.2685256, .9729184, 1);
     // float k_1 = 0; // This doesn't work for our normal map-based waves unfortunately
     float k_2 = .0015;
     float k_3 = .0015;
@@ -396,13 +395,13 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
             reflection.rgb *= 8; // TODO: this is nice, but maybe spooky
             break;
         case WATER_TYPE_SWAMP_WATER:
-            C_f = srgbToLinear(vec3(.382, .539, .432));
+            C_f = vec3(.12060062, .25193095, .15640968);
             k_2 = .0015;
             k_3 = .0015;
             k_4 = .015;
             break;
         case WATER_TYPE_POISON_WASTE:
-            C_f = srgbToLinear(vec3(.234, .266, .184));
+            C_f = vec3(.04470426, .05751832, .028336687);
             k_2 = .001;
             k_3 = .002;
             k_4 = .15;
@@ -422,25 +421,25 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
             k_4 = .003;
             break;
         case WATER_TYPE_MUDDY_WATER:
-            C_ss = C_f = unpackSrgb(0x684e22);
+            C_ss = C_f = vec3(.13843162, .07618539, .015996294);
             k_2 = 0;
             k_3 = .1;
             k_4 = .1;
             break;
         case WATER_TYPE_SCAR_SLUDGE:
-            C_f = srgbToLinear(vec3(.234, .266, .184));
+            C_f = vec3(.04470426, .05751832, .028336687);
             k_2 = .001;
             k_3 = .002;
             k_4 = .25;
             break;
         case WATER_TYPE_ABYSS_BILE:
-            C_f = unpackSrgb(0x728963);
+            C_f = vec3(.1682694, .2501583, .12477182);
             k_2 = .001;
             k_3 = .002;
             k_4 = .1;
             break;
         case WATER_TYPE_DARK_BLUE_WATER:
-            C_f = unpackSrgb(0x00515e);
+            C_f = vec3(0, .082282715, .111932434);
             k_2 = .1;
             k_3 = .01;
             k_4 = .02;
@@ -535,8 +534,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
         float foamMask = texture(textureArray, vec3(uv3, waterType.foamMap)).r;
         float foamAmount = 1 - dot(IN.texBlend, vec3(vColor[0].x, vColor[1].x, vColor[2].x));
         float foamDistance = 1;
-        vec3 foamColor = vec3(0.5);
-        foamColor = srgbToLinear(foamColor) * foamMask * (ambientColor * ambientStrength + lightColor * lightStrength);
+        vec3 foamColor = .214 * foamMask * (ambientColor * ambientStrength + lightColor * lightStrength);
         foamAmount = clamp(pow(1.0 - ((1.0 - foamAmount) / foamDistance), 3), 0.0, 1.0) * waterType.hasFoam;
         foamAmount *= waterFoamAmount;
         foamAmount *= 0.12; // rescale foam so that 100% is a good default amount
