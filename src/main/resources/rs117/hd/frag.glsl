@@ -156,11 +156,6 @@ void main() {
 
     vec4 outputColor = vec4(1);
 
-    // Hide underwater tiles in the reflection
-    // TODO: don't use discard. The fix in vert.glsl is broken in e.g. Baxtorian falls & the swamp south of Canifis
-    if (renderPass == RENDER_PASS_WATER_REFLECTION && isUnderwaterTile)
-        discard;
-
     if (isWaterSurface) {
         #if LEGACY_WATER
         outputColor = sampleLegacyWater(waterType, viewDir);

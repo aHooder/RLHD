@@ -125,10 +125,15 @@ void main() {
     bool isUnderwaterTile = waterDepth != 0;
     bool isWaterSurface = isWater && !isUnderwaterTile;
 
-    if (renderPass == RENDER_PASS_WATER_REFLECTION) {
+    if (renderPass == RENDER_PASS_WATER_REFLECTION && isWater) {
         // Hide flat water surface tiles in the reflection
         bool isFlat = -N.y > .7;
         if (isWaterSurface && isFlat)
+            return;
+
+        // Hide underwater tiles from the reflection
+        float minY = min(min(gPosition[0].y, gPosition[1].y), gPosition[2].y);
+        if (isUnderwaterTile && waterHeight - minY <= WATER_REFLECTION_HEIGHT_THRESHOLD)
             return;
     }
 
