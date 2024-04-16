@@ -2318,6 +2318,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE);
 
 			// Calculate projection matrix
+			// TODO: only render this if there's water in the scene
 			if (configPlanarReflections) {
 				// Calculate water reflection projection matrix
 				glUniform1i(uniWaterHeight, sceneContext.waterHeight);
