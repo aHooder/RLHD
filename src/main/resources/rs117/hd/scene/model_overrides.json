@@ -17208,5 +17208,12 @@
     ],
     "uvType": "BOX",
     "uvScale": 0.6
+  },
+  {
+    "description": "Hide black boxes in God Wars Dungeon messing up the water reflection",
+    "objectIds": [ 37491 ],
+    "hideInAreas": [
+      [ 2899, 5301, 2911, 5311 ]
+    ]
   }
 ]
