@@ -108,9 +108,7 @@ public enum WaterType
 		.surfaceColor(srgb(35, 10, 0))
 		.foamColor(srgb(106, 108, 24))
 		.depthColor(srgb(65, 23, 0))
-		.causticsStrength(0)
-		.duration(2.7f)
-		.flat(true)),
+		.causticsStrength(0)),
 	SCAR_SLUDGE(b -> b
 		.specularStrength(0)
 		.specularGloss(100)

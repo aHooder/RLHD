@@ -440,7 +440,7 @@ void main() {
 
             vec3 caustics = sampleCaustics(flow1, flow2) * 2;
 
-            vec3 absorptionColor = vec3(.003090, .001981, .001548);
+            vec3 absorptionColor = vec3(.003090, .002056, .001548);
 
             // hard-coded depth
             float depth = 128 * 8;

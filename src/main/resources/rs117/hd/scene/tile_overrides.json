@@ -1107,6 +1107,14 @@
     "groundMaterial": "ROCKY_CAVE_FLOOR"
   },
   {
+    "name": "GIANTS_FOUNDRY_WATER",
+    "area": "GIANTS_FOUNDRY",
+    "overlayIds": [
+      104
+    ],
+    "waterType": "WATER_FLAT"
+  },
+  {
     "name": "FALADOR_EAST_BANK_PATH_FIX_2",
     "area": "FALADOR_EAST_BANK_PATH_FIX_2",
     "overlayIds": [
