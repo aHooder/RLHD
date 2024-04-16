@@ -38,11 +38,13 @@ out float gFogAmount;
 out int gMaterialData;
 out int gTerrainData;
 
+uniform int renderPass;
 uniform int useFog;
 uniform float fogDepth;
 uniform float drawDistance;
 uniform int expandedMapLoadingChunks;
 uniform vec3 cameraPos;
+uniform int waterHeight;
 
 #include uniforms/materials.glsl
 
@@ -83,6 +85,15 @@ void main() {
     // CAUTION: only 24-bit ints can be stored safely as floats
     int materialData = int(vUv.w);
     int terrainData = int(vNormal.w);
+
+    // Hide underwater tiles in the reflection
+    int waterTypeIndex = terrainData >> 3 & 0x1F;
+    int waterDepth = terrainData >> 8 & 0x7FF;
+    if (
+        renderPass == RENDER_PASS_WATER_REFLECTION &&
+        waterTypeIndex > 0 && waterHeight - position.y < WATER_REFLECTION_HEIGHT_THRESHOLD) {
+        position.y = 100000000; // TODO: this is very much a hack. See if hiding in geom works better
+    }
 
     gPosition = position;
     gUv = vec3(vUv);
