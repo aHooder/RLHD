@@ -387,6 +387,14 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
     float k_4 = .0005;
 
     switch (waterTypeIndex) {
+        case WATER_TYPE_WATER_FLAT:
+            C_ss = vec3(0.026, .45, .8);
+            C_f = vec3(1);
+            k_2 = .15;
+            k_3 = .2;
+            k_4 = .01;
+            reflection.rgb *= 8; // TODO: this is nice, but maybe spooky
+            break;
         case WATER_TYPE_SWAMP_WATER:
             C_f = srgbToLinear(vec3(.382, .539, .432));
             k_2 = .001;
