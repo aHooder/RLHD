@@ -584,13 +584,13 @@ void main() {
         float combinedFog = 1 - (1 - IN.fogAmount) * (1 - groundFog);
 
         #if LINEAR_ALPHA_BLENDING
-//        outputColor.rgb = mix(outputColor.rgb * outputColor.a, srgbToLinear(fogColor), srgbToLinear(combinedFog));
-//        outputColor.a = mix(outputColor.a, 1, combinedFog);
-//        outputColor.rgb /= outputColor.a;
-        // TODO: decide if we want ~identical behaviour as before
-        if (isWaterSurface)
-            outputColor.a = combinedFog + outputColor.a * (1 - combinedFog);
-        outputColor.rgb = srgbToLinear(mix(linearToSrgb(outputColor.rgb), fogColor, combinedFog));
+        if (isWaterSurface) {
+            outputColor.rgb = mix(outputColor.rgb * outputColor.a, srgbToLinear(fogColor), srgbToLinear(combinedFog));
+            outputColor.a = mix(outputColor.a, 1, combinedFog);
+            outputColor.rgb /= outputColor.a;
+        } else {
+            outputColor.rgb = srgbToLinear(mix(linearToSrgb(outputColor.rgb), fogColor, combinedFog));
+        }
         #else
         if (isWaterSurface)
             outputColor.a = combinedFog + outputColor.a * (1 - combinedFog);

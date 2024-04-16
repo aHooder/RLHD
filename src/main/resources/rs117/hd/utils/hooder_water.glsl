@@ -273,6 +273,7 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
 vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
     WaterType waterType = getWaterType(waterTypeIndex);
     float specularGloss = waterType.specularGloss;
+    specularGloss = 500; // TODO: some water types set this to weird values
     float specularStrength = waterType.specularStrength;
 
     vec3 ambientLight = ambientColor * ambientStrength;
@@ -397,9 +398,9 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
             break;
         case WATER_TYPE_SWAMP_WATER:
             C_f = srgbToLinear(vec3(.382, .539, .432));
-            k_2 = .001;
-            k_3 = .002;
-            k_4 = .15;
+            k_2 = .0015;
+            k_3 = .0015;
+            k_4 = .015;
             break;
         case WATER_TYPE_POISON_WASTE:
             C_f = srgbToLinear(vec3(.234, .266, .184));
@@ -546,6 +547,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
             case WATER_TYPE_SWAMP_WATER:
             case WATER_TYPE_SWAMP_WATER_FLAT:
                 foam.rgb *= vec3(1.3, 1.3, 0.4);
+                foam.a *= .25;
                 break;
             case WATER_TYPE_POISON_WASTE:
                 foam.rgb *= vec3(0.7, 0.7, 0.7);
