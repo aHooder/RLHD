@@ -136,13 +136,17 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
     extinctionCoefficients /= 128.f;
 
     // Convert to XYZ at the end https://en.wikipedia.org/wiki/CIE_1931_color_space#Color_matching_functions
-    // TODO: hard-code these
-    mat3 bandsToXyz = transpose(mat3(
-        1.062200000000, 0.631000000000, 0.000800000000, // 600 nm
-        0.433449900000, 0.994950100000, 0.008749999000, // 550 nm
-        0.336200000000, 0.038000000000, 1.772110000000  // 450 nm
-    ));
-    mat3 xyzToBands = inverse(bandsToXyz);
+    const mat3 bandsToXyz = mat3(
+        //      600 nm,         550 nm,         450 nm
+        1.062200000000, 0.433449900000, 0.336200000000,
+        0.631000000000, 0.994950100000, 0.038000000000,
+        0.000800000000, 0.008749999000, 1.772110000000
+    );
+    const mat3 xyzToBands = mat3(
+         1.268775120684124396,     -0.55072870658672442104,  -0.22889916806727973655,
+        -0.80479044935729810573,    1.354595097945706297,     0.12363562947671802757,
+         0.0034009714580576880391, -0.0064398501149254011414, 0.5637919247113148566
+    );
 
     float absorptionAdjustment = exp(5 * (1 - waterTransparencyAmount));
     extinctionCoefficients *= absorptionAdjustment;
@@ -265,6 +269,9 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
     float specularGloss = waterType.specularGloss;
     float specularStrength = waterType.specularStrength;
 
+    vec3 ambientLight = ambientColor * ambientStrength;
+    vec3 directionalLight = lightColor * lightStrength;
+
     vec3 N;
     #ifdef IDENTICAL_WAVES
         float waveHeight = waterWaveSize;
@@ -364,60 +371,14 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
 
     vec3 additionalLight = vec3(0);
 
-    vec3 ambientLight = ambientColor * ambientStrength;
-    vec3 directionalLight = lightColor * lightStrength;
-
     // Scattering approximation
+    // TODO: hard-code sRGB to linear
+    vec3 C_ss = srgbToLinear(vec3(0, .843, 1));
+    vec3 C_f = srgbToLinear(vec3(.555, .988, 1));
     // float k_1 = 0; // This doesn't work for our normal map-based waves unfortunately
-    float k_2 = .001;
-    float k_3 = .002;
-    float k_4 = .00001;
-    vec3 C_ss = srgbToLinear(vec3(0.332, .708, .728));
-    vec3 C_f = vec3(1); // air bubble color
-
-    // From water.glsl
-    C_ss = vec3(0, .28, .32); // directional scatter color
-    C_f = C_ss; // ambient scatter color
-    k_2 = 0.01; // straight on sun scatter (C_ss)
-    k_3 = 0.008; // directional sun scatter (C_ss)
-    k_4 = 0.0001;  // ambient scatter (C_f)
-
-//    k_2 = .01;
-//    k_3 = .008;
-//    k_4 = .003;
-
-    // Try deriving scatter colors from extinction coefficients
-//    vec3 extinctionCoefficients = vec3(
-//        0.2224, // ~red   600 nm
-//        0.0565, // ~green 550 nm
-//        0.00922 // ~blue  450 nm
-//    );
-//    // Approximate some kind of ocean water with phytoplankton absorption based on https://www.oceanopticsbook.info/view/absorption/absorption-by-oceanic-constituents
-//    extinctionCoefficients += vec3(
-//        0.005,  // 600 nm
-//        0.0175, // 550 nm
-//        0.0275  // 450 nm
-//    );
-//    // Convert to XYZ at the end https://en.wikipedia.org/wiki/CIE_1931_color_space#Color_matching_functions
-//    // TODO: hard-code these
-//    mat3 bandsToXyz = transpose(mat3(
-//        1.062200000000, 0.631000000000, 0.000800000000, // 600 nm
-//        0.433449900000, 0.994950100000, 0.008749999000, // 550 nm
-//        0.336200000000, 0.038000000000, 1.772110000000  // 450 nm
-//    ));
-//    mat3 xyzToBands = inverse(bandsToXyz);
-//    const float ambientScatterLength = 5;
-//    C_f = XYZtoRGB(bandsToXyz * exp(-extinctionCoefficients * ambientScatterLength));
-    C_f = srgbToLinear(vec3(.555, .988, 1));
-    C_ss = srgbToLinear(vec3(0, .843, 1));
-
-    k_2 = .0035;
-    k_3 = .003;
-    k_4 = .001;
-
-    k_2 = .0015;
-    k_3 = .0015;
-    k_4 = .0005;
+    float k_2 = .0015;
+    float k_3 = .0015;
+    float k_4 = .0005;
 
     switch (waterTypeIndex) {
         case WATER_TYPE_SWAMP_WATER:
