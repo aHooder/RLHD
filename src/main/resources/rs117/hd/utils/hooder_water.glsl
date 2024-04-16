@@ -265,8 +265,6 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
     float specularGloss = waterType.specularGloss;
     float specularStrength = waterType.specularStrength;
 
-    specularStrength *= .4; // reduce intensity TODO: fresnel maybe?
-
     vec3 N;
     #ifdef IDENTICAL_WAVES
         float waveHeight = waterWaveSize;
