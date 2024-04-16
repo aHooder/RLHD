@@ -154,7 +154,6 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
     // Refraction is not precalculated for the underwater position
     vec3 fragPos = IN.position;
     vec3 underwaterNormal = normalize(IN.normal);
-    underwaterNormal = underwaterNormal.xzy; // TODO: this is horrible
     const vec3 surfaceNormal = vec3(0, -1, 0); // Assume a flat surface
 
     vec3 sunDir = -lightDir; // the light's direction from the sun towards any fragment

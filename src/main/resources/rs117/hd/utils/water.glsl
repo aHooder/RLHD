@@ -558,16 +558,14 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
     vec3 omega_i = lightDir; // incoming = sun to frag
     vec3 omega_o = viewDir; // outgoing = frag to camera
     vec3 omega_h = normalize(omega_o - omega_i); // half-way between incoming and outgoing
-    vec3 omega_n = IN.normal.xzy; // macro scale normal TODO: swap XZY for XYZ when fixed in SceneUploader
-    vec3 w_n = N; // presumably wave normal?
-    omega_n = w_n;
+    vec3 omega_n = N; // wave normal
 
     vec3 L_sun = max(lightColor * lightStrength, lightColor * 3);
     vec3 L_scatter = (
 //        k_1*H*pow(max(0, dot(omega_i, -omega_o)), 4.f) * pow(.5 - .5*dot(omega_i, omega_n), 3.f)
         + k_2*pow(max(0, dot(omega_o, omega_n)), 2.f)
     ) * C_ss*L_sun;
-    L_scatter += k_3*max(0, dot(omega_i, w_n))*C_ss*L_sun + k_4*P_f*C_f*L_sun;
+    L_scatter += k_3*max(0, dot(omega_i, omega_n))*C_ss*L_sun + k_4*P_f*C_f*L_sun;
     L_scatter *= brightnessFactor;
     if(waterTypeIndex == 5) // L_scatter not working here???
     {
