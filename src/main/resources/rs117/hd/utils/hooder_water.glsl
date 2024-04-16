@@ -88,7 +88,7 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
         0.0175, // 550 nm
         0.0275  // 450 nm
     );
-    extinctionCoefficients *= 2.5;
+    extinctionCoefficients *= 4;
 
     #ifdef ALMOST_IDENTICAL_APPEARANCE
     // Try to match water.glsl appearance
@@ -136,6 +136,7 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
     extinctionCoefficients /= 128.f;
 
     // Convert to XYZ at the end https://en.wikipedia.org/wiki/CIE_1931_color_space#Color_matching_functions
+    // TODO: hard-code these
     mat3 bandsToXyz = transpose(mat3(
         1.062200000000, 0.631000000000, 0.000800000000, // 600 nm
         0.433449900000, 0.994950100000, 0.008749999000, // 550 nm
@@ -378,10 +379,47 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
 
     // From water.glsl
     C_ss = vec3(0, .28, .32); // directional scatter color
-    C_f = vec3(1); // ambient scatter color
+    C_f = C_ss; // ambient scatter color
     k_2 = 0.01; // straight on sun scatter (C_ss)
     k_3 = 0.008; // directional sun scatter (C_ss)
     k_4 = 0.0001;  // ambient scatter (C_f)
+
+//    k_2 = .01;
+//    k_3 = .008;
+//    k_4 = .003;
+
+    // Try deriving scatter colors from extinction coefficients
+//    vec3 extinctionCoefficients = vec3(
+//        0.2224, // ~red   600 nm
+//        0.0565, // ~green 550 nm
+//        0.00922 // ~blue  450 nm
+//    );
+//    // Approximate some kind of ocean water with phytoplankton absorption based on https://www.oceanopticsbook.info/view/absorption/absorption-by-oceanic-constituents
+//    extinctionCoefficients += vec3(
+//        0.005,  // 600 nm
+//        0.0175, // 550 nm
+//        0.0275  // 450 nm
+//    );
+//    // Convert to XYZ at the end https://en.wikipedia.org/wiki/CIE_1931_color_space#Color_matching_functions
+//    // TODO: hard-code these
+//    mat3 bandsToXyz = transpose(mat3(
+//        1.062200000000, 0.631000000000, 0.000800000000, // 600 nm
+//        0.433449900000, 0.994950100000, 0.008749999000, // 550 nm
+//        0.336200000000, 0.038000000000, 1.772110000000  // 450 nm
+//    ));
+//    mat3 xyzToBands = inverse(bandsToXyz);
+//    const float ambientScatterLength = 5;
+//    C_f = XYZtoRGB(bandsToXyz * exp(-extinctionCoefficients * ambientScatterLength));
+    C_f = srgbToLinear(vec3(.555, .988, 1));
+    C_ss = srgbToLinear(vec3(0, .843, 1));
+
+    k_2 = .0035;
+    k_3 = .003;
+    k_4 = .001;
+
+    k_2 = .0015;
+    k_3 = .0015;
+    k_4 = .0005;
 
     switch (waterTypeIndex) {
         case WATER_TYPE_SWAMP_WATER:

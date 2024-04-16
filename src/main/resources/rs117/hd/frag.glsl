@@ -391,9 +391,6 @@ void main() {
             shadow = sampleShadowMap(fragPos, vec2(0), lightDotNormals);
         shadow = max(shadow, selfShadowing);
         float inverseShadow = 1 - shadow * baseColor1.a;
-        // TODO: fix shadows for upward-facing faces during the reflection map render pass
-
-
 
         // specular
         vec3 vSpecularGloss = vec3(material1.specularGloss, material2.specularGloss, material3.specularGloss);

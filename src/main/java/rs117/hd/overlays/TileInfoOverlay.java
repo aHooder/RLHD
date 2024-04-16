@@ -46,6 +46,7 @@ import rs117.hd.scene.ProceduralGenerator;
 import rs117.hd.scene.SceneContext;
 import rs117.hd.scene.TileOverrideManager;
 import rs117.hd.utils.AABB;
+import rs117.hd.utils.ColorUtils;
 import rs117.hd.utils.HDUtils;
 import rs117.hd.utils.ModelHash;
 
@@ -319,7 +320,7 @@ public class TileInfoOverlay extends Overlay implements MouseListener, MouseWhee
 			lines.add(String.format("Material: %s (%d)", material.name(), paint.getTexture()));
 			int[] hsl = new int[3];
 			HDUtils.getSouthWesternMostTileColor(hsl, tile);
-			lines.add(String.format("HSL: %s", Arrays.toString(hsl)));
+			lines.add(String.format("HSL: %s = %d", Arrays.toString(hsl), ColorUtils.packRawHsl(hsl)));
 
 			var override = tileOverrideManager.getOverride(scene, tile, worldPos, OVERLAY_FLAG | overlayId, underlayId);
 			lines.add("WaterType: " + proceduralGenerator.seasonalWaterType(override, paint.getTexture()));
@@ -379,7 +380,7 @@ public class TileInfoOverlay extends Overlay implements MouseListener, MouseWhee
 
 			int[] hsl = new int[3];
 			HDUtils.getSouthWesternMostTileColor(hsl, tile);
-			lines.add(String.format("HSL: %s", Arrays.toString(hsl)));
+			lines.add(String.format("HSL: %s = %d", Arrays.toString(hsl), ColorUtils.packRawHsl(hsl)));
 		}
 
 		GroundObject groundObject = tile.getGroundObject();
