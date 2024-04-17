@@ -68,7 +68,7 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
     WaterType waterType = getWaterType(waterTypeIndex);
 
     // Make the color appear like wet sand/dirt to start off with
-    outputColor *= vec3(.84, 1.2, 1.2);
+    outputColor *= vec3(.68, 1.2, 1.2);
 
     // The idea is to approximate light absorption using 3 frequency bands.
     // To accomplish this, we must transform linear RGB into linear XYZ,
