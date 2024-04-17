@@ -380,14 +380,6 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
     float k_4 = .0005;
 
     switch (waterTypeIndex) {
-        case WATER_TYPE_WATER_FLAT: // TODO: make a separate water type for turquoise water
-            C_ss = vec3(0.026, .45, .8);
-            C_f = vec3(1);
-            k_2 = .15;
-            k_3 = .2;
-            k_4 = .01;
-            reflection.rgb *= 8; // TODO: this is nice, but maybe spooky
-            break;
         case WATER_TYPE_SWAMP_WATER:
             C_f = vec3(.12060062, .25193095, .15640968);
             k_2 = .0015;
@@ -437,6 +429,14 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
             k_2 = .1;
             k_3 = .01;
             k_4 = .02;
+            break;
+        case WATER_TYPE_TURQUOISE_WATER:
+            C_ss = vec3(0.026, .45, .8);
+            C_f = vec3(1);
+            k_2 = .15;
+            k_3 = .2;
+            k_4 = .01;
+            reflection.rgb *= 8; // TODO: this is nice, but maybe spooky
             break;
     }
 

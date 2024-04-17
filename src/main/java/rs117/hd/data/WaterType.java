@@ -148,7 +148,7 @@ public enum WaterType
 		.depthColor(rgb("#000000"))
 		.causticsStrength(0)
 		.flat(true)),
-	// TODO: add turquoise water type for Giants' Foundry, Elid cave & more
+	TURQUOISE_WATER,
 	;
 
 	public final boolean flat;

@@ -43,6 +43,7 @@
 #define WATER_TYPE_ABYSS_BILE       12
 #define WATER_TYPE_PLAIN_WATER      13 // #2 is color-matched to model-water in caves etc, while this one isn't
 #define WATER_TYPE_DARK_BLUE_WATER  14
+#define WATER_TYPE_TURQUOISE_WATER  15
 
 // DEVELOPMENT OVERRIDE
 //#define DEVELOPMENT_WATER_TYPE WATER_TYPE_BLOOD
@@ -299,6 +300,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
     switch (waterTypeIndex)
     {
         case 1: // standard water
+        case 2: // standard flat water
         case 13:
         case 14:
         if(!isOpaque)
@@ -326,7 +328,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
         break;
 
 
-        case 2: // turquiose water, actually trying a non-flat option which has a higher focus on surface scattering coloration
+        case 15: // turquiose water, non-flat option which has a higher focus on surface scattering coloration
         {
                 if(!waterTransparency)
                 {
@@ -685,8 +687,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
     }
 
     // If the water should be opaque, premultiply alpha and set it to 1
-    // TODO: flat water should probably remain opaque, since it's probably used to hide underwater weirdness
-    if (isOpaque && waterTypeIndex != 2) {
+    if (isOpaque) {
         dst.rgb *= dst.a;
         dst.a = 1;
     }
@@ -732,6 +733,7 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth, f
         case 2:
         case 13:
         case 14:
+        case 15:
             waterTypeExtinction = vec3(1);
             break;
         case 3:
