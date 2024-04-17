@@ -65,6 +65,15 @@ float calculateFresnelTIR(const vec3 I, const vec3 N, const float ior) {
 }
 
 void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
+    // All light is absorbed
+    switch (waterTypeIndex) {
+        case WATER_TYPE_SWAMP_WATER:
+        case WATER_TYPE_BLACK_TAR_FLAT:
+        case WATER_TYPE_MUDDY_WATER:
+            outputColor = vec3(0);
+            return;
+    }
+
     WaterType waterType = getWaterType(waterTypeIndex);
 
     // Make the color appear like wet sand/dirt to start off with
@@ -100,11 +109,6 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
     #endif
 
     switch (waterTypeIndex) {
-        case WATER_TYPE_SWAMP_WATER:
-        case WATER_TYPE_MUDDY_WATER:
-            // TODO: should make these water types flat, as this way produces artifacts
-            extinctionCoefficients = vec3(100); // basically opaque
-            break;
         case WATER_TYPE_POISON_WASTE:
             extinctionCoefficients = vec3(
                 .309,
@@ -283,8 +287,12 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
 
         switch (waterTypeIndex) {
             case WATER_TYPE_BLACK_TAR_FLAT:
+                waveHeight = .1;
+                speed = .01;
+                break;
             case WATER_TYPE_MUDDY_WATER:
-                waveHeight = 0; // TODO: could skip normals if we actually want completely flat water types
+                waveHeight = .1;
+                break;
             case WATER_TYPE_BLOOD:
                 waveHeight = .75;
                 break;
@@ -406,9 +414,9 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
             break;
         case WATER_TYPE_MUDDY_WATER:
             C_ss = C_f = vec3(.13843162, .07618539, .015996294);
-            k_2 = 0;
-            k_3 = .1;
-            k_4 = .1;
+            k_2 = .001;
+            k_3 = .002;
+            k_4 = .11;
             break;
         case WATER_TYPE_SCAR_SLUDGE:
             C_f = vec3(.04470426, .05751832, .028336687);
@@ -473,7 +481,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
         vec3 pointLightColor = PointLightArray[i].color;
         vec3 pointLightDir = fragToLight / fragToLightDist;
 
-        pointLightColor *= 1 / (1 + distSq) * 1e5;
+        pointLightColor *= 1 / (1 + distSq) * 2e5;
 
         vec3 halfway = normalize(omega_o + pointLightDir);
         pointLightsSpecular += pointLightColor * pow(max(0, dot(halfway, N)), specularGloss) * specularStrength;
@@ -546,7 +554,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
                 foam.a *= .25;
                 break;
             case WATER_TYPE_BLACK_TAR_FLAT:
-                foam.rgb *= vec3(1.0, 1.0, 1.0);
+                foam.a *= .2;
                 break;
             case WATER_TYPE_BLOOD:
                 foam.a = 0;
@@ -558,7 +566,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
                 foam.rgb *= vec3(0.5, 0.5, 0.5);
                 break;
             case WATER_TYPE_MUDDY_WATER:
-                foam.rgb *= vec3(1.0, 0.5, 0.5);
+                foam.a *= .1;
                 break;
             case WATER_TYPE_SCAR_SLUDGE:
                 foam.a *= .5;
