@@ -422,8 +422,9 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	private int uniWaterCausticsStrength;
 	private int uniWaterWaveSize;
 	private int uniWaterWaveSpeed;
-	private int uniWaterFoamAmount;
 	private int uniWaterDistortionAmount;
+	private int uniWaterFoamAmount;
+	private int uniWaterSpecularStrength;
 
 	// Shadow program uniforms
 	private int uniShadowLightProjectionMatrix;
@@ -878,6 +879,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			.define("WATER_FOAM", config.enableWaterFoam())
 			.define("PLANAR_REFLECTIONS", configPlanarReflections)
 			.define("WATER_STYLE", config.waterStyle())
+			.define("WATER_SPECULAR_MODE", config.waterSpecularMode())
 			.addIncludePath(SHADER_PATH);
 
 		glSceneProgram = PROGRAM.compile(template);
@@ -977,8 +979,10 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		uniWaterTransparencyAmount = glGetUniformLocation(glSceneProgram, "waterTransparencyAmount");
 		uniWaterWaveSize = glGetUniformLocation(glSceneProgram, "waterWaveSize");
 		uniWaterWaveSpeed = glGetUniformLocation(glSceneProgram, "waterWaveSpeed");
-		uniWaterFoamAmount = glGetUniformLocation(glSceneProgram, "waterFoamAmount");
 		uniWaterDistortionAmount = glGetUniformLocation(glSceneProgram, "waterDistortionAmount");
+		uniWaterFoamAmount = glGetUniformLocation(glSceneProgram, "waterFoamAmount");
+		uniWaterSpecularStrength = glGetUniformLocation(glSceneProgram, "waterSpecularStrength");
+
 		uniCameraPos = glGetUniformLocation(glSceneProgram, "cameraPos");
 		uniTextureArray = glGetUniformLocation(glSceneProgram, "textureArray");
 		uniWaterNormalMaps = glGetUniformLocation(glSceneProgram, "waterNormalMaps");
@@ -2269,6 +2273,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			glUniform1f(uniWaterWaveSpeed, clamp(config.waterWaveSpeed(), 50, 200) / 100f);
 			glUniform1f(uniWaterDistortionAmount, config.waterDistortion() ? clamp(config.waterDistortionAmount(), 0, 300) / 100f : 0);
 			glUniform1f(uniWaterFoamAmount, clamp(config.waterFoamAmount(), 0, 300) / 100f);
+			glUniform1f(uniWaterSpecularStrength, clamp(config.waterSpecularStrength(), 0, 200) / 100f);
 
 			// Extract the 3rd column from the light view matrix (the float array is column-major)
 			// This produces the view matrix's forward direction vector in world space,
@@ -2865,6 +2870,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 							case KEY_LEGACY_WATER:
 							case KEY_WATER_FOAM:
 							case KEY_WATER_STYLE:
+							case KEY_WATER_SPECULAR:
 								recompilePrograms = true;
 								break;
 							case KEY_SHADOW_MODE:

@@ -71,6 +71,7 @@ uniform float waterWaveSize;
 uniform float waterWaveSpeed;
 uniform float waterFoamAmount;
 uniform float waterDistortionAmount;
+uniform float waterSpecularStrength;
 uniform vec3 legacyWaterColor;
 
 // general HD settings

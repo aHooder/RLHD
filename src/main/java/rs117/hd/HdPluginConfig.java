@@ -48,6 +48,7 @@ import rs117.hd.config.ShadowResolution;
 import rs117.hd.config.TextureResolution;
 import rs117.hd.config.UIScalingMode;
 import rs117.hd.config.VanillaShadowMode;
+import rs117.hd.config.WaterSpecularMode;
 
 import static rs117.hd.HdPlugin.MAX_DISTANCE;
 import static rs117.hd.HdPlugin.MAX_FOG_DEPTH;
@@ -827,6 +828,34 @@ public interface HdPluginConfig extends Config
 	@Units(Units.PERCENT)
 	@Range(min = 1, max = 300)
 	default int waterFoamAmount() {
+		return 100;
+	}
+
+	String KEY_WATER_SPECULAR = "waterSpecularMode";
+	@ConfigItem(
+		keyName = KEY_WATER_SPECULAR,
+		name = "Specular Highlights",
+		description =
+			"Render specular highlight reflections from the sun and point lights on the water surface.<br>" +
+			"Note, specular reflections from dynamic lights are somewhat GPU intensive.",
+		position = 14,
+		section = waterSettings
+	)
+	default WaterSpecularMode waterSpecularMode() {
+		return WaterSpecularMode.SUN;
+	}
+
+	String KEY_WATER_SPECULAR_STRENGTH = "waterSpecularStrength";
+	@ConfigItem(
+		keyName = KEY_WATER_SPECULAR_STRENGTH,
+		name = "Specular Strength",
+		description = "Controls the strength of sun and point light reflections on the water surface.",
+		position = 15,
+		section = waterSettings
+	)
+	@Units(Units.PERCENT)
+	@Range(min = 1, max = 200)
+	default int waterSpecularStrength() {
 		return 100;
 	}
 

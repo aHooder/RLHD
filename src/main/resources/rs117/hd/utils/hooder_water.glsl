@@ -460,33 +460,37 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
     L_scatter += k_4 * C_f * (ambientLight + directionalLight);
     additionalLight += L_scatter;
 
-    vec3 sunSpecular = pow(max(0, dot(N, omega_h)), specularGloss) * lightStrength * lightColor * specularStrength;
-    additionalLight += sunSpecular;
+    #if WATER_SPECULAR_MODE == 1 || WATER_SPECULAR_MODE == 3 // sun or sun & lights
+        vec3 sunSpecular = pow(max(0, dot(N, omega_h)), specularGloss) * lightStrength * lightColor * specularStrength;
+        additionalLight += sunSpecular;
+    #endif
 
     // TODO: skip point lights for underwater geometry in frag.glsl
 
     // Point lights
-    vec3 pointLightsSpecular = vec3(0);
-    float fragToCamDist = length(IN.position - cameraPos);
-    // TODO: add toggle, default off
-    // TODO: optimize by precomputing falloff radius
-    for (int i = 0; i < pointLightsCount; i++) {
-        vec4 pos = PointLightArray[i].position;
-        vec3 fragToLight = pos.xyz - IN.position;
-        float fragToLightDist = length(fragToLight);
-        float distSq = fragToLightDist + fragToCamDist;
-        distSq *= distSq;
-        float radiusSquared = pos.w;
+    #if WATER_SPECULAR_MODE >= 2 // lights or sun & lights
+        vec3 pointLightsSpecular = vec3(0);
+        float fragToCamDist = length(IN.position - cameraPos);
+        // TODO: add toggle, default off
+        // TODO: optimize by precomputing falloff radius
+        for (int i = 0; i < pointLightsCount; i++) {
+            vec4 pos = PointLightArray[i].position;
+            vec3 fragToLight = pos.xyz - IN.position;
+            float fragToLightDist = length(fragToLight);
+            float distSq = fragToLightDist + fragToCamDist;
+            distSq *= distSq;
+            float radiusSquared = pos.w;
 
-        vec3 pointLightColor = PointLightArray[i].color;
-        vec3 pointLightDir = fragToLight / fragToLightDist;
+            vec3 pointLightColor = PointLightArray[i].color;
+            vec3 pointLightDir = fragToLight / fragToLightDist;
 
-        pointLightColor *= 1 / (1 + distSq) * 2e5;
+            pointLightColor *= 1 / (1 + distSq) * 2e5;
 
-        vec3 halfway = normalize(omega_o + pointLightDir);
-        pointLightsSpecular += pointLightColor * pow(max(0, dot(halfway, N)), specularGloss) * specularStrength;
-    }
-    additionalLight += pointLightsSpecular;
+            vec3 halfway = normalize(omega_o + pointLightDir);
+            pointLightsSpecular += pointLightColor * pow(max(0, dot(halfway, N)), specularGloss) * specularStrength;
+        }
+        additionalLight += pointLightsSpecular;
+    #endif
 
     // Begin constructing final output color
     vec4 dst = reflection;

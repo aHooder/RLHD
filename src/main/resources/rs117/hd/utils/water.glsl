@@ -586,53 +586,57 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
 
 
     // SPECULAR STUFF
+    vec3 specular = vec3(0);
     float specularGloss = waterType.specularGloss;
     float specularStrength = waterType.specularStrength;
-    vec3 sunSpecular = pow(max(0, dot(R, lightDir)), specularGloss) * lightStrength * lightColor * specularStrength * 0.25;
 
-    #define PHYSICAL_LIGHT_FALLOFF
-    #ifdef PHYSICAL_LIGHT_FALLOFF
-    // Point lights
-    vec3 pointLightsSpecular = vec3(0);
-    float fragToCamDist = length(IN.position - cameraPos);
-    for (int i = 0; i < pointLightsCount; i++) {
-        vec4 pos = PointLightArray[i].position;
-        vec3 lightToFrag = pos.xyz - IN.position;
-        float distSq = length(lightToFrag) + fragToCamDist;
-        distSq *= distSq;
-        float radiusSquared = pos.w;
+    // Sun specular
+    #if WATER_SPECULAR_MODE == 1 || WATER_SPECULAR_MODE == 3 // sun or sun & lights
+        specular += pow(max(0, dot(R, lightDir)), specularGloss) * lightStrength * lightColor * specularStrength * 0.25;
+    #endif
 
-        vec3 pointLightColor = PointLightArray[i].color;
-        vec3 pointLightDir = normalize(lightToFrag);
+    // Point lights specular
+    #if WATER_SPECULAR_MODE >= 2 // lights or sun & lights
+        #define PHYSICAL_LIGHT_FALLOFF
+        #ifdef PHYSICAL_LIGHT_FALLOFF
+        vec3 pointLightsSpecular = vec3(0);
+        float fragToCamDist = length(IN.position - cameraPos);
+        for (int i = 0; i < pointLightsCount; i++) {
+            vec4 pos = PointLightArray[i].position;
+            vec3 lightToFrag = pos.xyz - IN.position;
+            float distSq = length(lightToFrag) + fragToCamDist;
+            distSq *= distSq;
+            float radiusSquared = pos.w;
 
-        pointLightColor *= 1 / (1 + distSq) * 2e5; // arbitrary multiplier
-
-        vec3 pointLightReflectDir = reflect(-pointLightDir, N);
-        pointLightsSpecular += pointLightColor * pow(max(0, dot(pointLightReflectDir, viewDir)), specularGloss) * specularStrength;
-    }
-    #else
-    // Point lights
-    vec3 pointLightsSpecular = vec3(0);
-    for (int i = 0; i < pointLightsCount; i++) {
-        vec4 pos = PointLightArray[i].position;
-        vec3 lightToFrag = pos.xyz - IN.position;
-        float distanceSquared = dot(lightToFrag, lightToFrag);
-        float radiusSquared = pos.w;
-        if (distanceSquared <= radiusSquared) {
             vec3 pointLightColor = PointLightArray[i].color;
             vec3 pointLightDir = normalize(lightToFrag);
 
-            float attenuation = 1 - min(distanceSquared / radiusSquared, 1);
-            pointLightColor *= attenuation * attenuation;
+            pointLightColor *= 1 / (1 + distSq) * 2e5; // arbitrary multiplier
 
             vec3 pointLightReflectDir = reflect(-pointLightDir, N);
             pointLightsSpecular += pointLightColor * pow(max(0, dot(pointLightReflectDir, viewDir)), specularGloss) * specularStrength;
         }
-    }
+        #else
+        vec3 pointLightsSpecular = vec3(0);
+        for (int i = 0; i < pointLightsCount; i++) {
+            vec4 pos = PointLightArray[i].position;
+            vec3 lightToFrag = pos.xyz - IN.position;
+            float distanceSquared = dot(lightToFrag, lightToFrag);
+            float radiusSquared = pos.w;
+            if (distanceSquared <= radiusSquared) {
+                vec3 pointLightColor = PointLightArray[i].color;
+                vec3 pointLightDir = normalize(lightToFrag);
+
+                float attenuation = 1 - min(distanceSquared / radiusSquared, 1);
+                pointLightColor *= attenuation * attenuation;
+
+                vec3 pointLightReflectDir = reflect(-pointLightDir, N);
+                pointLightsSpecular += pointLightColor * pow(max(0, dot(pointLightReflectDir, viewDir)), specularGloss) * specularStrength;
+            }
+        }
+        #endif
+        specular += pointLightsSpecular;
     #endif
-
-    vec3 specular = sunSpecular + pointLightsSpecular;
-
 
 
 
