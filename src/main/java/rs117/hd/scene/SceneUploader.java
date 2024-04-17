@@ -110,7 +110,12 @@ class SceneUploader {
 		for (int i = 0; i < waterHeightCounters.length; i++)
 			if (waterHeightCounters[i] > waterHeightCounters[largestIndex])
 				largestIndex = i;
-		sceneContext.waterHeight = -largestIndex;
+		if (waterHeightCounters[largestIndex] > 0) {
+			sceneContext.hasWater = true;
+			sceneContext.waterHeight = -largestIndex;
+		} else {
+			sceneContext.hasWater = false;
+		}
 
 		stopwatch.stop();
 		log.debug(

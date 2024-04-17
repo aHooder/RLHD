@@ -2319,8 +2319,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE);
 
 			// Calculate projection matrix
-			// TODO: only render this if there's water in the scene
-			if (configPlanarReflections) {
+			boolean renderWaterReflections = configPlanarReflections && sceneContext.hasWater;
+			if (renderWaterReflections) {
 				// Calculate water reflection projection matrix
 				glUniform1i(uniWaterHeight, sceneContext.waterHeight);
 
@@ -2418,7 +2418,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			glUniformMatrix4fv(uniProjectionMatrix, false, projectionMatrix);
 
 			glUniform1i(uniRenderPass, 0);
-			glUniform1i(uniWaterReflectionEnabled, configPlanarReflections ? 1 : 0);
+			glUniform1i(uniWaterReflectionEnabled, renderWaterReflections ? 1 : 0);
 			glDrawArrays(GL_TRIANGLES, 0, renderBufferOffset);
 
 			frameTimer.end(Timer.RENDER_SCENE);

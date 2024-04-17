@@ -27,7 +27,11 @@
 
 vec3 sampleWaterReflection(vec3 flatR, vec3 R, float distortionFactor) {
     // Only use the reflection map when enabled, the height difference is negligible & the surface is roughly flat
-    if (!waterReflectionEnabled || abs(IN.position.y - waterHeight) > WATER_REFLECTION_HEIGHT_THRESHOLD || -IN.flatNormal.y < .7)
+    // TODO: decide which tris to enable the reflection for in the geometry shader
+    if (renderPass == RENDER_PASS_WATER_REFLECTION ||
+        !waterReflectionEnabled ||
+        abs(IN.position.y - waterHeight) > WATER_REFLECTION_HEIGHT_THRESHOLD ||
+        -IN.flatNormal.y < .7)
         return srgbToLinear(fogColor);
 
     float dist = length(IN.position - cameraPos);
