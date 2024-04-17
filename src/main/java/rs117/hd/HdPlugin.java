@@ -1622,14 +1622,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_REPEAT);
 		glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_REPEAT);
-
-		// TODO: decide whether we prefer with or without anisotropic filtering. With it on, more detail is kept
-		if (GL.getCapabilities().GL_EXT_texture_filter_anisotropic) {
-			float anisotropicFilteringLevel = 16;
-			final float maxSamples = glGetFloat(EXTTextureFilterAnisotropic.GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT);
-			anisotropicFilteringLevel = clamp(anisotropicFilteringLevel, 1, maxSamples);
-			glTexParameterf(GL_TEXTURE_2D_ARRAY, EXTTextureFilterAnisotropic.GL_TEXTURE_MAX_ANISOTROPY_EXT, anisotropicFilteringLevel);
-		}
+		textureManager.setAnisotropicFilteringLevel(config.anisotropicFilteringLevel());
 
 		glGenerateMipmap(GL_TEXTURE_2D_ARRAY);
 
