@@ -282,6 +282,9 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
         float speed = .024;
 
         switch (waterTypeIndex) {
+            case WATER_TYPE_BLACK_TAR_FLAT:
+            case WATER_TYPE_MUDDY_WATER:
+                waveHeight = 0; // TODO: could skip normals if we actually want completely flat water types
             case WATER_TYPE_BLOOD:
                 waveHeight = .75;
                 break;
@@ -289,10 +292,6 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
             case WATER_TYPE_ICE_FLAT:
                 waveHeight = .1;
                 speed = 0.00000001;
-                break;
-            case WATER_TYPE_MUDDY_WATER:
-                waveHeight = .3;
-                speed = .08;
                 break;
             case WATER_TYPE_ABYSS_BILE:
                 waveHeight = .7;
@@ -429,13 +428,13 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
             k_3 = .01;
             k_4 = .02;
             break;
-        case WATER_TYPE_TURQUOISE_WATER:
+        case WATER_TYPE_CYAN_WATER:
             C_ss = vec3(0.026, .45, .8);
             C_f = vec3(1);
             k_2 = .15;
             k_3 = .2;
             k_4 = .01;
-            reflection.rgb *= 8; // TODO: this is nice, but maybe spooky
+            reflection.rgb *= 8;
             break;
     }
 

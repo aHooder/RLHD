@@ -1112,7 +1112,7 @@
     "overlayIds": [
       104
     ],
-    "waterType": "TURQUOISE_WATER"
+    "waterType": "CYAN_WATER"
   },
   {
     "name": "FALADOR_EAST_BANK_PATH_FIX_2",
@@ -3891,7 +3891,7 @@
     "overlayIds": [
       41
     ],
-    "waterType": "TURQUOISE_WATER",
+    "waterType": "CYAN_WATER",
     "blended": false
   },
   {

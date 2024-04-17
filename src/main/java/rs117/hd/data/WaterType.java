@@ -148,7 +148,7 @@ public enum WaterType
 		.depthColor(rgb("#000000"))
 		.causticsStrength(0)
 		.flat(true)),
-	TURQUOISE_WATER,
+	CYAN_WATER,
 	;
 
 	public final boolean flat;
