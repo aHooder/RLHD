@@ -198,7 +198,9 @@ void main() {
 
         // Set up tangent-space transformation matrix
         vec3 N = normalize(IN.normal);
-        // Account for face orientation when not culling back-faces TODO: proj matrix is maybe inverted
+        // Invert the normal for back-faces rendered in reflections, in order to add shading
+        // to the underside of docks. This actually needs to check for front-faces instead,
+        // since the projection matrix reverses winding order when flipping vertically
         if (renderPass == RENDER_PASS_WATER_REFLECTION && gl_FrontFacing)
             N *= -1;
         mat3 TBN = mat3(T, B, N * min(length(T), length(B)));

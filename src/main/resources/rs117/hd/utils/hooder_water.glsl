@@ -101,9 +101,8 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
 
     switch (waterTypeIndex) {
         case WATER_TYPE_SWAMP_WATER:
-        case WATER_TYPE_BLOOD:
         case WATER_TYPE_MUDDY_WATER:
-            // TODO: should just make these opaque
+            // TODO: should make these water types flat, as this way produces artifacts
             extinctionCoefficients = vec3(100); // basically opaque
             break;
         case WATER_TYPE_POISON_WASTE:
@@ -162,7 +161,6 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
 
     vec3 camToFrag = normalize(fragPos - cameraPos);
     // We ignore refraction effects on the way back up to the surface
-    // TODO: support viewing underwater geometry from below in waterfalls properly
     float fragToSurfaceDist = abs(depth / camToFrag.y);
 
     // Attenuate directional and ambient light by their distances travelled on the way down
@@ -274,6 +272,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
     float specularGloss = waterType.specularGloss;
     specularGloss = 500; // TODO: some water types set this to weird values
     float specularStrength = waterType.specularStrength;
+    specularStrength *= .4;
 
     vec3 ambientLight = ambientColor * ambientStrength;
     vec3 directionalLight = lightColor * lightStrength;
@@ -312,8 +311,8 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
         vec3 n2 = textureBicubic(waterNormalMaps, vec3(uv2, 1)).xyz;
 
         // Normalize
-        n1.xy = (n1.xy * 2 - 1);
-        n2.xy = (n2.xy * 2 - 1);
+        n1.xy = n1.xy * 2 - 1;
+        n2.xy = n2.xy * 2 - 1;
         // Tangent space to world
         n1.z *= -1;
         n2.z *= -1;
@@ -329,35 +328,30 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
         n2 = normalize(n2);
         N = normalize(n1 + n2);
     #else
-        float waveHeight = waterWaveSize * .5;
-        float scale1 = 26;
-        float scale2 = 6;
-        vec2 dir1 = vec2(2, 1);
-        vec2 dir2 = vec2(-1, 4);
-        float speed1 = .01 * length(dir1) * waterWaveSpeed;
-        float speed2 = .008 * length(dir2) * waterWaveSpeed;
-        vec2 uv1 = worldUvs(scale1) + dir1 * speed1 * elapsedTime;
-        vec2 uv2 = worldUvs(scale2) + dir2 * speed2 * elapsedTime;
+        float waveHeight = waterWaveSize;
+        float waveSpeed = waterWaveSpeed * .01;
+        vec2 uv1 = worldUvs(26) + vec2(1, -4) * waveSpeed * elapsedTime;
+        vec2 uv2 = worldUvs(6) + vec2(5, -1) * waveSpeed * elapsedTime;
 
-    //    vec3 n1 = linearToSrgb(texture(waterNormalMaps, vec3(uv1, 0), 1).xyz);
-    //    vec3 n2 = linearToSrgb(texture(waterNormalMaps, vec3(uv2, 1), 1).xyz);
-    //    vec3 n1 = linearToSrgb(textureBicubic(waterNormalMaps, vec3(uv1, 0)).xyz);
-    //    vec3 n2 = linearToSrgb(textureBicubic(waterNormalMaps, vec3(uv2, 1)).xyz);
+        // Flip UVs horizontally, since our water normal maps aren't oriented like vanilla textures
+        uv1.x = 1 - uv1.x;
+        uv2.x = 1 - uv2.x;
         vec3 n1 = textureBicubic(waterNormalMaps, vec3(uv1, 0)).xyz;
         vec3 n2 = textureBicubic(waterNormalMaps, vec3(uv2, 1)).xyz;
-    //    vec3 n1 = textureFxaaSrgb(waterNormalMaps, vec3(uv1, 0)).xyz;
-    //    vec3 n2 = textureFxaaSrgb(waterNormalMaps, vec3(uv2, 1)).xyz;
 
         // Normalize
-        n1.xy = (n1.xy * 2 - 1);
-        n2.xy = (n2.xy * 2 - 1);
+        n1.xy = n1.xy * 2 - 1;
+        n2.xy = n2.xy * 2 - 1;
         // Tangent space to world
         n1.z *= -1;
         n2.z *= -1;
         n1.xyz = n1.xzy;
         n2.xyz = n2.xzy;
-        n1 = normalize(vec3(1, 1 / waveHeight, 1) * n1);
-        n2 = normalize(vec3(1, 1 / waveHeight, 1) * n2);
+        // Scale normals
+        n1.y /= waveHeight * .4;
+        n2.y /= waveHeight;
+        n1 = normalize(n1);
+        n2 = normalize(n2);
         N = normalize(n1 + n2);
     #endif
 
@@ -463,9 +457,12 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
     vec3 sunSpecular = pow(max(0, dot(N, omega_h)), specularGloss) * lightStrength * lightColor * specularStrength;
     additionalLight += sunSpecular;
 
+    // TODO: skip point lights for underwater geometry in frag.glsl
+
     // Point lights
     vec3 pointLightsSpecular = vec3(0);
     float fragToCamDist = length(IN.position - cameraPos);
+    // TODO: maybe add a toggle to skip dynamic light reflections entirely
     // TODO: optimize by precomputing falloff radius
     for (int i = 0; i < pointLightsCount; i++) {
         vec4 pos = PointLightArray[i].position;
@@ -512,7 +509,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
     if (waterType.isFlat || !waterTransparency) {
         // Computed from packedHslToSrgb(6676)
         const vec3 underwaterColor = vec3(0.04856183, 0.025971446, 0.005794384);
-        int depth = 600;
+        int depth = 1200;
 
         // TODO: maybe change hard-coded depth to per environment, tile or water type
         if (waterTypeIndex == WATER_TYPE_ABYSS_BILE)
