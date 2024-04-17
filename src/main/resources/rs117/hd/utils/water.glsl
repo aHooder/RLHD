@@ -605,7 +605,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
         vec3 pointLightColor = PointLightArray[i].color;
         vec3 pointLightDir = normalize(lightToFrag);
 
-        pointLightColor *= 1 / (1 + distSq) * 1e4; // arbitrary multiplier
+        pointLightColor *= 1 / (1 + distSq) * 2e5; // arbitrary multiplier
 
         vec3 pointLightReflectDir = reflect(-pointLightDir, N);
         pointLightsSpecular += pointLightColor * pow(max(0, dot(pointLightReflectDir, viewDir)), specularGloss) * specularStrength;

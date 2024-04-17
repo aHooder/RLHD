@@ -179,9 +179,7 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
         const vec2 direction = vec2(1, -2);
         vec2 flow1 = causticsUv + animationFrame(13) * direction;
         vec2 flow2 = causticsUv * 1.5 + animationFrame(17) * -direction;
-        // TODO: Chromatic abberation can make it appear like caustics are adding shadows
-         vec3 caustics = sampleCaustics(flow1, flow2, depth * .00003);
-//        vec3 caustics = sampleCaustics(flow1, flow2);
+        vec3 caustics = sampleCaustics(flow1, flow2, depth * .00003);
 
         // Apply caustics color based on the environment
         // Usually this falls back to directional lighting
@@ -194,9 +192,10 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
         caustics *= max(0, 1 - smoothstep(0, 1, depth / 768));
 
         // Artificially boost strength
-        caustics *= 7.5;
+        caustics *= 1.5;
 
-        directionalLight += caustics;
+        // Add caustics as additional directional light
+        directionalLight *= 1 + caustics;
     }
 
     // Disable shadows for flat water, as it needs more work
@@ -462,7 +461,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
     // Point lights
     vec3 pointLightsSpecular = vec3(0);
     float fragToCamDist = length(IN.position - cameraPos);
-    // TODO: maybe add a toggle to skip dynamic light reflections entirely
+    // TODO: add toggle, default off
     // TODO: optimize by precomputing falloff radius
     for (int i = 0; i < pointLightsCount; i++) {
         vec4 pos = PointLightArray[i].position;
@@ -511,7 +510,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
         const vec3 underwaterColor = vec3(0.04856183, 0.025971446, 0.005794384);
         int depth = 1200;
 
-        // TODO: maybe change hard-coded depth to per environment, tile or water type
+        // TODO: maybe change hard-coded depth to tile or water type
         if (waterTypeIndex == WATER_TYPE_ABYSS_BILE)
             depth = 16;
 
