@@ -1622,7 +1622,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_REPEAT);
 		glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_REPEAT);
-		textureManager.setAnisotropicFilteringLevel(config.anisotropicFilteringLevel());
+		textureManager.setAnisotropicFilteringLevel(GL_TEXTURE_2D_ARRAY, config.anisotropicFilteringLevel());
 
 		glGenerateMipmap(GL_TEXTURE_2D_ARRAY);
 
@@ -2832,6 +2832,19 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 									destroyWaterNormalMaps();
 								}
 								break;
+							case KEY_ANISOTROPIC_FILTERING_LEVEL:
+								int level = config.anisotropicFilteringLevel();
+								glActiveTexture(TEXTURE_UNIT_GAME);
+								if (texWaterNormalMaps != 0) {
+									glBindTexture(GL_TEXTURE_2D_ARRAY, texWaterNormalMaps);
+									textureManager.setAnisotropicFilteringLevel(GL_TEXTURE_2D_ARRAY, level);
+								}
+								if (textureManager.textureArray != 0) {
+									glBindTexture(GL_TEXTURE_2D_ARRAY, textureManager.textureArray);
+									textureManager.setAnisotropicFilteringAndMipMapping(GL_TEXTURE_2D_ARRAY, level);
+								}
+								glActiveTexture(TEXTURE_UNIT_UI);
+								break;
 						}
 
 						switch (key) {
@@ -2868,7 +2881,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 								reloadEnvironments = true;
 								reloadModelOverrides = true;
 								// fall-through
-							case KEY_ANISOTROPIC_FILTERING_LEVEL:
 							case KEY_GROUND_TEXTURES:
 							case KEY_MODEL_TEXTURES:
 							case KEY_TEXTURE_RESOLUTION:

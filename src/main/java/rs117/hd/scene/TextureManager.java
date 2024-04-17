@@ -88,8 +88,8 @@ public class TextureManager {
 	@Inject
 	private ModelOverrideManager modelOverrideManager;
 
-	private int textureArray;
-	private int textureSize;
+	public int textureArray;
+	public int textureSize;
 
 	// Temporary variables for texture loading and generating material uniforms
 	private IntBuffer pixelBuffer;
@@ -241,21 +241,7 @@ public class TextureManager {
 
 		glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_REPEAT);
 		glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_REPEAT);
-		int level = config.anisotropicFilteringLevel();
-		setAnisotropicFilteringLevel(level);
-		if (level == 0) {
-			// level = 0 means no mipmaps and no anisotropic filtering
-			glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-			glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		} else {
-			// level = 1 means with mipmaps but without anisotropic filtering GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT defaults to 1.0 which is off
-			// level > 1 enables anisotropic filtering. It's up to the vendor what the values mean
-			// Even if anisotropic filtering isn't supported, mipmaps will be enabled with any level >= 1
-			// Trilinear filtering is used for HD textures as linear filtering produces noisy textures
-			// that are very noticeable on terrain
-			glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		}
+		setAnisotropicFilteringAndMipMapping(GL_TEXTURE_2D_ARRAY, config.anisotropicFilteringLevel());
 
 		log.debug("Allocated {}x{} texture array with {} layers", textureSize, textureSize, textureLayers.size());
 
@@ -396,13 +382,30 @@ public class TextureManager {
 		);
 	}
 
-	public void setAnisotropicFilteringLevel(float level) {
+	public void setAnisotropicFilteringAndMipMapping(int target, float level) {
+		setAnisotropicFilteringLevel(target, level);
+		if (level == 0) {
+			// level = 0 means no mipmaps and no anisotropic filtering
+			glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+			glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		} else {
+			// level = 1 means with mipmaps but without anisotropic filtering GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT defaults to 1.0 which is off
+			// level > 1 enables anisotropic filtering. It's up to the vendor what the values mean
+			// Even if anisotropic filtering isn't supported, mipmaps will be enabled with any level >= 1
+			// Trilinear filtering is used for HD textures as linear filtering produces noisy textures
+			// that are very noticeable on terrain
+			glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+			glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		}
+	}
+
+	public void setAnisotropicFilteringLevel(int target, float level) {
 		if (!plugin.glCaps.GL_EXT_texture_filter_anisotropic)
 			return;
 
 		float max = glGetFloat(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT);
 		level = HDUtils.clamp(level, 1, max);
-		glTexParameterf(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAX_ANISOTROPY_EXT, level);
+		glTexParameterf(target, GL_TEXTURE_MAX_ANISOTROPY_EXT, level);
 	}
 
 	private ByteBuffer generateMaterialUniformBuffer() {
