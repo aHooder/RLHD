@@ -189,6 +189,9 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
         // Usually this falls back to directional lighting
         caustics *= underwaterCausticsColor * underwaterCausticsStrength;
 
+        // Apply the caustics strength config
+        caustics *= waterCausticsStrength;
+
         // Fade caustics out too close to the shoreline
         caustics *= min(1, smoothstep(0, 1, depth / 32));
 
