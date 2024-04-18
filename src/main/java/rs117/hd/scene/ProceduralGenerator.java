@@ -54,7 +54,9 @@ import static rs117.hd.utils.Vector.add;
 @Singleton
 public class ProceduralGenerator {
 	// @formatter:off
-	public static final int[] DEPTH_LEVEL_SLOPE = new int[] { 384, 666, 818, 1056, 1142, 1224, 1303, 1379, 1452, 1522, 1589, 1645, 1700, 1775, 1860, 1994, 2175, 2329, 2459, 2571, 2665, 2745, 2825, 2890, 2945, 2996, 3047, 3085, 3114, 3140, 3158, 3170, 3200 };
+	//public static final int[] DEPTH_LEVEL_SLOPE = new int[] { 384, 666, 818, 1056, 1142, 1224, 1303, 1379, 1452, 1522, 1589, 1645, 1700, 1775, 1860, 1994, 2175, 2329, 2459, 2571, 2665, 2745, 2825, 2890, 2945, 2996, 3047, 3085, 3114, 3140, 3158, 3170, 3200 };
+	public static final int[] DEPTH_LEVEL_SLOPE = new int[] { 250, 420, 610, 830, 1050, 1185, 1303, 1379, 1452, 1522, 1589, 1645, 1700, 1860, 1920, 2010, 2100, 2180, 2310, 2480, 2640, 2750, 2860, 2915, 2996, 3067, 3100, 3125, 3135, 3158, 3185, 3200 };
+
 	// @formatter:on
 
 	public static final int VERTICES_PER_FACE = 3;
