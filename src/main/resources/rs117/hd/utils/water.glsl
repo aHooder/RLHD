@@ -588,7 +588,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
     // SPECULAR STUFF
     vec3 specular = vec3(0);
     float specularGloss = waterType.specularGloss;
-    float specularStrength = waterType.specularStrength;
+    float specularStrength = waterType.specularStrength * waterSpecularStrength;
 
     // Sun specular
     #if WATER_SPECULAR_MODE == 1 || WATER_SPECULAR_MODE == 3 // sun or sun & lights

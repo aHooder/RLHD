@@ -276,7 +276,7 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
 vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
     WaterType waterType = getWaterType(waterTypeIndex);
     float specularGloss = 500; // Ignore values set per water type, as they don't make a lot of sense
-    float specularStrength = waterType.specularStrength;
+    float specularStrength = waterType.specularStrength * waterSpecularStrength;
 
     vec3 ambientLight = ambientColor * ambientStrength;
     vec3 directionalLight = lightColor * lightStrength;
