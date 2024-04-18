@@ -275,10 +275,8 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
 
 vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
     WaterType waterType = getWaterType(waterTypeIndex);
-    float specularGloss = waterType.specularGloss;
-    specularGloss = 500; // TODO: some water types set this to weird values
+    float specularGloss = 500; // Ignore values set per water type, as they don't make a lot of sense
     float specularStrength = waterType.specularStrength;
-    specularStrength *= .4;
 
     vec3 ambientLight = ambientColor * ambientStrength;
     vec3 directionalLight = lightColor * lightStrength;
@@ -465,17 +463,13 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
 
     #if WATER_SPECULAR_MODE == 1 || WATER_SPECULAR_MODE == 3 // sun or sun & lights
         vec3 sunSpecular = pow(max(0, dot(N, omega_h)), specularGloss) * lightStrength * lightColor * specularStrength;
-        additionalLight += sunSpecular;
+        additionalLight += sunSpecular * calculateFresnel(omega_i, omega_n, IOR_WATER);
     #endif
-
-    // TODO: skip point lights for underwater geometry in frag.glsl
 
     // Point lights
     #if WATER_SPECULAR_MODE >= 2 // lights or sun & lights
         vec3 pointLightsSpecular = vec3(0);
         float fragToCamDist = length(IN.position - cameraPos);
-        // TODO: add toggle, default off
-        // TODO: optimize by precomputing falloff radius
         for (int i = 0; i < pointLightsCount; i++) {
             vec4 pos = PointLightArray[i].position;
             vec3 fragToLight = pos.xyz - IN.position;
