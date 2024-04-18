@@ -518,7 +518,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
         const vec3 underwaterColor = vec3(0.04856183, 0.025971446, 0.005794384);
         int depth = 1200;
 
-        // TODO: maybe change hard-coded depth to tile or water type
+        // TODO: add a way for tile overrides to specify water depth
         if (waterTypeIndex == WATER_TYPE_ABYSS_BILE)
             depth = 16;
 
