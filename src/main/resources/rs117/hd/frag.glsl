@@ -561,6 +561,7 @@ void main() {
         }
 
         outputColor.rgb = hsvToSrgb(hsv);
+        outputColor.rgb = clamp(outputColor.rgb, 0, 1);
     }
 
     outputColor.rgb = colorBlindnessCompensation(outputColor.rgb);
