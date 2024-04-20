@@ -217,7 +217,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
         switch (waterTypeIndex) {
             case 1:
             case WATER_TYPE_PLAIN_WATER:
-            case 14:
+            case WATER_TYPE_DARK_BLUE_WATER:
                 break;
             case WATER_TYPE_SWAMP_WATER:
             case WATER_TYPE_SWAMP_WATER_FLAT:
@@ -286,7 +286,6 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
         case 1: // standard water
         case 2: // standard flat water
         case WATER_TYPE_PLAIN_WATER:
-        case 14:
             C_ss = vec3(0.06, .26, .32); // water scatter color
             C_f = vec3(1); // air bubble color
             k_2 = 0.01; // ~refraction scatter
@@ -299,18 +298,6 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
                 k_3 = 0.04; // ~ambient scatter
             }
         break;
-
-        case 15: // turquiose water, non-flat option which has a higher focus on surface scattering coloration
-            C_ss = vec3(0.026, .45, .8); // water scatter color
-            C_f = vec3(1); // air bubble color
-            k_2 = 0.15; // ~refraction scatter
-            k_3 = 0.2; // ~ambient scatter
-            k_4 = 0.2;  // ~air bubble scatter
-            P_f = .05; // density of air bubbles
-            reflection.rgb *= 8;
-            if (waterTransparency)
-                brightnessFactor = 0.5;
-            break;
 
         case WATER_TYPE_SWAMP_WATER:
         case WATER_TYPE_SWAMP_WATER_FLAT:
@@ -399,7 +386,28 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
             k_3 = 0.017; // ~ambient scatter
             k_4 = 0.1;  // ~air bubble scatter
             P_f = .01; // density of air bubbles
-        break;
+            break;
+
+        case WATER_TYPE_DARK_BLUE_WATER:
+            C_ss = vec3(0, .0611363969, .09);
+            C_f = vec3(0, .0411413575, .055966217);
+            k_2 = .1;
+            k_3 = .01;
+            k_4 = .02;
+            P_f = 1;
+            break;
+
+        case WATER_TYPE_CYAN_WATER: // turquiose water, non-flat option which has a higher focus on surface scattering coloration
+            C_ss = vec3(0.026, .45, .8); // water scatter color
+            C_f = vec3(1); // air bubble color
+            k_2 = 0.15; // ~refraction scatter
+            k_3 = 0.2; // ~ambient scatter
+            k_4 = 0.2;  // ~air bubble scatter
+            P_f = .05; // density of air bubbles
+            reflection.rgb *= 8;
+            if (waterTransparency)
+                brightnessFactor = 0.5;
+            break;
     }
 
     float cosUp = -N.y;
@@ -578,7 +586,7 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth, f
         case 1:
         case 2:
         case WATER_TYPE_PLAIN_WATER:
-        case 14:
+        case WATER_TYPE_DARK_BLUE_WATER:
         case 15:
             waterTypeExtinction = vec3(1);
             break;
