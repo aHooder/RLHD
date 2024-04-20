@@ -442,16 +442,6 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
 void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth, float lightDotNormals) {
     outputColor *= vec3(0.57, 0.85, 1) * 2; // tune underwater terrain color
 
-    // Sanitize underwater terrain lighting so that it doesn't deviate too much
-    float underWaterLightStrength;
-    if (lightStrength < 4) {
-        underWaterLightStrength = 4;
-    } else {
-        underWaterLightStrength = lightStrength;
-    }
-    outputColor *= (underWaterLightStrength / 4);
-
-
     vec3 camToFrag = normalize(IN.position - cameraPos);
     float distanceToSurface = abs(depth / camToFrag.y); // abs = hack for viewing underwater geometry from below in waterfalls
     float totalDistance = depth + distanceToSurface;
