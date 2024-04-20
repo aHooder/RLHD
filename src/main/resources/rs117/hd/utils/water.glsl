@@ -216,13 +216,9 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
 
         switch (waterTypeIndex) {
             case 1:
-            case 13:
+            case WATER_TYPE_PLAIN_WATER:
             case 14:
-            if(isOpaque)
-            {
-                foam.a *=2;
-            }
-            break;
+                break;
             case WATER_TYPE_SWAMP_WATER:
             case WATER_TYPE_SWAMP_WATER_FLAT:
                 foam.rgb *= vec3(1.3, 1.3, 0.4);
@@ -289,7 +285,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
     {
         case 1: // standard water
         case 2: // standard flat water
-        case 13:
+        case WATER_TYPE_PLAIN_WATER:
         case 14:
             C_ss = vec3(0.06, .26, .32); // water scatter color
             C_f = vec3(1); // air bubble color
@@ -581,7 +577,7 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth, f
     switch (waterTypeIndex) {
         case 1:
         case 2:
-        case 13:
+        case WATER_TYPE_PLAIN_WATER:
         case 14:
         case 15:
             waterTypeExtinction = vec3(1);
