@@ -149,7 +149,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
     }
 
     //ice, ice flat, abyss bile
-    if(waterTypeIndex == 8 || waterTypeIndex == 9 || waterTypeIndex == 12) {
+    if(waterTypeIndex == 8 || waterTypeIndex == 9 || waterTypeIndex == WATER_TYPE_ABYSS_BILE) {
         n1.y /= 0.3;
         n2.y /= 0.3;
     }
@@ -251,7 +251,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
             case WATER_TYPE_SCAR_SLUDGE:
                 foam.rgb *= vec3(0.9, 1.2, 0.9);
                 break;
-            case 12: // abyss bile
+            case WATER_TYPE_ABYSS_BILE:
                 foam.rgb *= vec3(1.0, 0.7, 0.3);
                 break;
         }
@@ -396,7 +396,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
             P_f = .01; // density of air bubbles
             break;
 
-        case 12: // abyss bile flat
+        case WATER_TYPE_ABYSS_BILE:
             C_ss = vec3(0.68, .975, .48); // water scatter color
             C_f = vec3(1); // air bubble color
             k_2 = 0.02; // ~refraction scatter
@@ -610,7 +610,7 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth, f
             waterTypeExtinction = vec3(1, 1, 1); // Light absorption for scar sludge
             outputColor *= vec3(0.8, 0.8, 0); // Browner mud rather than sand
             break;
-        case 12:
+        case WATER_TYPE_ABYSS_BILE:
             waterTypeExtinction = vec3(1, 1, 1); // Light absorption for abyss bile
             break;
     }
