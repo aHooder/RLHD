@@ -239,6 +239,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
             case 3: // swamp water
             case 4: // swamp water flat
                 foam.rgb *= vec3(1.3, 1.3, 0.4);
+                foam.a *= .25;
                 break;
             case 5: // toxic waste
                 foam.rgb *= vec3(0.7, 0.7, 0.7);
@@ -356,44 +357,15 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
         break;
 
 
-        case 3: // swamp water
-        if(!isOpaque)
-        {
-            C_ss = vec3(0.15, .25, .16); // water scatter color
-            C_f = vec3(1); // air bubble color
-            k_2 = 0.15; // ~refraction scatter
-            k_3 = 0.15; // ~ambient scatter
-            k_4 = 0.2;  // ~air bubble scatter
-            P_f = .01; // density of air bubbles
-            brightnessFactor = 0.5;
-            reflection.rgb *= 1;
-        }
-        else
-        {
-           C_ss = vec3(0.15, .25, .16); // water scatter color
-           C_f = vec3(1); // air bubble color
-           k_2 = 0.15; // ~refraction scatter
-           k_3 = 0.15; // ~ambient scatter
-           k_4 = 0.2;  // ~air bubble scatter
-           P_f = .01; // density of air bubbles
-           brightnessFactor = 0.5;
-           reflection.rgb *= 1;
-        }
-        break;
-
-
-        case 4: // swamp water flat
-        {
-            C_ss = vec3(0.04, .48, .26); // water scatter color
-            C_f = vec3(1); // air bubble color
-            k_2 = 0.15; // ~refraction scatter
-            k_3 = 0.15; // ~ambient scatter
-            k_4 = 0.2;  // ~air bubble scatter
-            P_f = .01; // density of air bubbles
-            brightnessFactor = 1;
-            reflection.rgb *= 1;
-        }
-        break;
+        case WATER_TYPE_SWAMP_WATER:
+        case WATER_TYPE_SWAMP_WATER_FLAT:
+            C_ss = vec3(0, .6792933, 1);
+            C_f = vec3(.12060062, .25193095, .15640968);
+            k_2 = .0015;
+            k_3 = .0015;
+            k_4 = .015;
+            P_f = 1;
+            break;
 
 
         case 5: // poison waste
@@ -705,7 +677,6 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
 }
 
 void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth, float lightDotNormals) {
-
     outputColor *= vec3(0.57, 0.85, 1) * 2; // tune underwater terrain color
 
     // Sanitize underwater terrain lighting so that it doesn't deviate too much
@@ -740,11 +711,11 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth, f
         case 15:
             waterTypeExtinction = vec3(1);
             break;
-        case 3:
-        case 4:
-            waterTypeExtinction = vec3(2, 2, 2); // Light absorption for swamp water
+        case WATER_TYPE_SWAMP_WATER:
+        case WATER_TYPE_SWAMP_WATER_FLAT:
+            waterTypeExtinction = vec3(10); // Light absorption for swamp water
             outputColor *= vec3(0.6, 0.8, 0); // Browner mud rather than sand
-           break;
+            break;
         case 5:
             waterTypeExtinction = vec3(2, 2, 2); // Light absorption for toxic waste
             outputColor *= vec3(0.5, 0.35, 0); // Browner mud rather than sand
