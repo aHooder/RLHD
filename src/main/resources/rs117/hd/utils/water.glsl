@@ -142,7 +142,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
     n1.y /= 0.225; // scale normals
 
     //black tar
-    if(waterTypeIndex == 6)
+    if(waterTypeIndex == WATER_TYPE_BLACK_TAR_FLAT)
     {
         n1.y /= 0.1;
     }
@@ -158,7 +158,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
     n2.y /= 0.8; // scale normals
 
     //black tar
-    if(waterTypeIndex == 6)
+    if(waterTypeIndex == WATER_TYPE_BLACK_TAR_FLAT)
     {
         n2.y /= 0.1;
     }
@@ -236,15 +236,15 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
                 foam.a *=2;
             }
             break;
-            case 3: // swamp water
-            case 4: // swamp water flat
+            case WATER_TYPE_SWAMP_WATER:
+            case WATER_TYPE_SWAMP_WATER_FLAT:
                 foam.rgb *= vec3(1.3, 1.3, 0.4);
                 foam.a *= .25;
                 break;
-            case 5: // toxic waste
+            case WATER_TYPE_POISON_WASTE:
                 foam.rgb *= vec3(0.7, 0.7, 0.7);
                 break;
-            case 6: // black tar
+            case WATER_TYPE_BLACK_TAR_FLAT:
                 foam.rgb *= vec3(0.4);
                 foam.a *= 0.5;
                 break;
@@ -378,7 +378,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
             break;
 
 
-        case 6: // black tar flat
+        case WATER_TYPE_BLACK_TAR_FLAT:
         {
             C_ss = vec3(.0, .0, .0); // water scatter color
             C_f = vec3(1); // air bubble color
