@@ -368,29 +368,14 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
             break;
 
 
-        case 5: // poison waste
-        if(!isOpaque)
-        {
-           //C_ss = vec3(1, 1, 1); // water scatter color
-           //C_f = vec3(1); // air bubble color
-           //k_2 = 15; // ~refraction scatter
-           //k_3 = 15; // ~ambient scatter
-           //k_4 = 0.2;  // ~air bubble scatter
-           //P_f = .01; // density of air bubbles
-           //brightnessFactor = 1;
-           //reflection.rgb *= 1;
-        }
-        else
-        {
-          //C_ss = vec3(1, 1, 1); // water scatter color
-          //C_f = vec3(1); // air bubble color
-          //k_2 = 15; // ~refraction scatter
-          //k_3 = 15; // ~ambient scatter
-          //k_4 = 0.2;  // ~air bubble scatter
-          //P_f = .01; // density of air bubbles
-          //brightnessFactor = 1;
-          //reflection.rgb *= 1;
-        }
+        case WATER_TYPE_POISON_WASTE:
+            C_ss = vec3(0, .6792933, 1);
+            C_f = vec3(.04470426, .05751832, .028336687);
+            k_2 = .001;
+            k_3 = .002;
+            k_4 = .15;
+            P_f = 1;
+            break;
 
 
         case 6: // black tar flat
@@ -540,10 +525,6 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
     ) * C_ss*L_sun;
     L_scatter += k_3*max(0, dot(omega_i, omega_n))*C_ss*L_sun + k_4*P_f*C_f*L_sun;
     L_scatter *= brightnessFactor;
-    if(waterTypeIndex == 5) // L_scatter not working here???
-    {
-        L_scatter += vec3(0.018, 0.013, 0);
-    }
 
 
 
@@ -716,9 +697,9 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth, f
             waterTypeExtinction = vec3(10); // Light absorption for swamp water
             outputColor *= vec3(0.6, 0.8, 0); // Browner mud rather than sand
             break;
-        case 5:
-            waterTypeExtinction = vec3(2, 2, 2); // Light absorption for toxic waste
-            outputColor *= vec3(0.5, 0.35, 0); // Browner mud rather than sand
+        case WATER_TYPE_POISON_WASTE:
+            waterTypeExtinction = vec3(1.654, 3.64, 4.83344);
+            outputColor *= vec3(0.5, 0.35, .35); // Browner mud rather than sand
             break;
         case 7:
             waterTypeExtinction = vec3(1, 4, 4); // Light absorption for blood
