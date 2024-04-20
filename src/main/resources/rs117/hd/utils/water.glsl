@@ -328,13 +328,12 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
             P_f = .01; // density of air bubbles
             break;
 
-        case 7: // blood
-            C_ss = vec3(0.3, .0, .0); // water scatter color
-            C_f = vec3(1); // air bubble color
-            k_2 = 0.1; // ~refraction scatter
-            k_3 = 0.1; // ~ambient scatter
-            k_4 = 0.1;  // ~air bubble scatter
-            P_f = .01; // density of air bubbles
+        case WATER_TYPE_BLOOD:
+            C_ss = C_f = vec3(1, 0, 0);
+            k_2 = .05;
+            k_3 = .001;
+            k_4 = .015;
+            P_f = 1;
             break;
 
         case 8: // ice
