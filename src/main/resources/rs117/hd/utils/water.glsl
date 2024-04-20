@@ -336,7 +336,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
             P_f = 1;
             break;
 
-        case 8: // ice
+        case WATER_TYPE_ICE:
             C_ss = vec3(0.42, .5, .5); // water scatter color
             C_f = vec3(1); // air bubble color
             k_2 = 0.01; // ~refraction scatter
@@ -344,14 +344,14 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
             k_4 = 0.1;  // ~air bubble scatter
             P_f = .01; // density of air bubbles
 
-            if(isOpaque) {
+            if (isOpaque) {
                 C_ss = vec3(.35, .5, .6); // water scatter color
                 k_2 = 0.15; // ~refraction scatter
                 k_3 = 0.15; // ~ambient scatter
             }
             break;
 
-        case 9: // ice flat
+        case WATER_TYPE_ICE_FLAT:
             C_ss = vec3(0.06, .28, .32); // water scatter color
             C_f = vec3(1); // air bubble color
             k_2 = 0.01; // ~refraction scatter

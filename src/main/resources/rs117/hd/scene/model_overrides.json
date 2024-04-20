@@ -11212,9 +11212,10 @@
     "uvType": "BOX"
   },
   {
-    "description": "Remove the shadow cast by the exit crack of the brine rat cave",
+    "description": "Remove the shadow cast by the exit crack of the brine rat cave & near GWD",
     "objectIds": [
-      23159
+      23159,
+      26382
     ],
     "castShadows": false
   },
