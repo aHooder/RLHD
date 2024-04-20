@@ -258,7 +258,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
             case 9: // ice flat
                 foam.rgb *= vec3(0.5, 0.5, 0.5);
                 break;
-            case 10: // muddy water
+            case WATER_TYPE_MUDDY_WATER:
                 foam.rgb *= vec3(1.0, 0.5, 0.5);
                 break;
             case 11: // scar sludge
@@ -446,7 +446,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
         break;
 
 
-        case 10: // muddy water
+        case WATER_TYPE_MUDDY_WATER:
         if(!isOpaque)
         {
             C_ss = vec3(0.3, .18, .0); // water scatter color
@@ -708,7 +708,7 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth, f
         case 8:
             waterTypeExtinction = vec3(1, 1, 1);
             break;
-        case 10:
+        case WATER_TYPE_MUDDY_WATER:
             waterTypeExtinction = vec3(0.6, 1, 1.5); // Light absorption for muddy water
             outputColor *= vec3(0.37, 0.24, 0.24); // Browner mud rather than sand
             break;
@@ -738,7 +738,7 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth, f
         {
             causticsColor *= 0.5;
         }
-        if(waterTypeIndex == 3 || waterTypeIndex == 10 || waterTypeIndex == 11)
+        if(waterTypeIndex == 3 || waterTypeIndex == WATER_TYPE_MUDDY_WATER || waterTypeIndex == 11)
         {
             causticsColor *= 0.5;
         }
