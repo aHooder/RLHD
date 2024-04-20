@@ -87,8 +87,6 @@ float calculateFresnel(const vec3 I, const vec3 N, const float ior) {
     return R0 + (1 - R0) * pow(1 - cosi, 5);
 }
 
-void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth);
-
 vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
 {
     WaterType waterType = getWaterType(waterTypeIndex);
@@ -141,7 +139,6 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
     n2.y /= waterWaveSize;
     n2 = normalize(n2);
     vec3 N = normalize(n1 + n2);
-    N = normalize(vec3(n1.xy + n2.xy, n1.z + n2.z));
 
     // REFLECTIONS STUFF
     // Assume the water is level
@@ -172,10 +169,6 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
         foam = vec4(foamColor, foamAmount);
 
         switch (waterTypeIndex) {
-            case 1:
-            case WATER_TYPE_PLAIN_WATER:
-            case WATER_TYPE_DARK_BLUE_WATER:
-                break;
             case WATER_TYPE_SWAMP_WATER:
             case WATER_TYPE_SWAMP_WATER_FLAT:
                 foam.rgb *= vec3(1.3, 1.3, 0.4);
@@ -188,14 +181,12 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
                 foam.rgb *= vec3(0.4);
                 foam.a *= 0.5;
                 break;
-            case 7: // blood
+            case WATER_TYPE_BLOOD:
                 foam.rgb *= vec3(1.6, 0.7, 0.7);
                 foam.a *= 0.5;
                 break;
-            case 8: // ice
-                foam.rgb *= vec3(0.5, 0.5, 0.5);
-                break;
-            case 9: // ice flat
+            case WATER_TYPE_ICE:
+            case WATER_TYPE_ICE_FLAT:
                 foam.rgb *= vec3(0.5, 0.5, 0.5);
                 break;
             case WATER_TYPE_MUDDY_WATER:
@@ -211,7 +202,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
     #endif
 
     // SCATTERING STUFF
-    vec3 C_ss = vec3(0.06, .28, .32); // water scatter color
+    vec3 C_ss = vec3(0.06, .26, .32); // water scatter color
     vec3 C_f = vec3(1); // air bubble color
     float k_2 = 0.01; // ~refraction scatter
     float k_3 = 0.008; // ~ambient scatter
@@ -221,11 +212,6 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
         case WATER_TYPE_WATER:
         case WATER_TYPE_WATER_FLAT:
         case WATER_TYPE_PLAIN_WATER:
-            C_ss = vec3(0.06, .26, .32); // water scatter color
-            C_f = vec3(1); // air bubble color
-            k_2 = 0.01; // ~refraction scatter
-            k_3 = 0.008; // ~ambient scatter
-            k_4 = 0.001;  // ~air bubble scatter
             if (isOpaque) {
                 k_2 = 0.04; // ~refraction scatter
                 k_3 = 0.04; // ~ambient scatter
@@ -337,20 +323,19 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
     L_scatter += k_3 * max(0, dot(omega_i, omega_n)) * C_ss * L_sun;
     L_scatter += k_4 * C_f * L_sun;
 
+    vec3 additionalLight = vec3(0);
+
     // SPECULAR STUFF
-    vec3 specular = vec3(0);
     float specularGloss = waterType.specularGloss;
     float specularStrength = waterType.specularStrength * waterSpecularStrength;
 
     // Sun specular
     #if WATER_SPECULAR_MODE == 1 || WATER_SPECULAR_MODE == 3 // sun or sun & lights
-        specular += pow(max(0, dot(R, lightDir)), specularGloss) * lightStrength * lightColor * specularStrength * 0.25;
+        additionalLight += pow(max(0, dot(R, lightDir)), specularGloss) * lightStrength * lightColor * specularStrength * 0.25;
     #endif
 
     // Point lights specular
     #if WATER_SPECULAR_MODE >= 2 // lights or sun & lights
-        #define PHYSICAL_LIGHT_FALLOFF
-        #ifdef PHYSICAL_LIGHT_FALLOFF
         vec3 pointLightsSpecular = vec3(0);
         float fragToCamDist = length(IN.position - cameraPos);
         for (int i = 0; i < pointLightsCount; i++) {
@@ -368,26 +353,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
             vec3 pointLightReflectDir = reflect(-pointLightDir, N);
             pointLightsSpecular += pointLightColor * pow(max(0, dot(pointLightReflectDir, viewDir)), specularGloss) * specularStrength;
         }
-        #else
-        vec3 pointLightsSpecular = vec3(0);
-        for (int i = 0; i < pointLightsCount; i++) {
-            vec4 pos = PointLightArray[i].position;
-            vec3 lightToFrag = pos.xyz - IN.position;
-            float distanceSquared = dot(lightToFrag, lightToFrag);
-            float radiusSquared = pos.w;
-            if (distanceSquared <= radiusSquared) {
-                vec3 pointLightColor = PointLightArray[i].color;
-                vec3 pointLightDir = normalize(lightToFrag);
-
-                float attenuation = 1 - min(distanceSquared / radiusSquared, 1);
-                pointLightColor *= attenuation * attenuation;
-
-                vec3 pointLightReflectDir = reflect(-pointLightDir, N);
-                pointLightsSpecular += pointLightColor * pow(max(0, dot(pointLightReflectDir, viewDir)), specularGloss) * specularStrength;
-            }
-        }
-        #endif
-        specular += pointLightsSpecular;
+        additionalLight += pointLightsSpecular;
     #endif
 
     // PUTTING IT ALL TOGETHER...
@@ -399,12 +365,11 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
     // but with transparent water, we still want the underwater geometry to be visible.
     // Refraction + reflection = 1, so modulate scattering by 1 - reflection.a
     vec3 refraction = L_scatter * (1 - reflection.a);
+    additionalLight += refraction;
 
     // Neither refraction nor specular make sense to blend in using alpha blending,
     // so we need a special way to blend in light additively, without unnecessarily
     // obscuring the underwater geometry.
-    vec3 additionalLight = refraction + specular;
-
     // In theory, we could just add the light and be done with it, but since the color
     // will be multiplied by alpha during alpha blending, we need to divide by alpha to
     // end up with our target amount of additional light after alpha blending
@@ -440,6 +405,13 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
 }
 
 void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth, float lightDotNormals) {
+    WaterType waterType = getWaterType(waterTypeIndex);
+    bool isOpaque = !waterTransparency || waterType.isFlat;
+    if (isOpaque) {
+        outputColor *= 0;
+        return;
+    }
+
     outputColor *= vec3(1.14, 1.7, 2); // tune underwater terrain color
 
     vec3 camToFrag = normalize(IN.position - cameraPos);
@@ -455,7 +427,7 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth, f
     switch (waterTypeIndex) {
         case WATER_TYPE_SWAMP_WATER:
         case WATER_TYPE_SWAMP_WATER_FLAT:
-            extinctionCoefficients *= vec3(10); // Light absorption for swamp water
+            extinctionCoefficients *= 10; // Light absorption for swamp water
             outputColor *= vec3(0.6, 0.8, 0); // Browner mud rather than sand
             break;
         case WATER_TYPE_POISON_WASTE:
@@ -471,37 +443,42 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth, f
             outputColor *= vec3(0.37, 0.24, 0.24); // Browner mud rather than sand
             break;
         case WATER_TYPE_SCAR_SLUDGE:
-            extinctionCoefficients *= vec3(1, 1, 1); // Light absorption for scar sludge
             outputColor *= vec3(0.8, 0.8, 0); // Browner mud rather than sand
             break;
     }
 
     vec3 extinctionColors = exp(-totalDistance / lightPenetration * extinctionCoefficients);
 
-    if (shorelineCaustics && (waterTransparency || depth <= 500)) {
-        const float scale = 2.5;
+    if (shorelineCaustics) {
+        const float scale = 3.333f;
         vec2 causticsUv = worldUvs(scale);
-        causticsUv *= 0.75;
         const ivec2 direction = ivec2(1, -2);
         vec2 flow1 = causticsUv + animationFrame(17) * direction;
         vec2 flow2 = causticsUv * 1.5 + animationFrame(23) * -direction;
         vec3 caustics = sampleCaustics(flow1, flow2, .005);
         vec3 causticsColor = underwaterCausticsColor * underwaterCausticsStrength;
+
+        switch (waterTypeIndex) {
+            case WATER_TYPE_SWAMP_WATER:
+            case WATER_TYPE_MUDDY_WATER:
+            case WATER_TYPE_SCAR_SLUDGE:
+                causticsColor *= 0.5;
+                break;
+            case WATER_TYPE_POISON_WASTE:
+            case WATER_TYPE_BLOOD:
+            case WATER_TYPE_ICE:
+            case WATER_TYPE_ICE_FLAT:
+                causticsColor *= 0;
+                break;
+        }
+
         if (!waterTransparency && depth <= 500) // reduce caustics brightness for shallow opaque water
-        {
             causticsColor *= 0.5;
-        }
-        if (waterTypeIndex == 3 || waterTypeIndex == WATER_TYPE_MUDDY_WATER || waterTypeIndex == WATER_TYPE_SCAR_SLUDGE)
-        {
-            causticsColor *= 0.5;
-        }
-        if (waterTypeIndex == 5 || waterTypeIndex == 7 || waterTypeIndex == 8 || waterTypeIndex == 9)
-        {
-            causticsColor *= 0;
-        }
+
+        // TODO: caustics are multiplied by extinction twice
         outputColor *= 1 + caustics * causticsColor * extinctionColors * lightDotNormals * lightStrength * waterCausticsStrength;
     }
 
-    outputColor = mix(vec3(0), outputColor, extinctionColors);
+    outputColor *= extinctionColors;
 }
 #endif
