@@ -440,7 +440,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
 }
 
 void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth, float lightDotNormals) {
-    outputColor *= vec3(0.57, 0.85, 1) * 2; // tune underwater terrain color
+    outputColor *= vec3(1.14, 1.7, 2); // tune underwater terrain color
 
     vec3 camToFrag = normalize(IN.position - cameraPos);
     float distanceToSurface = abs(depth / camToFrag.y); // abs = hack for viewing underwater geometry from below in waterfalls
@@ -451,48 +451,32 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth, f
     // divide by tuning factor during testing
 
     // Exponential falloff of light intensity when penetrating water, different for each color
-    vec3 extinctionColors = vec3(0);
-    vec3 waterTypeExtinction = vec3(1);
+    vec3 extinctionCoefficients = vec3(.003090, .001981, .001548);
     switch (waterTypeIndex) {
-        case 1:
-        case 2:
-        case WATER_TYPE_PLAIN_WATER:
-        case WATER_TYPE_DARK_BLUE_WATER:
-        case 15:
-            waterTypeExtinction = vec3(1);
-            break;
         case WATER_TYPE_SWAMP_WATER:
         case WATER_TYPE_SWAMP_WATER_FLAT:
-            waterTypeExtinction = vec3(10); // Light absorption for swamp water
+            extinctionCoefficients *= vec3(10); // Light absorption for swamp water
             outputColor *= vec3(0.6, 0.8, 0); // Browner mud rather than sand
             break;
         case WATER_TYPE_POISON_WASTE:
-            waterTypeExtinction = vec3(1.654, 3.64, 4.83344);
+            extinctionCoefficients *= vec3(1.654, 3.64, 4.83344);
             outputColor *= vec3(0.5, 0.35, .35); // Browner mud rather than sand
             break;
-        case 7:
-            waterTypeExtinction = vec3(1, 4, 4); // Light absorption for blood
+        case WATER_TYPE_BLOOD:
+            extinctionCoefficients *= vec3(1, 4, 4); // Light absorption for blood
             outputColor *= vec3(0.4, 0.1, 0.1); // Browner mud rather than sand
             break;
-        case 8:
-            waterTypeExtinction = vec3(1, 1, 1);
-            break;
         case WATER_TYPE_MUDDY_WATER:
-            waterTypeExtinction = vec3(0.6, 1, 1.5); // Light absorption for muddy water
+            extinctionCoefficients *= vec3(0.6, 1, 1.5); // Light absorption for muddy water
             outputColor *= vec3(0.37, 0.24, 0.24); // Browner mud rather than sand
             break;
         case WATER_TYPE_SCAR_SLUDGE:
-            waterTypeExtinction = vec3(1, 1, 1); // Light absorption for scar sludge
+            extinctionCoefficients *= vec3(1, 1, 1); // Light absorption for scar sludge
             outputColor *= vec3(0.8, 0.8, 0); // Browner mud rather than sand
-            break;
-        case WATER_TYPE_ABYSS_BILE:
-            waterTypeExtinction = vec3(1, 1, 1); // Light absorption for abyss bile
             break;
     }
 
-    extinctionColors.r = exp(-totalDistance * (0.003090 / lightPenetration) * waterTypeExtinction.r);
-    extinctionColors.g = exp(-totalDistance * (0.001981 / lightPenetration) * waterTypeExtinction.g);
-    extinctionColors.b = exp(-totalDistance * (0.001548 / lightPenetration) * waterTypeExtinction.b);
+    vec3 extinctionColors = exp(-totalDistance / lightPenetration * extinctionCoefficients);
 
     if (shorelineCaustics && (waterTransparency || depth <= 500)) {
         const float scale = 2.5;
