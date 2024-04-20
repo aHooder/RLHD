@@ -4255,7 +4255,7 @@
     "name": "STREAMBOUND_CAVERN_WATER",
     "area": "STREAMBOUND_CAVERN",
     "overlayIds": [ 156 ],
-    "waterType": "SWAMP_WATER_FLAT"
+    "waterType": "GREEN_CAVE_WATER"
   },
   {
     "name": "ANCIENT_SHRINE_DIRT",

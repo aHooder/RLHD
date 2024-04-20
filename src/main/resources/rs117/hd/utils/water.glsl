@@ -43,7 +43,8 @@
 #define WATER_TYPE_ABYSS_BILE       12
 #define WATER_TYPE_PLAIN_WATER      13 // #2 is color-matched to model-water in caves etc, while this one isn't
 #define WATER_TYPE_DARK_BLUE_WATER  14
-#define WATER_TYPE_CYAN_WATER  15
+#define WATER_TYPE_CYAN_WATER       15
+#define WATER_TYPE_GREEN_CAVE_WATER 16
 
 // DEVELOPMENT OVERRIDE
 //#define DEVELOPMENT_WATER_TYPE WATER_TYPE_BLOOD
@@ -407,6 +408,15 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir)
             reflection.rgb *= 8;
             if (waterTransparency)
                 brightnessFactor = 0.5;
+            break;
+
+        case WATER_TYPE_GREEN_CAVE_WATER:
+            C_ss = vec3(0.04, .48, .26); // water scatter color
+            C_f = vec3(1); // air bubble color
+            k_2 = 0.15; // ~refraction scatter
+            k_3 = 0.15; // ~ambient scatter
+            k_4 = 0.2;  // ~air bubble scatter
+            P_f = .01; // density of air bubbles
             break;
     }
 

@@ -149,6 +149,7 @@ public enum WaterType
 		.causticsStrength(0)
 		.flat(true)),
 	CYAN_WATER,
+	GREEN_CAVE_WATER(SWAMP_WATER_FLAT, true),
 	;
 
 	public final boolean flat;
