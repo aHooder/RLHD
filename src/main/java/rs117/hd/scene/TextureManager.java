@@ -394,7 +394,7 @@ public class TextureManager {
 			glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 		}
 
-		if (GL.getCapabilities().GL_EXT_texture_filter_anisotropic) {
+		if (plugin.glCaps.GL_EXT_texture_filter_anisotropic) {
 			final float maxSamples = glGetFloat(EXTTextureFilterAnisotropic.GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT);
 			//Clamp from 1 to max GL says it supports.
 			final float anisoLevel = Math.max(1, Math.min(maxSamples, level));
