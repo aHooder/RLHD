@@ -396,6 +396,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	private int uniUnderwaterCausticsColor;
 	private int uniUnderwaterCausticsStrength;
 	private int uniCameraPos;
+	private int uniCameraDir;
 	private int uniColorFilter;
 	private int uniColorFilterPrevious;
 	private int uniColorFilterFade;
@@ -639,6 +640,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				skipScene = null;
 				isInHouse = false;
 				isInChambersOfXeric = false;
+
+				client.getScene().setRoofRemovalMode(16);
 
 				// We need to force the client to reload the scene since we're changing GPU flags
 				if (client.getGameState() == GameState.LOGGED_IN)
@@ -934,6 +937,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		uniUnderwaterCausticsColor = glGetUniformLocation(glSceneProgram, "underwaterCausticsColor");
 		uniUnderwaterCausticsStrength = glGetUniformLocation(glSceneProgram, "underwaterCausticsStrength");
 		uniCameraPos = glGetUniformLocation(glSceneProgram, "cameraPos");
+		uniCameraDir = glGetUniformLocation(glSceneProgram, "cameraDir");
 		uniTextureArray = glGetUniformLocation(glSceneProgram, "textureArray");
 		uniElapsedTime = glGetUniformLocation(glSceneProgram, "elapsedTime");
 
@@ -2078,6 +2082,12 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			glUniform1f(uniUnderwaterCausticsStrength, environmentManager.currentUnderwaterCausticsStrength);
 			glUniform1f(uniElapsedTime, (float) (elapsedTime % MAX_FLOAT_WITH_128TH_PRECISION));
 			glUniform3fv(uniCameraPos, cameraPosition);
+			glUniform3f(
+				uniCameraDir,
+				(float) (Math.cos(cameraOrientation[1]) * -Math.sin(cameraOrientation[0])),
+				(float) Math.sin(cameraOrientation[1]),
+				(float) (Math.cos(cameraOrientation[1]) * Math.cos(cameraOrientation[0]))
+			);
 
 			// Extract the 3rd column from the light view matrix (the float array is column-major)
 			// This produces the view matrix's forward direction vector in world space,
