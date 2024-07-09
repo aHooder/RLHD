@@ -311,7 +311,7 @@ public class ModelPusher {
 				frameTimer.begin(Timer.MODEL_PUSHING_NORMAL);
 
 			for (int face = 0; face < faceCount; face++) {
-				getNormalDataForFace(sceneContext, model, modelOverride, face);
+				getNormalDataForFace(sceneContext, model, uuid, modelOverride, face);
 				sceneContext.stagingBufferNormals.put(sceneContext.modelFaceNormals);
 				if (shouldCacheNormalData)
 					fullNormalData.put(sceneContext.modelFaceNormals);
@@ -384,7 +384,7 @@ public class ModelPusher {
 		sceneContext.modelPusherResults[1] = texturedFaceCount;
 	}
 
-	private void getNormalDataForFace(SceneContext sceneContext, Model model, @NonNull ModelOverride modelOverride, int face) {
+	private void getNormalDataForFace(SceneContext sceneContext, Model model, int uuid, @NonNull ModelOverride modelOverride, int face) {
 		assert SceneUploader.packTerrainData(false, 0, WaterType.NONE, 0) == 0;
 		if (modelOverride.flatNormals || !plugin.configPreserveVanillaNormals && model.getFaceColors3()[face] == -1) {
 			Arrays.fill(sceneContext.modelFaceNormals, 0);
@@ -403,7 +403,10 @@ public class ModelPusher {
 			return;
 		}
 
-		float terrainData = 0x800000; // Force undo vanilla shading in compute to not use flat normals
+		int terrainData = 0x800000; // Force undo vanilla shading in compute to not use flat normals
+		int type = ModelHash.getUuidType(uuid);
+		if (type == ModelHash.TYPE_PLAYER || type == ModelHash.TYPE_NPC)
+			terrainData |= 1 << 22;
 		sceneContext.modelFaceNormals[0] = xVertexNormals[triA];
 		sceneContext.modelFaceNormals[1] = yVertexNormals[triA];
 		sceneContext.modelFaceNormals[2] = zVertexNormals[triA];

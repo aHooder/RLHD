@@ -36,6 +36,7 @@ uniform sampler2D shadowMap;
 
 uniform vec3 cameraPos;
 uniform vec3 cameraDir;
+uniform vec3 cameraFocalPoint;
 uniform float drawDistance;
 uniform int expandedMapLoadingChunks;
 uniform mat4 projectionMatrix;
@@ -458,8 +459,11 @@ void main() {
     }
 
     int plane = (vTerrainData[0] >> 1) & 3;
-    if (!isTerrain || plane > 0)
-        outputColor.a *= 1 - smoothstep(.54, .55, gl_FragCoord.z) * smoothstep(.75, 1, dot(viewDir, -cameraDir));
+    if (!isTerrain && ((vTerrainData[0] >> 22) & 1) == 0 || plane > 0)
+        outputColor.a *= 1 - smoothstep(0.5, 1, dot(
+            normalize(cameraDir - vec3(0, cameraDir.y - 1, 0)),
+            normalize(cameraFocalPoint + cameraDir * 64 - IN.position)
+        ));
 
     vec2 tiledist = abs(floor(IN.position.xz / 128) - floor(cameraPos.xz / 128));
     float maxDist = max(tiledist.x, tiledist.y);

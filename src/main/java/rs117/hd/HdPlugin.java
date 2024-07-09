@@ -55,6 +55,7 @@ import javax.swing.SwingUtilities;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
+import net.runelite.api.coords.*;
 import net.runelite.api.events.*;
 import net.runelite.api.hooks.*;
 import net.runelite.client.RuneLite;
@@ -397,6 +398,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	private int uniUnderwaterCausticsStrength;
 	private int uniCameraPos;
 	private int uniCameraDir;
+	private int uniCameraFocalPoint;
 	private int uniColorFilter;
 	private int uniColorFilterPrevious;
 	private int uniColorFilterFade;
@@ -938,6 +940,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		uniUnderwaterCausticsStrength = glGetUniformLocation(glSceneProgram, "underwaterCausticsStrength");
 		uniCameraPos = glGetUniformLocation(glSceneProgram, "cameraPos");
 		uniCameraDir = glGetUniformLocation(glSceneProgram, "cameraDir");
+		uniCameraFocalPoint = glGetUniformLocation(glSceneProgram, "cameraFocalPoint");
 		uniTextureArray = glGetUniformLocation(glSceneProgram, "textureArray");
 		uniElapsedTime = glGetUniformLocation(glSceneProgram, "elapsedTime");
 
@@ -2087,6 +2090,12 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				(float) (Math.cos(cameraOrientation[1]) * -Math.sin(cameraOrientation[0])),
 				(float) Math.sin(cameraOrientation[1]),
 				(float) (Math.cos(cameraOrientation[1]) * Math.cos(cameraOrientation[0]))
+			);
+			glUniform3f(
+				uniCameraFocalPoint,
+				cameraFocalPoint[0],
+				Perspective.getTileHeight(client, new LocalPoint(cameraFocalPoint[0], cameraFocalPoint[1]), client.getPlane()) - 64,
+				cameraFocalPoint[1]
 			);
 
 			// Extract the 3rd column from the light view matrix (the float array is column-major)
