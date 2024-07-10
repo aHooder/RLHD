@@ -1490,8 +1490,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 					break;
 			}
 
-			int width = 256;
-			int height = 256;
+			int width = 64;
+			int height = 64;
 			int[] pixels = new int[width * height];
 
 			double turbidity = 4; // "haziness" from 1 to 10, with 50 being foggy, but unsupported by the model
@@ -1499,7 +1499,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			double albedo = .5; // snow
 			double solarElevation = (Math.cos(elapsedTime * Math.PI / 10) + 1) / 2 * Math.PI / 2; // radians from 0 to pi/2
 			solarElevation = lightPitch;
-			System.out.println("elevation: " + Math.toDegrees(solarElevation));
+//			System.out.println("elevation: " + Math.toDegrees(solarElevation));
 
 			// See https://cgg.mff.cuni.cz/projects/SkylightModelling/
 			ArHosekSkyModelData_Spectral.loadDatasets(gson);

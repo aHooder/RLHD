@@ -37,6 +37,10 @@ float sampleShadowMap(vec3 fragPos, int waterTypeIndex, vec2 distortion, float l
     vec2 uv = shadowPos.xy * 2 - 1;
     float fadeOut = smoothstep(.75, 1., dot(uv, uv));
 
+    // TODO: make this more physically correct
+    fadeOut += 1 - abs(lightDir.y);
+    fadeOut = min(1, fadeOut);
+
     if (fadeOut >= 1)
         return 0.f;
 
