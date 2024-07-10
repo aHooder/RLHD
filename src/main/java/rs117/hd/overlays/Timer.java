@@ -1,10 +1,11 @@
 package rs117.hd.overlays;
 
+import javax.annotation.Nonnull;
 import lombok.RequiredArgsConstructor;
-import net.runelite.client.util.Text;
 
 @RequiredArgsConstructor
 public enum Timer {
+	DRAW_FRAME,
 	DRAW_SCENE,
 	DRAW_RENDERABLE,
 	GET_MODEL,
@@ -14,13 +15,16 @@ public enum Timer {
 	MODEL_PUSHING,
 	MODEL_PUSHING_VERTEX,
 	MODEL_PUSHING_NORMAL,
-	MODEL_PUSHING_UV(false, "Model Pushing UV"),
+	MODEL_PUSHING_UV(false, "Model pushing UV"),
 	UPDATE_ENVIRONMENT,
 	UPDATE_LIGHTS,
+	IMPOSTOR_TRACKING,
+	REPLACE_FISHING_SPOTS,
 	UPLOAD_GEOMETRY(true),
 	UPLOAD_UI(true, "Upload UI"),
 	COMPUTE(true),
 	CLEAR_SCENE(true),
+	RENDER_SKY(true),
 	RENDER_SHADOWS(true),
 	RENDER_SCENE(true),
 	RENDER_UI(true, "Render UI"),
@@ -32,21 +36,26 @@ public enum Timer {
 
 	Timer() {
 		isGpuTimer = false;
-		name = Text.titleCase(this);
+		name = enumToName(name());
 	}
 
 	Timer(boolean isGpuTimer) {
 		this.isGpuTimer = isGpuTimer;
-		name = Text.titleCase(this);
+		name = enumToName(name());
 	}
 
-	Timer(String name) {
+	Timer(@Nonnull String name) {
 		isGpuTimer = false;
 		this.name = name;
 	}
 
+	private static String enumToName(String name) {
+		name = name.replace('_', ' ');
+		return name.substring(0, 1).toUpperCase() + name.substring(1).toLowerCase();
+	}
+
 	@Override
 	public String toString() {
-		return name == null ? name() : name;
+		return name;
 	}
 }

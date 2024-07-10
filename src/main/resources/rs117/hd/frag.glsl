@@ -36,11 +36,14 @@ uniform sampler2D shadowMap;
 uniform sampler2D skyTexture;
 
 uniform vec3 cameraPos;
+uniform float drawDistance;
+uniform int expandedMapLoadingChunks;
 uniform mat4 lightProjectionMatrix;
 uniform float elapsedTime;
 uniform float colorBlindnessIntensity;
-uniform vec3 fogColor;
+uniform int useFog;
 uniform float fogDepth;
+uniform vec3 fogColor;
 uniform vec3 waterColorLight;
 uniform vec3 waterColorMid;
 uniform vec3 waterColorDark;
@@ -66,18 +69,17 @@ uniform float contrast;
 
 uniform int pointLightsCount; // number of lights in current frame
 
-flat in vec4 vColor[3];
-flat in vec3 vUv[3];
-flat in int vMaterialData[3];
-flat in int vTerrainData[3];
+flat in ivec3 vHsl;
+flat in ivec3 vMaterialData;
+flat in ivec3 vTerrainData;
 flat in vec3 T;
 flat in vec3 B;
 
 in FragmentData {
     vec3 position;
+    vec2 uv;
     vec3 normal;
     vec3 texBlend;
-    float fogAmount;
 } IN;
 
 out vec4 FragColor;
@@ -96,6 +98,8 @@ vec2 worldUvs(float scale) {
 #include utils/displacement.glsl
 #include utils/shadows.glsl
 #include utils/water.glsl
+#include utils/color_filters.glsl
+#include utils/fog.glsl
 #include utils/sky.glsl
 
 void main() {
@@ -135,13 +139,18 @@ void main() {
     if (isWater) {
         outputColor = sampleWater(waterTypeIndex, viewDir);
     } else {
-        vec2 uv1 = vUv[0].xy;
-        vec2 uv2 = vUv[1].xy;
-        vec2 uv3 = vUv[2].xy;
-        vec2 blendedUv = uv1 * IN.texBlend.x + uv2 * IN.texBlend.y + uv3 * IN.texBlend.z;
-        if ((vMaterialData[0] >> MATERIAL_FLAG_IS_VANILLA_TEXTURED & 1) == 1)
-            blendedUv.x = clamp(blendedUv.x, 0, 1); // Vanilla textures rely on UVs being horizontally edge clamped
-        uv1 = uv2 = uv3 = blendedUv;
+        vec2 blendedUv = IN.uv;
+
+        float mipBias = 0;
+        // Vanilla tree textures rely on UVs being clamped horizontally, which HD doesn't do at the texture level.
+        // Instead we manually clamp vanilla textures with transparency here. Including the transparency check
+        // allows texture wrapping to work correctly for the mirror shield.
+        if ((vMaterialData[0] >> MATERIAL_FLAG_VANILLA_UVS & 1) == 1 && getMaterialHasTransparency(material1))
+            blendedUv.x = clamp(blendedUv.x, 0, .984375);
+
+        vec2 uv1 = blendedUv;
+        vec2 uv2 = blendedUv;
+        vec2 uv3 = blendedUv;
 
         // Scroll UVs
         uv1 += material1.scrollDuration * elapsedTime;
@@ -149,9 +158,9 @@ void main() {
         uv3 += material3.scrollDuration * elapsedTime;
 
         // Scale from the center
-        uv1 = (uv1 - .5) / material1.textureScale + .5;
-        uv2 = (uv2 - .5) / material2.textureScale + .5;
-        uv3 = (uv3 - .5) / material3.textureScale + .5;
+        uv1 = (uv1 - .5) * material1.textureScale.xy + .5;
+        uv2 = (uv2 - .5) * material2.textureScale.xy + .5;
+        uv3 = (uv3 - .5) * material3.textureScale.xy + .5;
 
         // get flowMap map
         vec2 flowMapUv = uv1 - animationFrame(material1.flowMapDuration);
@@ -193,10 +202,9 @@ void main() {
         #endif
 
         // get vertex colors
-        vec4 flatColor = vec4(0.5, 0.5, 0.5, 1.0);
-        vec4 baseColor1 = vColor[0];
-        vec4 baseColor2 = vColor[1];
-        vec4 baseColor3 = vColor[2];
+        vec4 baseColor1 = vec4(srgbToLinear(packedHslToSrgb(vHsl[0])), 1 - float(vHsl[0] >> 24 & 0xff) / 255.);
+        vec4 baseColor2 = vec4(srgbToLinear(packedHslToSrgb(vHsl[1])), 1 - float(vHsl[1] >> 24 & 0xff) / 255.);
+        vec4 baseColor3 = vec4(srgbToLinear(packedHslToSrgb(vHsl[2])), 1 - float(vHsl[2] >> 24 & 0xff) / 255.);
 
         #if VANILLA_COLOR_BANDING
         vec4 baseColor =
@@ -214,9 +222,9 @@ void main() {
         #endif
 
         // get diffuse textures
-        vec4 texColor1 = colorMap1 == -1 ? vec4(1) : texture(textureArray, vec3(uv1, colorMap1));
-        vec4 texColor2 = colorMap2 == -1 ? vec4(1) : texture(textureArray, vec3(uv2, colorMap2));
-        vec4 texColor3 = colorMap3 == -1 ? vec4(1) : texture(textureArray, vec3(uv3, colorMap3));
+        vec4 texColor1 = colorMap1 == -1 ? vec4(1) : texture(textureArray, vec3(uv1, colorMap1), mipBias);
+        vec4 texColor2 = colorMap2 == -1 ? vec4(1) : texture(textureArray, vec3(uv2, colorMap2), mipBias);
+        vec4 texColor3 = colorMap3 == -1 ? vec4(1) : texture(textureArray, vec3(uv3, colorMap3), mipBias);
         texColor1.rgb *= material1.brightness;
         texColor2.rgb *= material2.brightness;
         texColor3.rgb *= material3.brightness;
@@ -273,77 +281,41 @@ void main() {
 
         if (overlayCount > 0 && underlayCount > 0)
         {
-            // custom blending logic for blending overlays into underlays
-            // in a style similar to 2008+ HD
-
-            // fragment UV
-            vec2 fragUv = blendedUv;
-            // standalone UV
-            // e.g. if there are 2 overlays and 1 underlay, the underlay is the standalone
-            vec2 sUv[3];
-            bool inverted = false;
-
             ivec3 isPrimary = isUnderlay;
+            bool invert = true;
             if (overlayCount == 1) {
                 isPrimary = isOverlay;
-                // we use this at the end of this logic to invert
-                // the result if there's 1 overlay, 2 underlay
-                // vs the default result from 1 underlay, 2 overlay
-                inverted = true;
+                invert = false;
             }
 
-            if (isPrimary[0] == 1) {
-                sUv = vec2[](vUv[0].xy, vUv[1].xy, vUv[2].xy);
-            } else if (isPrimary[1] == 1) {
-                sUv = vec2[](vUv[1].xy, vUv[0].xy, vUv[2].xy);
-            } else {
-                sUv = vec2[](vUv[2].xy, vUv[0].xy, vUv[1].xy);
-            }
-
-            // point on side perpendicular to sUv[0]
-            vec2 oppositePoint = sUv[1] + pointToLine(sUv[1], sUv[2], sUv[0]) * (sUv[2] - sUv[1]);
-
-            // calculate position of fragment's UV relative to
-            // line between sUv[0] and oppositePoint
-            float result = pointToLine(sUv[0], oppositePoint, fragUv);
-
-            if (inverted)
-            {
+            float result = dot(IN.texBlend, isPrimary);
+            if (invert)
                 result = 1 - result;
-            }
 
-            result = clamp(result, 0, 1);
-
-            float distance = distance(sUv[0], oppositePoint);
-
-            float cutoff = 0.5;
-
-            result = (result - (1.0 - cutoff)) * (1.0 / cutoff);
-            result = clamp(result, 0, 1);
-
-            float maxDistance = 2.5;
-            if (distance > maxDistance)
-            {
-                float multi = distance / maxDistance;
-                result = 1.0 - ((1.0 - result) * multi);
-                result = clamp(result, 0, 1);
-            }
-
+            result = clamp(result * 2 - 1, 0, 1);
             overlayMix = result;
         }
 
         outputColor = mix(underlayColor, overlayColor, overlayMix);
 
         // normals
-        vec3 n1 = sampleNormalMap(material1, uv1, TBN);
-        vec3 n2 = sampleNormalMap(material2, uv2, TBN);
-        vec3 n3 = sampleNormalMap(material3, uv3, TBN);
-        vec3 normals = normalize(n1 * IN.texBlend.x + n2 * IN.texBlend.y + n3 * IN.texBlend.z);
+        vec3 normals;
+        if ((vMaterialData[0] >> MATERIAL_FLAG_UPWARDS_NORMALS & 1) == 1) {
+            normals = vec3(0, -1, 0);
+        } else {
+            vec3 n1 = sampleNormalMap(material1, uv1, TBN);
+            vec3 n2 = sampleNormalMap(material2, uv2, TBN);
+            vec3 n3 = sampleNormalMap(material3, uv3, TBN);
+            normals = normalize(n1 * IN.texBlend.x + n2 * IN.texBlend.y + n3 * IN.texBlend.z);
+        }
 
         float lightDotNormals = dot(normals, lightDir);
         float downDotNormals = dot(downDir, normals);
         float viewDotNormals = dot(viewDir, normals);
 
+        #if (DISABLE_DIRECTIONAL_SHADING)
+        lightDotNormals = .7;
+        #endif
 
         float shadow = 0;
         if ((vMaterialData[0] >> MATERIAL_FLAG_DISABLE_SHADOW_RECEIVING & 1) == 0)
@@ -395,9 +367,6 @@ void main() {
             float scale = 12.8;
             vec2 causticsUv = worldUvs(scale);
 
-            // height offset
-            causticsUv += lightDir.xy * IN.position.y / (128 * scale);
-
             const ivec2 direction = ivec2(1, -1);
             const int driftSpeed = 231;
             vec2 drift = animationFrame(231) * ivec2(1, -2);
@@ -428,11 +397,11 @@ void main() {
             float distanceSquared = dot(lightToFrag, lightToFrag);
             float radiusSquared = pos.w;
             if (distanceSquared <= radiusSquared) {
-                vec3 pointLightColor = PointLightArray[i].color;
-                vec3 pointLightDir = normalize(lightToFrag);
+                float attenuation = max(0, 1 - sqrt(distanceSquared / radiusSquared));
+                attenuation *= attenuation;
 
-                float attenuation = 1 - min(distanceSquared / radiusSquared, 1);
-                pointLightColor *= attenuation * attenuation;
+                vec3 pointLightColor = PointLightArray[i].color * attenuation;
+                vec3 pointLightDir = normalize(lightToFrag);
 
                 float pointLightDotNormals = max(dot(normals, pointLightDir), 0);
                 pointLightsOut += pointLightColor * pointLightDotNormals;
@@ -485,6 +454,14 @@ void main() {
         }
     }
 
+    vec2 tiledist = abs(floor(IN.position.xz / 128) - floor(cameraPos.xz / 128));
+    float maxDist = max(tiledist.x, tiledist.y);
+    if (maxDist > drawDistance) {
+        // Rapidly fade out any geometry that extends beyond the draw distance.
+        // This is required if we always draw all underwater terrain.
+        outputColor.a *= -256;
+    }
+
 
     outputColor.rgb = clamp(outputColor.rgb, 0, 1);
 
@@ -507,6 +484,10 @@ void main() {
 
     outputColor.rgb = colorBlindnessCompensation(outputColor.rgb);
 
+    #if APPLY_COLOR_FILTER
+    outputColor.rgb = applyColorFilter(outputColor.rgb);
+    #endif
+
     // apply fog
     if (!isUnderwater) {
         // ground fog
@@ -517,7 +498,8 @@ void main() {
         groundFog *= clamp(distance / closeFadeDistance, 0.0, 1.0);
 
         // multiply the visibility of each fog
-        float combinedFog = 1 - (1 - IN.fogAmount) * (1 - groundFog);
+        float fogAmount = calculateFogAmount(IN.position);
+        float combinedFog = 1 - (1 - fogAmount) * (1 - groundFog);
 
         if (isWater) {
             outputColor.a = combinedFog + outputColor.a * (1 - combinedFog);

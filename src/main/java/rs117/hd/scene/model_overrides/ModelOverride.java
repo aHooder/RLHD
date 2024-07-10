@@ -9,11 +9,14 @@ import lombok.AllArgsConstructor;
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
+import rs117.hd.config.SeasonalTheme;
+import rs117.hd.config.VanillaShadowMode;
 import rs117.hd.data.materials.Material;
 import rs117.hd.data.materials.UvType;
-import rs117.hd.utils.AABB;
+import rs117.hd.scene.areas.AABB;
 import rs117.hd.utils.GsonUtils;
-import rs117.hd.utils.HDUtils;
+import rs117.hd.utils.Props;
+import rs117.hd.utils.Vector;
 
 import static net.runelite.api.Perspective.*;
 
@@ -22,20 +25,24 @@ import static net.runelite.api.Perspective.*;
 @AllArgsConstructor
 public class ModelOverride
 {
-	public static ModelOverride NONE = new ModelOverride(true);
+	public static final ModelOverride NONE = new ModelOverride(true);
 
 	private static final Set<Integer> EMPTY = new HashSet<>();
 
 	public String description = "UNKNOWN";
 
 	// When, where or what the override should apply to
-	public String seasonalTheme;
+	public SeasonalTheme seasonalTheme;
 	@JsonAdapter(AABB.JsonAdapter.class)
 	public AABB[] areas = {};
 	@JsonAdapter(GsonUtils.IntegerSetAdapter.class)
 	public Set<Integer> npcIds = EMPTY;
 	@JsonAdapter(GsonUtils.IntegerSetAdapter.class)
 	public Set<Integer> objectIds = EMPTY;
+	@JsonAdapter(GsonUtils.IntegerSetAdapter.class)
+	public Set<Integer> projectileIds = EMPTY;
+	@JsonAdapter(GsonUtils.IntegerSetAdapter.class)
+	public Set<Integer> graphicsObjectIds = EMPTY;
 
 	public Material baseMaterial = Material.NONE;
 	public Material textureMaterial = Material.NONE;
@@ -50,7 +57,10 @@ public class ModelOverride
 	public boolean retainVanillaUvs = true;
 	public boolean forceMaterialChanges = false;
 	public boolean flatNormals = false;
-	public boolean removeBakedLighting = false;
+	public boolean upwardsNormals = false;
+	public boolean hideVanillaShadows = false;
+	public boolean retainVanillaShadowsInPvm = false;
+	public boolean hideHdShadowsInPvm = false;
 	public boolean castShadows = true;
 	public boolean receiveShadows = true;
 	public float shadowOpacityThreshold = 0;
@@ -65,33 +75,48 @@ public class ModelOverride
 	public transient boolean isDummy;
 	public transient Map<AABB, ModelOverride> areaOverrides;
 
-	public void gsonReallyShouldSupportThis() {
+	public void normalize(VanillaShadowMode vanillaShadowMode) {
 		// Ensure there are no nulls in case of invalid configuration during development
-		if (baseMaterial == null)
+		if (baseMaterial == null) {
+			if (Props.DEVELOPMENT)
+				throw new IllegalStateException("Invalid baseMaterial");
 			baseMaterial = ModelOverride.NONE.baseMaterial;
-		if (textureMaterial == null)
+		}
+		if (textureMaterial == null) {
+			if (Props.DEVELOPMENT)
+				throw new IllegalStateException("Invalid textureMaterial");
 			textureMaterial = ModelOverride.NONE.textureMaterial;
-		if (uvType == null)
+		}
+		if (uvType == null) {
+			if (Props.DEVELOPMENT)
+				throw new IllegalStateException("Invalid uvType");
 			uvType = ModelOverride.NONE.uvType;
-		if (tzHaarRecolorType == null)
+		}
+		if (tzHaarRecolorType == null) {
+			if (Props.DEVELOPMENT)
+				throw new IllegalStateException("Invalid tzHaarRecolorType");
 			tzHaarRecolorType = ModelOverride.NONE.tzHaarRecolorType;
-		if (inheritTileColorType == null)
+		}
+		if (inheritTileColorType == null) {
+			if (Props.DEVELOPMENT)
+				throw new IllegalStateException("Invalid inheritTileColorType");
 			inheritTileColorType = ModelOverride.NONE.inheritTileColorType;
+		}
+
 		if (areas == null)
 			areas = new AABB[0];
 		if (hideInAreas == null)
 			hideInAreas = new AABB[0];
-	}
 
-	public void normalize() {
 		baseMaterial = baseMaterial.resolveReplacements();
 		textureMaterial = textureMaterial.resolveReplacements();
 
 		if (materialOverrides != null) {
 			var normalized = new HashMap<Material, ModelOverride>();
 			for (var entry : materialOverrides.entrySet()) {
-				entry.getValue().normalize();
-				normalized.put(entry.getKey().resolveReplacements(), entry.getValue());
+				var override = entry.getValue();
+				override.normalize(vanillaShadowMode);
+				normalized.put(entry.getKey().resolveReplacements(), override);
 			}
 			materialOverrides = normalized;
 		}
@@ -102,6 +127,13 @@ public class ModelOverride
 			uvOrientationY = uvOrientation;
 		if (uvOrientationZ == 0)
 			uvOrientationZ = uvOrientation;
+
+		if (retainVanillaShadowsInPvm) {
+			if (vanillaShadowMode.retainInPvm)
+				hideVanillaShadows = false;
+			if (vanillaShadowMode == VanillaShadowMode.PREFER_IN_PVM && hideHdShadowsInPvm)
+				castShadows = false;
+		}
 
 		if (!castShadows && shadowOpacityThreshold == 0)
 			shadowOpacityThreshold = 1;
@@ -114,6 +146,8 @@ public class ModelOverride
 			areas,
 			npcIds,
 			objectIds,
+			projectileIds,
+			graphicsObjectIds,
 			baseMaterial,
 			textureMaterial,
 			uvType,
@@ -127,7 +161,10 @@ public class ModelOverride
 			retainVanillaUvs,
 			forceMaterialChanges,
 			flatNormals,
-			removeBakedLighting,
+			upwardsNormals,
+			hideVanillaShadows,
+			retainVanillaShadowsInPvm,
+			hideHdShadowsInPvm,
 			castShadows,
 			receiveShadows,
 			shadowOpacityThreshold,
@@ -196,9 +233,9 @@ public class ModelOverride
 			case MODEL_YZ:
 			case MODEL_YZ_MIRROR_A:
 			case MODEL_YZ_MIRROR_B: {
-				final int[] vertexX = model.getVerticesX();
-				final int[] vertexY = model.getVerticesY();
-				final int[] vertexZ = model.getVerticesZ();
+				final float[] vertexX = model.getVerticesX();
+				final float[] vertexY = model.getVerticesY();
+				final float[] vertexZ = model.getVerticesZ();
 				final int triA = model.getFaceIndices1()[face];
 				final int triB = model.getFaceIndices2()[face];
 				final int triC = model.getFaceIndices3()[face];
@@ -217,9 +254,9 @@ public class ModelOverride
 				if (texFace != -1) {
 					texFace &= 0xff;
 
-					final int[] vertexX = model.getVerticesX();
-					final int[] vertexY = model.getVerticesY();
-					final int[] vertexZ = model.getVerticesZ();
+					final float[] vertexX = model.getVerticesX();
+					final float[] vertexY = model.getVerticesY();
+					final float[] vertexZ = model.getVerticesZ();
 					final int texA = model.getTexIndices1()[texFace];
 					final int texB = model.getTexIndices2()[texFace];
 					final int texC = model.getTexIndices3()[texFace];
@@ -252,7 +289,7 @@ public class ModelOverride
 	}
 
 	private void computeBoxUvw(float[] out, Model model, int modelOrientation, int face) {
-		final int[][] vertexXYZ = {
+		final float[][] vertexXYZ = {
 			model.getVerticesX(),
 			model.getVerticesY(),
 			model.getVerticesZ()
@@ -292,11 +329,12 @@ public class ModelOverride
 		// Compute face normal
 		float[] a = new float[3];
 		float[] b = new float[3];
-		HDUtils.subtract(a, v[1], v[0]);
-		HDUtils.subtract(b, v[2], v[0]);
+		Vector.subtract(a, v[1], v[0]);
+		Vector.subtract(b, v[2], v[0]);
 		float[] n = new float[3];
-		HDUtils.cross(n, a, b);
-		float[] absN = HDUtils.abs(a, n);
+		Vector.cross(n, a, b);
+		float[] absN = new float[3];
+		Vector.abs(absN, n);
 
 		out[2] = out[6] = out[10] = 0;
 		if (absN[0] > absN[1] && absN[0] > absN[2]) {

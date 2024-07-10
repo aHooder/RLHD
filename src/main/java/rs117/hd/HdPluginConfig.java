@@ -33,17 +33,21 @@ import net.runelite.client.config.Range;
 import net.runelite.client.config.Units;
 import rs117.hd.config.AntiAliasingMode;
 import rs117.hd.config.ColorBlindMode;
+import rs117.hd.config.ColorFilter;
 import rs117.hd.config.Contrast;
 import rs117.hd.config.DaylightCycle;
 import rs117.hd.config.DefaultSkyColor;
 import rs117.hd.config.FogDepthMode;
 import rs117.hd.config.MaxDynamicLights;
 import rs117.hd.config.Saturation;
+import rs117.hd.config.SeasonalTheme;
+import rs117.hd.config.ShadingMode;
 import rs117.hd.config.ShadowDistance;
 import rs117.hd.config.ShadowMode;
 import rs117.hd.config.ShadowResolution;
 import rs117.hd.config.TextureResolution;
 import rs117.hd.config.UIScalingMode;
+import rs117.hd.config.VanillaShadowMode;
 
 import static rs117.hd.HdPlugin.MAX_DISTANCE;
 import static rs117.hd.HdPlugin.MAX_FOG_DEPTH;
@@ -70,8 +74,8 @@ public interface HdPluginConfig extends Config
 		keyName = "drawDistance",
 		name = "Draw Distance",
 		description =
-			"The maximum number of tiles to draw in either direction from the camera.<br>" +
-			"Depending on where the scene was loaded from, you might only see as far as 16 tiles in some directions.",
+			"The number of tiles to draw in either direction from the camera, up to a maximum of 184.<br>" +
+			"Depending on where the scene is centered, you might only see 16 tiles in one direction, unless you extend map loading.",
 		position = 0,
 		section = generalSettings
 	)
@@ -86,7 +90,9 @@ public interface HdPluginConfig extends Config
 	@ConfigItem(
 		keyName = KEY_EXPANDED_MAP_LOADING_CHUNKS,
 		name = "Extended map loading",
-		description = "Extra map area to load, in 8 tile chunks.",
+		description =
+			"How much further the map should be loaded. The maximum is 5 extra chunks.<br>" +
+			"Note, extending the map can have a very high impact on performance.",
 		position = 1,
 		section = generalSettings
 	)
@@ -98,8 +104,8 @@ public interface HdPluginConfig extends Config
 		keyName = "antiAliasingMode",
 		name = "Anti-Aliasing",
 		description =
-			"Improves jagged/shimmering edges at the cost of GPU performance.<br>" +
-			"16x MSAA is highly expensive, so 8x is recommended if anti-aliasing is desired.",
+			"Improves pixelated edges at the cost of significantly higher GPU usage.<br>" +
+			"MSAA x16 is very expensive, so x8 is recommended if anti-aliasing is desired.",
 		position = 2,
 		section = generalSettings
 	)
@@ -393,7 +399,7 @@ public interface HdPluginConfig extends Config
 		name = "Shadow Quality",
 		description =
 			"The resolution of the shadow map.<br>" +
-			"Higher resolutions result in higher quality shadows, at the cost of GPU performance.",
+			"Higher resolutions result in higher quality shadows, at the cost of higher GPU usage.",
 		position = 7,
 		section = lightingSettings
 	)
@@ -422,7 +428,7 @@ public interface HdPluginConfig extends Config
 		name = "Expand Shadow Draw",
 		description =
 			"Reduces shadows popping in and out at the edge of the screen by rendering<br>" +
-			"shadows for a larger portion of the scene, at the cost of performance.",
+			"shadows for a larger portion of the scene, at the cost of higher GPU usage.",
 		position = 10,
 		section = lightingSettings
 	)
@@ -431,25 +437,26 @@ public interface HdPluginConfig extends Config
 		return false;
 	}
 
-	String KEY_HIDE_FAKE_SHADOWS = "hideBakedEffects";
+	String KEY_VANILLA_SHADOW_MODE = "vanillaShadowMode";
 	@ConfigItem(
-		keyName = KEY_HIDE_FAKE_SHADOWS,
-		name = "Hide Fake Shadows",
+		keyName = KEY_VANILLA_SHADOW_MODE,
+		name = "Vanilla Shadows",
 		description =
-			"Hide fake shadows and lighting which is often built into models by Jagex.<br>" +
-			"This does not affect the hitbox of NPCs, so you can still click where the fake shadow would normally be.",
+			"Choose whether shadows built into models by Jagex should be hidden. This does not affect clickboxes.<br>" +
+			"'Show in PvM' will retain shadows for falling crystals during the Olm fight and other useful cases.<br>" +
+			"'Prefer in PvM' will do the above and also disable 117 HD's dynamic shadows in such cases.",
 		position = 11,
 		section = lightingSettings
 	)
-	default boolean hideFakeShadows() {
-		return true;
+	default VanillaShadowMode vanillaShadowMode() {
+		return VanillaShadowMode.SHOW_IN_PVM;
 	}
 
 	String KEY_NORMAL_MAPPING = "normalMapping";
 	@ConfigItem(
 		keyName = KEY_NORMAL_MAPPING,
 		name = "Normal Mapping",
-		description = "Affects how light interacts with certain materials. Barely affects performance.",
+		description = "Affects how light interacts with certain materials. Barely impacts performance.",
 		position = 12,
 		section = lightingSettings
 	)
@@ -461,7 +468,7 @@ public interface HdPluginConfig extends Config
 	@ConfigItem(
 		keyName = KEY_PARALLAX_OCCLUSION_MAPPING,
 		name = "Parallax Occlusion Mapping",
-		description = "Adds more depth to supported materials, at the cost of performance.",
+		description = "Adds more depth to some materials, at the cost of higher GPU usage.",
 		position = 13,
 		section = lightingSettings
 	)
@@ -475,10 +482,21 @@ public interface HdPluginConfig extends Config
 	@ConfigSection(
 		name = "Environment",
 		description = "Environment settings",
-		position = 2,
-		closedByDefault = false
+		position = 2
 	)
 	String environmentSettings = "environmentSettings";
+
+	String KEY_SEASONAL_THEME = "seasonalTheme";
+	@ConfigItem(
+		keyName = KEY_SEASONAL_THEME,
+		name = "Seasonal Theme",
+		description = "Festive themes for Gielinor.",
+		position = 0,
+		section = environmentSettings
+	)
+	default SeasonalTheme seasonalTheme() {
+		return SeasonalTheme.AUTOMATIC;
+	}
 
 	@ConfigItem(
 		keyName = "daylightCycle",
@@ -551,6 +569,7 @@ public interface HdPluginConfig extends Config
 		name = "Default Sky",
 		description =
 			"Specify a sky color to use when the current area doesn't have a sky color defined.<br>" +
+			"This only applies when the default summer seasonal theme is active.<br>" +
 			"If set to 'RuneLite Skybox', the sky color from RuneLite's Skybox plugin will be used.<br>" +
 			"If set to 'Old School Black', the sky will be black and water will remain blue, but for any<br>" +
 			"other option, the water color will be influenced by the sky color.",
@@ -726,7 +745,6 @@ public interface HdPluginConfig extends Config
 		warning =
 			"This setting can cause RuneLite to crash, and it can be difficult to undo.\n" +
 			"Only enable it if you are seeing broken colors. Are you sure you want to enable this setting?",
-		position = 1,
 		section = miscellaneousSettings
 	)
 	default boolean macosIntelWorkaround()
@@ -741,25 +759,10 @@ public interface HdPluginConfig extends Config
 		description =
 			"Replace the infernal cape texture with a more detailed version.<br>" +
 			"Note, with Anisotropic Filtering above zero, the cape may look blurry when zoomed out.",
-		position = 2,
 		section = miscellaneousSettings
 	)
-	default boolean hdInfernalTexture()
-	{
+	default boolean hdInfernalTexture() {
 		return true;
-	}
-
-	String KEY_WINTER_THEME = "winterTheme0";
-	@ConfigItem(
-		keyName = KEY_WINTER_THEME,
-		name = "Winter Theme",
-		description = "Covers the Gielinor overworld with a layer of snow!",
-		position = 3,
-		section = miscellaneousSettings
-	)
-	default boolean winterTheme()
-	{
-		return false;
 	}
 
 	String KEY_LEGACY_GREY_COLORS = "reduceOverExposure";
@@ -769,7 +772,6 @@ public interface HdPluginConfig extends Config
 		description =
 			"Previously, HD attempted to reduce over-exposure by capping the maximum color brightness,<br>" +
 			"which changed white colors into dull shades of grey. This option brings back that old behaviour.",
-		position = 4,
 		section = miscellaneousSettings
 	)
 	default boolean legacyGreyColors() {
@@ -783,7 +785,6 @@ public interface HdPluginConfig extends Config
 		description =
 			"Blend between colors similarly to how it works in vanilla, with clearly defined bands of color.<br>" +
 			"This isn't really noticeable on textured surfaces, and is intended to be used without ground textures.",
-		position = 5,
 		section = miscellaneousSettings
 	)
 	default boolean vanillaColorBanding() {
@@ -798,11 +799,46 @@ public interface HdPluginConfig extends Config
 		warning =
 			"<html>This <b>will not</b> result in better performance. It is recommended only if you are unable to install<br>" +
 			"the 64-bit version of RuneLite, or if your computer has a very low amount of memory available.</html>",
-		position = 6,
 		section = miscellaneousSettings
 	)
 	default boolean lowMemoryMode() {
 		return false;
+	}
+
+	String KEY_REPLACE_FISHING_SPOTS = "replaceFishingSpots";
+	@ConfigItem(
+		keyName = KEY_REPLACE_FISHING_SPOTS,
+		name = "Replace Fishing Spots",
+		description = "Replace certain fishing spots with more appropriate models that are easier to see.",
+		section = miscellaneousSettings
+	)
+	default boolean replaceFishingSpots() {
+		return true;
+	}
+
+	String KEY_COLOR_FILTER = "colorFilter";
+	@ConfigItem(
+		keyName = KEY_COLOR_FILTER,
+		name = "Color Filter",
+		description = "Apply a color filter to the game as a post-processing effect.",
+		section = miscellaneousSettings
+	)
+	default ColorFilter colorFilter() {
+		return ColorFilter.NONE;
+	}
+
+	String KEY_REMOVE_VERTEX_SNAPPING = "removeVertexSnapping";
+	@ConfigItem(
+		keyName = KEY_REMOVE_VERTEX_SNAPPING,
+		name = "Remove vertex snapping",
+		description =
+			"Removes vertex snapping from most animations.<br>" +
+			"Most animations are barely affected by this, and it only has an effect if the animation smoothing plugin is turned off.<br>" +
+			"To see quite clearly what impact this option has, a good example is the godsword idle animation.",
+		section = miscellaneousSettings
+	)
+	default boolean removeVertexSnapping() {
+		return true;
 	}
 
 
@@ -831,21 +867,10 @@ public interface HdPluginConfig extends Config
 	@ConfigItem(
 		keyName = KEY_FASTER_MODEL_HASHING,
 		name = "Use faster model hashing",
-		description = "Should increase performance at the expensive of potential graphical issues.",
+		description = "Should increase performance at the expense of potential graphical issues.",
 		section = experimentalSettings
 	)
 	default boolean fasterModelHashing() {
-		return true;
-	}
-
-	String KEY_UNDO_VANILLA_SHADING_IN_COMPUTE = "experimentalUndoVanillaShadingInCompute";
-	@ConfigItem(
-		keyName = KEY_UNDO_VANILLA_SHADING_IN_COMPUTE,
-		name = "Undo vanilla shading in compute",
-		description = "Should increase performance at the expensive of potential graphical issues.",
-		section = experimentalSettings
-	)
-	default boolean undoVanillaShadingInCompute() {
 		return true;
 	}
 
@@ -858,6 +883,52 @@ public interface HdPluginConfig extends Config
 	)
 	default boolean preserveVanillaNormals() {
 		return false;
+	}
+
+	String KEY_SHADING_MODE = "experimentalShadingMode";
+	@ConfigItem(
+		keyName = KEY_SHADING_MODE,
+		name = "Shading mode",
+		description =
+			"If you prefer playing without shadows, maybe you'll prefer vanilla shading or no shading as well.<br>" +
+			"Keep in mind, with vanilla shading used alongside shadows, you can end up with double shading.",
+		section = experimentalSettings
+	)
+	default ShadingMode shadingMode() {
+		return ShadingMode.DEFAULT;
+	}
+
+	String KEY_FLAT_SHADING = "experimentalFlatShading";
+	@ConfigItem(
+		keyName = KEY_FLAT_SHADING,
+		name = "Flat shading",
+		description = "Gives a more low-poly look to the game.",
+		section = experimentalSettings
+	)
+	default boolean flatShading() {
+		return false;
+	}
+
+	String KEY_DECOUPLE_WATER_FROM_SKY_COLOR = "experimentalDecoupleWaterFromSkyColor";
+	@ConfigItem(
+		keyName = KEY_DECOUPLE_WATER_FROM_SKY_COLOR,
+		name = "Decouple water from sky color",
+		description = "Some people prefer the water staying blue even with a different sky color active.",
+		section = experimentalSettings
+	)
+	default boolean decoupleSkyAndWaterColor() {
+		return false;
+	}
+
+	String KEY_HIDE_UNRELATED_AREAS = "hideUnrelatedAreas";
+	@ConfigItem(
+		keyName = KEY_HIDE_UNRELATED_AREAS,
+		name = "Hide unrelated areas",
+		description = "Hide unrelated areas which you shouldn't see from your current position.",
+		section = experimentalSettings
+	)
+	default boolean hideUnrelatedAreas() {
+		return true;
 	}
 
 

@@ -38,10 +38,8 @@ import static java.lang.Math.cos;
 import static java.lang.Math.sin;
 import static java.lang.Math.tan;
 import static rs117.hd.utils.ColorUtils.rgb;
-import static rs117.hd.utils.HDUtils.add;
 import static rs117.hd.utils.HDUtils.clamp;
 import static rs117.hd.utils.HDUtils.lerp;
-import static rs117.hd.utils.HDUtils.multiply;
 
 @Slf4j
 public class SunCalc
@@ -82,7 +80,7 @@ public class SunCalc
 		double[] angles = getSunAngles(millis, latLong);
 
 		// Use night illumination as a base
-		float[] rgb = multiply(
+		float[] rgb = Vector.multiply(
 			ColorUtils.colorTemperatureToLinearRgb(4100),
 			(float) SunCalc.getMoonIllumination(millis)[0] * .2f
 		);
@@ -108,8 +106,8 @@ public class SunCalc
 			strength *= strength;
 			strength *= 3;
 			float[] sunIllumination = ColorUtils.colorTemperatureToLinearRgb(temperature);
-			sunIllumination = multiply(sunIllumination, strength);
-			rgb = add(rgb, sunIllumination);
+			sunIllumination = Vector.multiply(sunIllumination, strength);
+			rgb = Vector.add(rgb, sunIllumination);
 		}
 
 		return rgb;

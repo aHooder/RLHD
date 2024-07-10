@@ -18,8 +18,8 @@ struct Material
     float flowMapStrength;
     vec2 flowMapDuration;
     vec2 scrollDuration;
-    vec2 textureScale;
-    vec2 pad;
+    vec3 textureScale;
+    float pad;
 };
 
 layout(std140) uniform MaterialUniforms {
@@ -36,6 +36,6 @@ int getMaterialIsUnlit(const Material material) {
     return material.flags >> 1 & 1;
 }
 
-int getMaterialHasTransparency(const Material material) {
-    return material.flags & 1;
+bool getMaterialHasTransparency(const Material material) {
+    return (material.flags & 1) == 1;
 }
