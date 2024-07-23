@@ -3105,6 +3105,18 @@
     "blended": false
   },
   {
+    "name": "LOVAKENGJ_LAVA_OVERLAY",
+    "area": "LOVAKENGJ",
+    "overlayIds": [ 152 ],
+    "groundMaterial": "HD_LAVA",
+    "blended": false,
+    "forced": true,
+    "heightOffset": -70,
+    "setHue": 36,
+    "setSaturation": 2,
+    "setLightness": 65
+  },
+  {
     "name": "LOVAKENGJ_GROUND_OVERLAY",
     "area": "LOVAKENGJ",
     "overlayIds": [
@@ -3318,6 +3330,19 @@
     ],
     "groundMaterial": "DIRT",
     "blended": false
+  },
+  {
+    "name": "MOUNT_KARUULM_LAVA_TILES",
+    "area": "MOUNT_KARUULM",
+    "overlayIds": [
+      57
+    ],
+    "forced": true,
+    "heightOffset": -45,
+    "setHue": 36,
+    "setSaturation": 2,
+    "setLightness": 65,
+    "groundMaterial": "HD_LAVA"
   },
   {
     "name": "LIZARDMAN_TEMPLE_WATER",
