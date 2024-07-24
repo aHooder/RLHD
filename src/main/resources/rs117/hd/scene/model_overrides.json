@@ -21309,7 +21309,6 @@
     "baseMaterial": "METALLIC_1_LIGHT_GLOSS",
     "uvOrientation": 512,
     "uvType": "BOX",
-    "flatNormals": true,
     "uvScale": 0.6,
     "objectIds": [
       28484,
@@ -21322,7 +21321,6 @@
     "baseMaterial": "METALLIC_1_LIGHT_GLOSS",
     "uvOrientation": 512,
     "uvType": "BOX",
-    "flatNormals": true,
     "uvScale": 0.6,
     "objectIds": [
       28479,
@@ -21336,7 +21334,6 @@
     "baseMaterial": "METALLIC_1_LIGHT_GLOSS",
     "uvOrientation": 512,
     "uvType": "BOX",
-    "flatNormals": true,
     "uvScale": 0.6,
     "colorOverrides": [
       {
@@ -21359,7 +21356,6 @@
     "baseMaterial": "METALLIC_1_LIGHT_GLOSS",
     "uvOrientation": 512,
     "uvType": "BOX",
-    "flatNormals": true,
     "uvScale": 0.6,
     "colorOverrides": [
       {
@@ -21382,7 +21378,6 @@
     "baseMaterial": "METALLIC_1_LIGHT_GLOSS",
     "uvOrientation": 512,
     "uvType": "BOX",
-    "flatNormals": true,
     "uvScale": 0.6,
     "objectIds": [
       28487,
