@@ -26,44 +26,19 @@
 
 #version 330
 
-layout (location = 0) in ivec4 vPosition;
-layout (location = 1) in vec4 vUv;
-layout (location = 2) in vec4 vNormal;
+layout (location = 0) in vec3 vPosition;
+layout (location = 1) in int vHsl;
+layout (location = 2) in vec4 vUv;
+layout (location = 3) in vec4 vNormal;
 
 out vec3 gPosition;
-out vec3 gUv;
-out vec3 gNormal;
-out vec4 gColor;
-out float gFogAmount;
-out int gMaterialData;
-out int gTerrainData;
-
-#include uniforms/materials.glsl
-
-#include utils/polyfills.glsl
-#include utils/constants.glsl
-#include utils/color_utils.glsl
-#include utils/fog.glsl
+out int gHsl;
+out vec4 gUv;
+out vec4 gNormal;
 
 void main() {
-    int ahsl = vPosition.w;
-    vec3 rgb = packedHslToSrgb(ahsl);
-    float alpha = 1 - float(ahsl >> 24 & 0xff) / 255.;
-    vec4 color = vec4(srgbToLinear(rgb), alpha);
-    // CAUTION: only 24-bit ints can be stored safely as floats
-    int materialData = int(vUv.w);
-    int terrainData = int(vNormal.w);
-
-    float normalMagnitude = length(vNormal.xyz);
-    bool flatNormal = // Flat normals must be applied separately per vertex
-        normalMagnitude == 0 ||
-        (materialData >> MATERIAL_FLAG_FLAT_NORMALS & 1) == 1;
-
-    gPosition = vec3(vPosition);
-    gUv = vec3(vUv);
-    gNormal = flatNormal ? vec3(0) : vNormal.xyz / normalMagnitude;
-    gColor = color;
-    gFogAmount = calculateFogAmount(gPosition);
-    gMaterialData = materialData;
-    gTerrainData = terrainData;
+    gPosition = vPosition;
+    gHsl = vHsl;
+    gUv = vUv;
+    gNormal = vNormal;
 }

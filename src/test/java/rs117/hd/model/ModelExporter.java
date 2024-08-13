@@ -65,11 +65,15 @@ import org.lwjgl.assimp.AITexture;
 import org.lwjgl.assimp.AIVector3D;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.Pointer;
+import rs117.hd.HdPlugin;
 import rs117.hd.data.materials.Material;
+import rs117.hd.scene.ModelOverrideManager;
 import rs117.hd.scene.SceneContext;
 import rs117.hd.scene.TextureManager;
+import rs117.hd.scene.model_overrides.ModelOverride;
 import rs117.hd.utils.ColorUtils;
 import rs117.hd.utils.HDUtils;
+import rs117.hd.utils.ModelHash;
 
 import static net.runelite.api.Perspective.*;
 import static org.lwjgl.assimp.Assimp.*;
@@ -119,7 +123,13 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 	private ModelOutlineRenderer modelOutlineRenderer;
 
 	@Inject
+	private HdPlugin plugin;
+
+	@Inject
 	private TextureManager textureManager;
+
+	@Inject
+	private ModelOverrideManager modelOverrideManager;
 
 	@Inject
 	private ModelPusher modelPusher;
@@ -170,10 +180,18 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 	}
 
 	public void exportModel(Map.Entry<String, String> objectName, Object object) {
-		while (!textureManager.ensureTexturesLoaded()) ;
+		textureManager.ensureMaterialsAreLoaded();
+
+		SceneContext currentSceneContext = plugin.getSceneContext();
+		if (currentSceneContext == null) {
+			log.debug("Scene context is null");
+			return;
+		}
+
 		TextureProvider textureProvider = null;
 		while (textureProvider == null)
 			textureProvider = client.getTextureProvider();
+		var vanillaImage = new BufferedImage(128, 128, BufferedImage.TYPE_INT_ARGB);
 
 		long formatCount = aiGetExportFormatCount();
 		log.debug("Supported formats: {}", formatCount);
@@ -208,7 +226,6 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 		while (exportPath.exists())
 			exportPath = path("model-exports", filename + "_" + (collisionCounter++) + "." + extension);
 
-		long hash = getHash(object);
 		var modelInfos = resolveModels(object);
 		if (modelInfos.isEmpty()) {
 			chatMessageManager.queue(QueuedMessage.builder()
@@ -251,46 +268,58 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 			scene.mRootNode(rootNode);
 
 			var meshList = new ArrayList<AIMesh>();
-			var materialList = new ArrayList<Material>();
+			var materialList = new ArrayList<TextureManager.MaterialEntry>();
 
 			// Dummy scene context for writing model data
-			var sceneContext = new SceneContext(client.getScene(), null);
+			var sceneContext = new SceneContext(
+				client,
+				client.getScene(),
+				currentSceneContext.expandedMapLoadingChunks,
+				false,
+				null
+			);
 			boolean worldUvWarningSent = false;
 			for (ModelInfo modelInfo : modelInfos) {
+				long hash = getHash(modelInfo.object);
+				int uuid = ModelHash.generateUuid(client, hash, modelInfo.renderable);
+				int[] worldPos = sceneContext.sceneToWorld(
+					ModelHash.getSceneX(hash),
+					ModelHash.getSceneY(hash),
+					ModelHash.getPlane(hash)
+				);
+				ModelOverride modelOverride = modelOverrideManager.getOverride(uuid, worldPos);
 				var model = modelInfo.model;
 				int vertexOffset = sceneContext.getVertexOffset();
 				int uvOffset = sceneContext.getUvOffset();
 				int bakedOrientation = getBakedOrientation(modelInfo.object, modelInfo.renderable);
-				modelPusher.pushModel(sceneContext, null, hash, model, null, bakedOrientation, false);
-				int numVertices = sceneContext.modelPusherResults[0];
-				int numUvs = sceneContext.modelPusherResults[1];
+				modelPusher.pushModel(sceneContext, null, uuid, model, modelOverride, bakedOrientation, false);
+				int numVertices = sceneContext.modelPusherResults[0] * 3;
+				int numUvs = sceneContext.modelPusherResults[1] * 3;
 				int numFaces = numVertices / 3;
-
 				assert numUvs == numVertices || numUvs == 0;
 
-				var meshDataMap = new HashMap<Material, MeshData>();
+				var meshDataMap = new HashMap<TextureManager.MaterialEntry, MeshData>();
 				for (int face = 0; face < numFaces; face++) {
 					int faceVertexOffset = vertexOffset + face * 3;
 					int faceUvOffset = uvOffset + face * 3;
 
 					int materialData = 0;
-					Material material = Material.NONE;
+					TextureManager.MaterialEntry materialEntry = textureManager.materialUniformEntries.get(0);
 					if (numUvs > 0) {
 						materialData = (int) sceneContext.stagingBufferUvs.getBuffer().get(faceUvOffset * 4 + 3);
-						material = Material.values()[materialData >> 12 & MAX_MATERIAL_COUNT];
-						material = textureManager.getEffectiveMaterial(material);
+						materialEntry = textureManager.materialUniformEntries.get(materialData >> 12 & MAX_MATERIAL_COUNT);
 					}
 
-					var buffers = meshDataMap.get(material);
+					var buffers = meshDataMap.get(materialEntry);
 					if (buffers == null) {
 						// Model#getHash() = ObjectDefinitionId << 10 | 7-bit model type << 3 | 1-bit mirroring? | 2-bit orientation
 						int objectCompositionId = (int) (model.getHash() >> 10); // could use this to grab another name maybe
-						var meshName = objectName.getValue() + "_" + material.name();
+						var meshName = objectName.getValue() + "_" + materialEntry;
 
-						int materialIndex = materialList.indexOf(material);
+						int materialIndex = materialList.indexOf(materialEntry);
 						if (materialIndex == -1) {
 							materialIndex = materialList.size();
-							materialList.add(material);
+							materialList.add(materialEntry);
 						}
 
 						// All meshes share the same underlying buffers, with different indices
@@ -308,7 +337,7 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 						var faces = AIFace.malloc(numFaces);
 						cleanupFaceBuffers.add(faces);
 						buffers = new MeshData(mesh, faces);
-						meshDataMap.put(material, buffers);
+						meshDataMap.put(materialEntry, buffers);
 						meshList.add(mesh);
 					}
 
@@ -350,8 +379,8 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 							float v = uvs.get(offset + 1);
 
 							// Apply HD's texture scale parameter
-							u = (u - .5f) / material.textureScale[0] + .5f;
-							v = (v - .5f) / material.textureScale[1] + .5f;
+							u = (u - .5f) / materialEntry.material.textureScale[0] + .5f;
+							v = (v - .5f) / materialEntry.material.textureScale[1] + .5f;
 
 							// Flip UVs horizontally & vertically to match exported image orientation
 							u = 1 - u;
@@ -372,7 +401,7 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 							.put(alpha);
 
 						for (int c = 0; c < 3; c++) {
-							vertices.put(sceneContext.stagingBufferVertices.getBuffer().get(vertex * 4 + c));
+							vertices.put(Float.intBitsToFloat(sceneContext.stagingBufferVertices.getBuffer().get(vertex * 4 + c)));
 							normals.put(sceneContext.stagingBufferNormals.getBuffer().get(vertex * 4 + c));
 						}
 					}
@@ -400,7 +429,8 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 
 			var materialPointers = stack.callocPointer(materialList.size());
 			var expandedMaterials = new ArrayList<Material>();
-			for (var material : materialList) {
+			for (var materialEntry : materialList) {
+				var material = materialEntry.material;
 				var aiMaterial = AIMaterial.calloc(stack);
 				materialPointers.put(aiMaterial);
 
@@ -515,11 +545,44 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 			var texturePointers = stack.callocPointer(expandedMaterials.size());
 			for (Material material : expandedMaterials) {
 				String textureName = material.name().toLowerCase();
-				BufferedImage textureImage = textureManager.loadTexture(
-					material,
-					material.vanillaTextureIndex,
-					textureProvider
-				);
+
+				BufferedImage textureImage = null;
+				// Check if HD provides a texture for the material
+				if (material != Material.VANILLA) {
+					textureImage = textureManager.loadTextureImage(material);
+					if (textureImage == null && material.vanillaTextureIndex == -1) {
+						log.warn("No texture found for material: {}", material);
+						continue;
+					}
+				}
+
+				// Fallback to loading a vanilla image
+				if (textureImage == null) {
+					int vanillaIndex = material.vanillaTextureIndex;
+					var texture = textureProvider.getTextures()[vanillaIndex];
+					if (texture != null) {
+						int[] pixels = textureProvider.load(vanillaIndex);
+						if (pixels == null) {
+							log.warn("No pixels for vanilla texture at index {}", vanillaIndex);
+							continue;
+						}
+						int resolution = (int) Math.round(Math.sqrt(pixels.length));
+						if (resolution * resolution != pixels.length) {
+							log.warn("Unknown dimensions for vanilla texture at index {} ({} pixels)", vanillaIndex, pixels.length);
+							continue;
+						}
+
+						for (int j = 0; j < pixels.length; j++) {
+							int rgb = pixels[j];
+							// Black is considered transparent in vanilla, with anything else being fully opaque
+							int alpha = rgb == 0 ? 0 : 0xFF;
+							vanillaImage.setRGB(j % 128, j / 128, alpha << 24 | rgb & 0xFFFFFF);
+						}
+
+						textureImage = vanillaImage;
+					}
+				}
+
 				if (textureImage == null) {
 					log.error("Failed to load texture for material: {}", material);
 					chatMessageManager.queue(QueuedMessage.builder()
@@ -532,7 +595,7 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 				} else {
 					AffineTransform t = new AffineTransform();
 					// Flip vanilla textures horizontally
-					if (textureManager.isVanillaTexture(textureImage)) {
+					if (textureImage == vanillaImage) {
 						t.translate(textureImage.getWidth(), 0);
 						t.scale(-1, 1);
 					}
@@ -616,6 +679,7 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 					.runeLiteFormattedMessage(new ChatMessageBuilder()
 						.append("Exported model as ")
 						.append(Color.CYAN, exportPath.getFilename())
+						.append(" (" + totalFaceCount + " faces)")
 						.build())
 					.build());
 			}
@@ -641,9 +705,9 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 	) {
 		final int triangleCount = model.getFaceCount();
 
-		final int[] verticesX = model.getVerticesX();
-		final int[] verticesY = model.getVerticesY();
-		final int[] verticesZ = model.getVerticesZ();
+		final float[] verticesX = model.getVerticesX();
+		final float[] verticesY = model.getVerticesY();
+		final float[] verticesZ = model.getVerticesZ();
 
 		final int[] indices1 = model.getFaceIndices1();
 		final int[] indices2 = model.getFaceIndices2();
@@ -727,9 +791,9 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 			return;
 		}
 
-		final int[] verticesX = model.getVerticesX();
-		final int[] verticesY = model.getVerticesY();
-		final int[] verticesZ = model.getVerticesZ();
+		final float[] verticesX = model.getVerticesX();
+		final float[] verticesY = model.getVerticesY();
+		final float[] verticesZ = model.getVerticesZ();
 
 		final int[] indices1 = model.getFaceIndices1();
 		final int[] indices2 = model.getFaceIndices2();
@@ -752,30 +816,30 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 			int texC = texIndices3[tfaceIdx];
 
 			// v1 = vertex[texA]
-			float v1x = (float) verticesX[texA];
-			float v1y = (float) verticesY[texA];
-			float v1z = (float) verticesZ[texA];
+			float v1x = verticesX[texA];
+			float v1y = verticesY[texA];
+			float v1z = verticesZ[texA];
 			// v2 = vertex[texB] - v1
-			float v2x = (float) verticesX[texB] - v1x;
-			float v2y = (float) verticesY[texB] - v1y;
-			float v2z = (float) verticesZ[texB] - v1z;
+			float v2x = verticesX[texB] - v1x;
+			float v2y = verticesY[texB] - v1y;
+			float v2z = verticesZ[texB] - v1z;
 			// v3 = vertex[texC] - v1
-			float v3x = (float) verticesX[texC] - v1x;
-			float v3y = (float) verticesY[texC] - v1y;
-			float v3z = (float) verticesZ[texC] - v1z;
+			float v3x = verticesX[texC] - v1x;
+			float v3y = verticesY[texC] - v1y;
+			float v3z = verticesZ[texC] - v1z;
 
 			// v4 = vertex[triangleA] - v1
-			float v4x = (float) verticesX[triA] - v1x;
-			float v4y = (float) verticesY[triA] - v1y;
-			float v4z = (float) verticesZ[triA] - v1z;
+			float v4x = verticesX[triA] - v1x;
+			float v4y = verticesY[triA] - v1y;
+			float v4z = verticesZ[triA] - v1z;
 			// v5 = vertex[triangleB] - v1
-			float v5x = (float) verticesX[triB] - v1x;
-			float v5y = (float) verticesY[triB] - v1y;
-			float v5z = (float) verticesZ[triB] - v1z;
+			float v5x = verticesX[triB] - v1x;
+			float v5y = verticesY[triB] - v1y;
+			float v5z = verticesZ[triB] - v1z;
 			// v6 = vertex[triangleC] - v1
-			float v6x = (float) verticesX[triC] - v1x;
-			float v6y = (float) verticesY[triC] - v1y;
-			float v6z = (float) verticesZ[triC] - v1z;
+			float v6x = verticesX[triC] - v1x;
+			float v6y = verticesY[triC] - v1y;
+			float v6z = verticesZ[triC] - v1z;
 
 			// v7 = v2 x v3
 			float v7x = v2y * v3z - v2z * v3y;

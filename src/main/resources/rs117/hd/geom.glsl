@@ -31,49 +31,43 @@ layout(triangle_strip, max_vertices = 3) out;
 
 uniform mat4 projectionMatrix;
 uniform float elapsedTime;
+uniform vec3 cameraPos;
 
-#include uniforms/camera.glsl
-
-#include utils/polyfills.glsl
 #include utils/constants.glsl
 #define USE_VANILLA_UV_PROJECTION
 #include utils/uvs.glsl
+#include utils/color_utils.glsl
 
 in vec3 gPosition[3];
-in vec3 gUv[3];
-in vec3 gNormal[3];
-in vec4 gColor[3];
-in float gFogAmount[3];
-in int gMaterialData[3];
-in int gTerrainData[3];
+in int gHsl[3];
+in vec4 gUv[3];
+in vec4 gNormal[3];
 
-flat out vec4 vColor[3];
-flat out vec3 vUv[3];
-flat out int vMaterialData[3];
-flat out int vTerrainData[3];
-flat out mat2x3 TB;
+flat out ivec3 vHsl;
+flat out ivec3 vMaterialData;
+flat out ivec3 vTerrainData;
+flat out vec3 T;
+flat out vec3 B;
 
 out FragmentData {
     vec3 position;
+    vec2 uv;
     vec3 normal;
     vec3 texBlend;
-    float fogAmount;
 } OUT;
 
 void main() {
+    vec3 vUv[3];
+
     // MacOS doesn't allow assigning these arrays directly.
     // One of the many wonders of Apple software...
     for (int i = 0; i < 3; i++) {
-        vColor[i] = gColor[i];
-        vUv[i] = gUv[i];
-        vMaterialData[i] = gMaterialData[i];
-        vTerrainData[i] = gTerrainData[i];
+        vHsl[i] = gHsl[i];
+        vUv[i] = gUv[i].xyz;
+        // CAUTION: only 24-bit ints can be stored safely as floats
+        vMaterialData[i] = int(gUv[i].w);
+        vTerrainData[i] = int(gNormal[i].w);
     }
-
-    mat2x3 triToWorld = mat2x3(
-        gPosition[1] - gPosition[0],
-        gPosition[2] - gPosition[0]
-    );
 
     computeUvs(vMaterialData[0], vec3[](gPosition[0], gPosition[1], gPosition[2]), vUv);
 
@@ -84,19 +78,28 @@ void main() {
     );
     if (determinant(triToUv) == 0)
         triToUv = mat2(1);
-
     mat2 uvToTri = inverse(triToUv) * -1; // Flip UV direction, since OSRS UVs are oriented strangely
-    TB = triToWorld * uvToTri; // Preserve scale in order for displacement to interact properly with shadow mapping
+    mat2x3 triToWorld = mat2x3(
+        gPosition[1] - gPosition[0],
+        gPosition[2] - gPosition[0]
+    );
+    mat2x3 TB = triToWorld * uvToTri; // Preserve scale in order for displacement to interact properly with shadow mapping
+    T = TB[0];
+    B = TB[1];
     vec3 N = normalize(cross(triToWorld[0], triToWorld[1]));
 
     for (int i = 0; i < 3; i++) {
+        // Flat normals must be applied separately per vertex
+        vec3 normal = gNormal[i].xyz;
         OUT.position = gPosition[i];
-        OUT.normal = gNormal[i];
-        if (OUT.normal == vec3(0))
-            OUT.normal = N;
+        OUT.uv = vUv[i].xy;
+        #if FLAT_SHADING
+        OUT.normal = N;
+        #else
+        OUT.normal = length(normal) == 0 ? N : normalize(normal);
+        #endif
         OUT.texBlend = vec3(0);
         OUT.texBlend[i] = 1;
-        OUT.fogAmount = gFogAmount[i];
         gl_Position = projectionMatrix * vec4(OUT.position, 1);
         EmitVertex();
     }

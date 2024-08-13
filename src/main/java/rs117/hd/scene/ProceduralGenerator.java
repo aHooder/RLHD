@@ -30,26 +30,35 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
-import net.runelite.api.coords.*;
 import rs117.hd.HdPlugin;
+import rs117.hd.config.SeasonalTheme;
 import rs117.hd.data.WaterType;
 import rs117.hd.data.materials.Material;
-import rs117.hd.data.materials.Overlay;
-import rs117.hd.data.materials.Underlay;
 import rs117.hd.scene.model_overrides.ModelOverride;
-import rs117.hd.scene.model_overrides.ObjectType;
 import rs117.hd.scene.model_overrides.TzHaarRecolorType;
-import rs117.hd.utils.HDUtils;
+import rs117.hd.scene.tile_overrides.TileOverride;
+import rs117.hd.utils.ModelHash;
 
 import static net.runelite.api.Constants.*;
+import static net.runelite.api.Perspective.*;
+import static rs117.hd.scene.SceneContext.SCENE_OFFSET;
+import static rs117.hd.scene.tile_overrides.TileOverride.OVERLAY_FLAG;
+import static rs117.hd.utils.HDUtils.HIDDEN_HSL;
+import static rs117.hd.utils.HDUtils.calculateSurfaceNormals;
+import static rs117.hd.utils.HDUtils.clamp;
+import static rs117.hd.utils.HDUtils.dotLightDirectionTile;
+import static rs117.hd.utils.HDUtils.fract;
+import static rs117.hd.utils.HDUtils.lerp;
+import static rs117.hd.utils.HDUtils.vertexHash;
+import static rs117.hd.utils.Vector.add;
 
 @Slf4j
 @Singleton
-public class ProceduralGenerator
-{
-	private static final int VERTICES_PER_FACE = 3;
-	private static final int[] DEPTH_LEVEL_SLOPE = new int[]{150, 300, 470, 610, 700, 750, 820, 920, 1080, 1300, 1350, 1380};
-	private static final boolean[][] TILE_OVERLAY_TRIS = new boolean[][]
+public class ProceduralGenerator {
+	public static final int[] DEPTH_LEVEL_SLOPE = new int[] { 150, 300, 470, 610, 700, 750, 820, 920, 1080, 1300, 1350, 1380 };
+
+	public static final int VERTICES_PER_FACE = 3;
+	public static final boolean[][] TILE_OVERLAY_TRIS = new boolean[][]
 		{
 			/*  0 */ { true, true, true, true }, // Used by tilemodels of varying tri counts?
 			/*  1 */ { false, true },
@@ -67,6 +76,9 @@ public class ProceduralGenerator
 
 	@Inject
 	private HdPlugin plugin;
+
+	@Inject
+	private TileOverrideManager tileOverrideManager;
 
 	public void generateSceneData(SceneContext sceneContext)
 	{
@@ -108,17 +120,17 @@ public class ProceduralGenerator
 		// between underlays and overlays for custom blending
 		sceneContext.vertexIsOverlay = new HashMap<>();
 
-		Tile[][][] tiles = sceneContext.scene.getTiles();
+		Tile[][][] tiles = sceneContext.scene.getExtendedTiles();
 		for (int z = 0; z < MAX_Z; ++z) {
-			for (int x = 0; x < SCENE_SIZE; ++x)
-				for (int y = 0; y < SCENE_SIZE; ++y)
+			for (int x = 0; x < EXTENDED_SCENE_SIZE; ++x)
+				for (int y = 0; y < EXTENDED_SCENE_SIZE; ++y)
 					if (tiles[z][x][y] != null)
-						generateDataForTile(sceneContext, tiles[z][x][y]);
+						generateDataForTile(sceneContext, tiles[z][x][y], x, y);
 
-			for (int x = 0; x < SCENE_SIZE; ++x)
-				for (int y = 0; y < SCENE_SIZE; ++y)
+			for (int x = 0; x < EXTENDED_SCENE_SIZE; ++x)
+				for (int y = 0; y < EXTENDED_SCENE_SIZE; ++y)
 					if (tiles[z][x][y] != null && tiles[z][x][y].getBridge() != null)
-						generateDataForTile(sceneContext, tiles[z][x][y].getBridge());
+						generateDataForTile(sceneContext, tiles[z][x][y].getBridge(), x, y);
 		}
 	}
 
@@ -129,42 +141,34 @@ public class ProceduralGenerator
 	 * @param sceneContext that the tile is associated with
 	 * @param tile         to generate terrain data for
 	 */
-	private void generateDataForTile(SceneContext sceneContext, Tile tile)
+	private void generateDataForTile(SceneContext sceneContext, Tile tile, int tileExX, int tileExY)
 	{
 		int faceCount;
-		if (tile.getSceneTilePaint() != null)
-		{
+		if (tile.getSceneTilePaint() != null) {
 			faceCount = 2;
-		}
-		else if (tile.getSceneTileModel() != null)
-		{
+		} else if (tile.getSceneTileModel() != null) {
 			faceCount = tile.getSceneTileModel().getFaceX().length;
-		}
-		else
-		{
+		} else {
 			return;
 		}
 
 		int[] vertexHashes = new int[faceCount * VERTICES_PER_FACE];
 		int[] vertexColors = new int[faceCount * VERTICES_PER_FACE];
-		Overlay[] vertexOverlays = new Overlay[faceCount * VERTICES_PER_FACE];
-		Underlay[] vertexUnderlays = new Underlay[faceCount * VERTICES_PER_FACE];
+		TileOverride[] vertexOverrides = new TileOverride[faceCount * VERTICES_PER_FACE];
+		boolean[] vertexIsOverlay = new boolean[faceCount * VERTICES_PER_FACE];
 		boolean[] vertexDefaultColor = new boolean[faceCount * VERTICES_PER_FACE];
 
-		int x = tile.getSceneLocation().getX();
-		int y = tile.getSceneLocation().getY();
-		WorldPoint worldPos = sceneContext.localToWorld(tile.getLocalLocation(), tile.getRenderLevel());
+		int tileX = tileExX - SCENE_OFFSET;
+		int tileY = tileExY - SCENE_OFFSET;
+		int tileZ = tile.getRenderLevel();
+		int[] worldPos = sceneContext.sceneToWorld(tileX, tileY, tileZ);
 
 		Scene scene = sceneContext.scene;
-		if (tile.getSceneTilePaint() != null)
-		{
+		if (tile.getSceneTilePaint() != null) {
 			// tile paint
 
-			Overlay overlay = Overlay.getOverlay(scene, tile, plugin);
-			Underlay underlay =  Underlay.getUnderlay(scene, tile, plugin);
-
-			if (overlay.waterType != WaterType.NONE || underlay.waterType != WaterType.NONE)
-			{
+			var override = tileOverrideManager.getOverride(scene, tile, worldPos);
+			if (override.waterType != WaterType.NONE) {
 				// skip water tiles
 				return;
 			}
@@ -176,20 +180,15 @@ public class ProceduralGenerator
 
 			vertexHashes = tileVertexKeys(scene, tile);
 
-			if (x >= SCENE_SIZE - 2 && y >= SCENE_SIZE - 2)
-			{
+			if (tileExX >= EXTENDED_SCENE_SIZE - 2 && tileExY >= EXTENDED_SCENE_SIZE - 2) {
 				// reduce the black scene edges by assigning surrounding colors
 				neColor = swColor;
 				nwColor = swColor;
 				seColor = swColor;
-			}
-			else if (y >= SCENE_SIZE - 2)
-			{
+			} else if (tileExY >= EXTENDED_SCENE_SIZE - 2) {
 				nwColor = swColor;
 				neColor = seColor;
-			}
-			else if (x >= SCENE_SIZE - 2)
-			{
+			} else if (tileExX >= EXTENDED_SCENE_SIZE - 2) {
 				neColor = nwColor;
 				seColor = swColor;
 			}
@@ -199,12 +198,13 @@ public class ProceduralGenerator
 			vertexColors[2] = nwColor;
 			vertexColors[3] = neColor;
 
-			vertexOverlays[0] = vertexOverlays[1] = vertexOverlays[2] = vertexOverlays[3] = overlay;
-			vertexUnderlays[0] = vertexUnderlays[1] = vertexUnderlays[2] = vertexUnderlays[3] = underlay;
-			if (useDefaultColor(scene, tile))
-			{
-				vertexDefaultColor[0] = vertexDefaultColor[1] = vertexDefaultColor[2] = vertexDefaultColor[3] = true;
+			for (int i = 0; i < 4; i++) {
+				vertexOverrides[i] = override;
+				vertexIsOverlay[i] = override.queriedAsOverlay;
 			}
+			if (useDefaultColor(tile, override))
+				for (int i = 0; i < 4; i++)
+					vertexDefaultColor[i] = true;
 		}
 		else if (tile.getSceneTileModel() != null)
 		{
@@ -216,6 +216,9 @@ public class ProceduralGenerator
 			final int[] faceColorsB = sceneTileModel.getTriangleColorB();
 			final int[] faceColorsC = sceneTileModel.getTriangleColorC();
 
+			int overlayId = OVERLAY_FLAG | scene.getOverlayIds()[tileZ][tileExX][tileExY];
+			int underlayId = scene.getUnderlayIds()[tileZ][tileExX][tileExY];
+
 			for (int face = 0; face < faceCount; face++)
 			{
 				int[] faceColors = new int[]{faceColorsA[face], faceColorsB[face], faceColorsC[face]};
@@ -225,14 +228,9 @@ public class ProceduralGenerator
 				for (int vertex = 0; vertex < VERTICES_PER_FACE; vertex++)
 				{
 					boolean isOverlay = isOverlayFace(tile, face);
-					Overlay overlay = Overlay.NONE;
-					if (isOverlay)
-					{
-						overlay = Overlay.getOverlay(scene, tile, plugin);
-					}
-					Underlay underlay =  Underlay.getUnderlay(scene, tile, plugin);
 
-					if (overlay.waterType != WaterType.NONE || underlay.waterType != WaterType.NONE)
+					var override = tileOverrideManager.getOverride(scene, tile, worldPos, isOverlay ? overlayId : underlayId);
+					if (override.waterType != WaterType.NONE)
 					{
 						// skip water faces
 						continue;
@@ -243,10 +241,10 @@ public class ProceduralGenerator
 					int color = faceColors[vertex];
 					vertexColors[face * VERTICES_PER_FACE + vertex] = color;
 
-					vertexOverlays[face * VERTICES_PER_FACE + vertex] = overlay;
-					vertexUnderlays[face * VERTICES_PER_FACE + vertex] = underlay;
+					vertexOverrides[face * VERTICES_PER_FACE + vertex] = override;
+					vertexIsOverlay[face * VERTICES_PER_FACE + vertex] = isOverlay;
 
-					if (isOverlay && useDefaultColor(scene, tile))
+					if (isOverlay && useDefaultColor(tile, override))
 					{
 						vertexDefaultColor[face * VERTICES_PER_FACE + vertex] = true;
 					}
@@ -257,20 +255,17 @@ public class ProceduralGenerator
 		for (int vertex = 0; vertex < vertexHashes.length; vertex++)
 		{
 			if (vertexHashes[vertex] == 0)
-			{
 				continue;
-			}
-			if (vertexColors[vertex] < 0 || vertexColors[vertex] > 65535)
-			{
-				// skip invalid tile color
+
+			int color = vertexColors[vertex];
+			var override = vertexOverrides[vertex];
+			if (color < 0 || color == HIDDEN_HSL && !override.forced)
 				continue;
-			}
+
 			// if this vertex already has a 'high priority' color assigned,
 			// skip assigning a 'low priority' color unless there is no color assigned.
 			// Near-solid-black tiles that are used in some places under wall objects
 			boolean lowPriorityColor = vertexColors[vertex] <= 2;
-
-			int[] colorHSL = HDUtils.colorIntToHSL(vertexColors[vertex]);
 
 			float lightenMultiplier = 1.5f;
 			int lightenBase = 15;
@@ -279,35 +274,37 @@ public class ProceduralGenerator
 			int darkenBase = 0;
 			int darkenAdd = 0;
 
-			float[] vNormals = sceneContext.vertexTerrainNormals.getOrDefault(vertexHashes[vertex], new float[]{0, 0, 0});
+			float[] vNormals = sceneContext.vertexTerrainNormals.getOrDefault(vertexHashes[vertex], new float[] { 0, 0, 0 });
 
-			float dot = HDUtils.dotLightDirectionTile(vNormals[0], vNormals[1], vNormals[2]);
-			int lighten = (int) (Math.max((colorHSL[2] - lightenAdd), 0) * lightenMultiplier) + lightenBase;
-			colorHSL[2] = (int) HDUtils.lerp(colorHSL[2], lighten, Math.max(dot, 0));
-			int darken = (int) (Math.max((colorHSL[2] - darkenAdd), 0) * darkenMultiplier) + darkenBase;
-			colorHSL[2] = (int) HDUtils.lerp(colorHSL[2], darken, Math.abs(Math.min(dot, 0)));
-			colorHSL[2] *= 1.25f;
+			float dot = dotLightDirectionTile(vNormals[0], vNormals[1], vNormals[2]);
+			int lightness = color & 0x7F;
+			lightness = (int) lerp(
+				lightness,
+				(int) (
+					Math.max((lightness - lightenAdd), 0) * lightenMultiplier
+				) + lightenBase,
+				Math.max(dot, 0)
+			);
+			lightness = (int) (
+				1.25f * lerp(
+					lightness,
+					(int) (Math.max((lightness - darkenAdd), 0) * darkenMultiplier) + darkenBase,
+					Math.abs(Math.min(dot, 0))
+				)
+			);
+			final int maxBrightness = 55; // reduces overexposure
+			lightness = Math.min(lightness, maxBrightness);
+			color = color & ~0x7F | lightness;
 
 			boolean isOverlay = false;
 			Material material = Material.DIRT_1;
-			Overlay overlay = vertexOverlays[vertex];
-			if (overlay != Overlay.NONE)
-			{
-				material = overlay.groundMaterial.getRandomMaterial(worldPos.getPlane(), worldPos.getX(), worldPos.getY());
-				isOverlay = !overlay.blendedAsUnderlay;
-				overlay.modifyColor(colorHSL);
-			}
-			else if (vertexUnderlays[vertex] != Underlay.NONE)
-			{
-				Underlay underlay = vertexUnderlays[vertex];
-				material = underlay.groundMaterial.getRandomMaterial(worldPos.getPlane(), worldPos.getX(), worldPos.getY());
-				isOverlay = underlay.blendedAsOverlay;
-				underlay.modifyColor(colorHSL);
+			if (override != TileOverride.NONE) {
+				material = override.groundMaterial.getRandomMaterial(worldPos);
+				isOverlay = vertexIsOverlay[vertex] != override.blendedAsOpposite;
+				color = override.modifyColor(color);
 			}
 
-			final int maxBrightness = 55; // reduces overexposure
-			colorHSL[2] = HDUtils.clamp(colorHSL[2], 0, maxBrightness);
-			vertexColors[vertex] = HDUtils.colorHSLToInt(colorHSL);
+			vertexColors[vertex] = color;
 
 			// mark the vertex as either an overlay or underlay.
 			// this is used to determine how to blend between vertex colors
@@ -323,24 +320,15 @@ public class ProceduralGenerator
 			// add color and texture to hashmap
 			if ((!lowPriorityColor || !sceneContext.highPriorityColor.containsKey(vertexHashes[vertex])) && !vertexDefaultColor[vertex])
 			{
-				if (vertexOverlays[vertex] != Overlay.NONE ||
-					!sceneContext.vertexTerrainColor.containsKey(vertexHashes[vertex]) ||
-					!sceneContext.highPriorityColor.containsKey(vertexHashes[vertex]))
-				{
+				boolean shouldWrite = isOverlay || !sceneContext.vertexTerrainColor.containsKey(vertexHashes[vertex]);
+				if (shouldWrite || !sceneContext.vertexTerrainColor.containsKey(vertexHashes[vertex]))
 					sceneContext.vertexTerrainColor.put(vertexHashes[vertex], vertexColors[vertex]);
-				}
 
-				if (vertexOverlays[vertex] != Overlay.NONE ||
-					!sceneContext.vertexTerrainTexture.containsKey(vertexHashes[vertex]) ||
-					!sceneContext.highPriorityColor.containsKey(vertexHashes[vertex]))
-				{
+				if (shouldWrite || !sceneContext.vertexTerrainTexture.containsKey(vertexHashes[vertex]))
 					sceneContext.vertexTerrainTexture.put(vertexHashes[vertex], material);
-				}
 
 				if (!lowPriorityColor)
-				{
 					sceneContext.highPriorityColor.put(vertexHashes[vertex], true);
-				}
 			}
 		}
 	}
@@ -353,7 +341,7 @@ public class ProceduralGenerator
 	private void generateUnderwaterTerrain(SceneContext sceneContext)
 	{
 		// true if a tile contains at least 1 face which qualifies as water
-		sceneContext.tileIsWater = new boolean[MAX_Z][SCENE_SIZE][SCENE_SIZE];
+		sceneContext.tileIsWater = new boolean[MAX_Z][EXTENDED_SCENE_SIZE][EXTENDED_SCENE_SIZE];
 		// true if a vertex is part of a face which qualifies as water; non-existent if not
 		sceneContext.vertexIsWater = new HashMap<>();
 		// true if a vertex is part of a face which qualifies as land; non-existent if not
@@ -361,22 +349,21 @@ public class ProceduralGenerator
 		sceneContext.vertexIsLand = new HashMap<>();
 		// if true, the tile will be skipped when the scene is drawn
 		// this is due to certain edge cases with water on the same X/Y on different planes
-		sceneContext.skipTile = new boolean[MAX_Z][SCENE_SIZE][SCENE_SIZE];
+		sceneContext.skipTile = new boolean[MAX_Z][EXTENDED_SCENE_SIZE][EXTENDED_SCENE_SIZE];
 		// the height adjustment for each vertex, to be applied to the vertex'
 		// real height to create the underwater terrain
 		sceneContext.vertexUnderwaterDepth = new HashMap<>();
 		// the basic 'levels' of underwater terrain, used to sink terrain based on its distance
 		// from the shore, then used to produce the world-space height offset
 		// 0 = land
-		sceneContext.underwaterDepthLevels = new int[MAX_Z][SCENE_SIZE + 1][SCENE_SIZE + 1];
+		sceneContext.underwaterDepthLevels = new int[MAX_Z][EXTENDED_SCENE_SIZE + 1][EXTENDED_SCENE_SIZE + 1];
 		// the world-space height offsets of each vertex on the tile grid
 		// these offsets are interpolated to calculate offsets for vertices not on the grid (tilemodels)
-		final int[][][] underwaterDepths = new int[MAX_Z][SCENE_SIZE + 1][SCENE_SIZE + 1];
+		final int[][][] underwaterDepths = new int[MAX_Z][EXTENDED_SCENE_SIZE + 1][EXTENDED_SCENE_SIZE + 1];
 
 		for (int z = 0; z < MAX_Z; ++z)
 		{
-			for (int x = 0; x < SCENE_SIZE; ++x)
-			{
+			for (int x = 0; x < EXTENDED_SCENE_SIZE; ++x) {
 				// set the array to 1 initially
 				// this assumes that all vertices are water;
 				// we will set non-water vertices to 0 in the next loop
@@ -385,64 +372,51 @@ public class ProceduralGenerator
 		}
 
 		Scene scene = sceneContext.scene;
-		Tile[][][] tiles = scene.getTiles();
+		Tile[][][] tiles = scene.getExtendedTiles();
 
 		// figure out which vertices are water and assign some data
-		for (int z = 0; z < MAX_Z; ++z)
-		{
-			for (int x = 0; x < SCENE_SIZE; ++x)
-			{
-				for (int y = 0; y < SCENE_SIZE; ++y)
-				{
-					if (tiles[z][x][y] == null)
-					{
+		for (int z = 0; z < MAX_Z; ++z) {
+			for (int x = 0; x < EXTENDED_SCENE_SIZE; ++x) {
+				for (int y = 0; y < EXTENDED_SCENE_SIZE; ++y) {
+					if (tiles[z][x][y] == null) {
 						sceneContext.underwaterDepthLevels[z][x][y] = 0;
-						sceneContext.underwaterDepthLevels[z][x+1][y] = 0;
-						sceneContext.underwaterDepthLevels[z][x][y+1] = 0;
-						sceneContext.underwaterDepthLevels[z][x+1][y+1] = 0;
+						sceneContext.underwaterDepthLevels[z][x + 1][y] = 0;
+						sceneContext.underwaterDepthLevels[z][x][y + 1] = 0;
+						sceneContext.underwaterDepthLevels[z][x + 1][y + 1] = 0;
 						continue;
 					}
 
 					Tile tile = tiles[z][x][y];
-					if (tile.getBridge() != null)
-					{
+					if (tile.getBridge() != null) {
 						tile = tile.getBridge();
 					}
-					if (tile.getSceneTilePaint() != null)
-					{
+
+					if (tile.getSceneTilePaint() != null) {
 						int[] vertexKeys = tileVertexKeys(scene, tile);
 
-						if (tileWaterType(scene, tile, tile.getSceneTilePaint()) == WaterType.NONE)
-						{
+						int[] worldPos = sceneContext.extendedSceneToWorld(x, y, tile.getRenderLevel());
+						var override = tileOverrideManager.getOverride(scene, tile, worldPos);
+						if (seasonalWaterType(override, tile.getSceneTilePaint().getTexture()) == WaterType.NONE) {
 							for (int vertexKey : vertexKeys)
-							{
-								if (tile.getSceneTilePaint().getNeColor() != 12345678)
-								{
+								if (tile.getSceneTilePaint().getNeColor() != HIDDEN_HSL || override.forced)
 									sceneContext.vertexIsLand.put(vertexKey, true);
-								}
-							}
 
 							sceneContext.underwaterDepthLevels[z][x][y] = 0;
-							sceneContext.underwaterDepthLevels[z][x+1][y] = 0;
-							sceneContext.underwaterDepthLevels[z][x][y+1] = 0;
-							sceneContext.underwaterDepthLevels[z][x+1][y+1] = 0;
-						}
-						else
-						{
+							sceneContext.underwaterDepthLevels[z][x + 1][y] = 0;
+							sceneContext.underwaterDepthLevels[z][x][y + 1] = 0;
+							sceneContext.underwaterDepthLevels[z][x + 1][y + 1] = 0;
+						} else {
 							// Stop tiles on the same X,Y coordinates on different planes from
 							// each generating water. Prevents undesirable results in certain places.
-							if (z > 0)
-							{
+							if (z > 0) {
 								boolean continueLoop = false;
 
-								for (int checkZ = 0; checkZ < z; ++checkZ)
-								{
-									if (sceneContext.tileIsWater[checkZ][x][y])
-									{
+								for (int checkZ = 0; checkZ < z; ++checkZ) {
+									if (sceneContext.tileIsWater[checkZ][x][y]) {
 										sceneContext.underwaterDepthLevels[z][x][y] = 0;
-										sceneContext.underwaterDepthLevels[z][x+1][y] = 0;
-										sceneContext.underwaterDepthLevels[z][x][y+1] = 0;
-										sceneContext.underwaterDepthLevels[z][x+1][y+1] = 0;
+										sceneContext.underwaterDepthLevels[z][x + 1][y] = 0;
+										sceneContext.underwaterDepthLevels[z][x][y + 1] = 0;
+										sceneContext.underwaterDepthLevels[z][x + 1][y + 1] = 0;
 
 										sceneContext.skipTile[z][x][y] = true;
 
@@ -466,9 +440,14 @@ public class ProceduralGenerator
 					}
 					else if (tile.getSceneTileModel() != null)
 					{
-						SceneTileModel sceneTileModel = tile.getSceneTileModel();
+						SceneTileModel model = tile.getSceneTileModel();
 
-						int faceCount = sceneTileModel.getFaceX().length;
+						int faceCount = model.getFaceX().length;
+
+						int tileZ = tile.getRenderLevel();
+						int[] worldPos = sceneContext.extendedSceneToWorld(x, y, tileZ);
+						int overlayId = OVERLAY_FLAG | scene.getOverlayIds()[tileZ][x][y];
+						int underlayId = scene.getUnderlayIds()[tileZ][x][y];
 
 						// Stop tiles on the same X,Y coordinates on different planes from
 						// each generating water. Prevents undesirable results in certain places.
@@ -478,7 +457,11 @@ public class ProceduralGenerator
 
 							for (int face = 0; face < faceCount; face++)
 							{
-								if (faceWaterType(scene, tile, face, sceneTileModel) != WaterType.NONE)
+								boolean isOverlay = ProceduralGenerator.isOverlayFace(tile, face);
+								var override = tileOverrideManager.getOverride(scene, tile, worldPos, isOverlay ? overlayId : underlayId);
+								int textureId = model.getTriangleTextureId() == null ? -1 :
+									model.getTriangleTextureId()[face];
+								if (seasonalWaterType(override, textureId) != WaterType.NONE)
 								{
 									tileIncludesWater = true;
 									break;
@@ -516,20 +499,22 @@ public class ProceduralGenerator
 							int[][] vertices = faceVertices(tile, face);
 							int[] vertexKeys = faceVertexKeys(tile, face);
 
-							if (faceWaterType(scene, tile, face, sceneTileModel) == WaterType.NONE)
+							boolean isOverlay = ProceduralGenerator.isOverlayFace(tile, face);
+							var override = tileOverrideManager.getOverride(scene, tile, worldPos, isOverlay ? overlayId : underlayId);
+							int textureId = model.getTriangleTextureId() == null ? -1 :
+								model.getTriangleTextureId()[face];
+							if (seasonalWaterType(override, textureId) == WaterType.NONE)
 							{
 								for (int vertex = 0; vertex < VERTICES_PER_FACE; vertex++)
 								{
-									if (sceneTileModel.getTriangleColorA()[face] != 12345678)
-									{sceneContext.
-										vertexIsLand.put(vertexKeys[vertex], true);
-									}
+									if (model.getTriangleColorA()[face] != HIDDEN_HSL || override.forced)
+										sceneContext.vertexIsLand.put(vertexKeys[vertex], true);
 
-									if (vertices[vertex][0] % Perspective.LOCAL_TILE_SIZE == 0 &&
-										vertices[vertex][1] % Perspective.LOCAL_TILE_SIZE == 0
+									if (vertices[vertex][0] % LOCAL_TILE_SIZE == 0 &&
+										vertices[vertex][1] % LOCAL_TILE_SIZE == 0
 									) {
-										int vX = vertices[vertex][0] / Perspective.LOCAL_TILE_SIZE;
-										int vY = vertices[vertex][1] / Perspective.LOCAL_TILE_SIZE;
+										int vX = (vertices[vertex][0] >> LOCAL_COORD_BITS) + SCENE_OFFSET;
+										int vY = (vertices[vertex][1] >> LOCAL_COORD_BITS) + SCENE_OFFSET;
 
 										sceneContext.underwaterDepthLevels[z][vX][vY] = 0;
 									}
@@ -574,8 +559,7 @@ public class ProceduralGenerator
 						// If it's on the edge of the scene, reset the depth so
 						// it creates a 'wall' to prevent fog from passing through.
 						// Not incredibly effective, but better than nothing.
-						if (x == 0 || y == 0 || x == SCENE_SIZE || y == SCENE_SIZE)
-						{
+						if (x == 0 || y == 0 || x == EXTENDED_SCENE_SIZE || y == EXTENDED_SCENE_SIZE) {
 							sceneContext.underwaterDepthLevels[z][x][y] = 0;
 							continue;
 						}
@@ -619,18 +603,8 @@ public class ProceduralGenerator
 					{
 						continue;
 					}
-					int maxRange = DEPTH_LEVEL_SLOPE[sceneContext.underwaterDepthLevels[z][x][y] - 1];
-					int minRange = (int) (DEPTH_LEVEL_SLOPE[sceneContext.underwaterDepthLevels[z][x][y] - 1] * 0.1f);
-					// Range from noise-generated terrain is 10-60.
-					// Translate the result from range 0-1.
-//					float noiseOffset = (HeightCalc.calculate(baseX + x + 0xe3b7b, baseY + y + 0x87cce) - 10) / 50f;
-					float noiseOffset = 0.5f;
-					// limit range of variation
-					float minOffset = 0.25f;
-					float maxOffset = 0.75f;
-					noiseOffset = HDUtils.lerp(minOffset, maxOffset, noiseOffset);
-					// apply offset to vertex height range
-					int heightOffset = (int) HDUtils.lerp(minRange, maxRange, noiseOffset);
+					int depth = DEPTH_LEVEL_SLOPE[sceneContext.underwaterDepthLevels[z][x][y] - 1];
+					int heightOffset = (int) (depth * .55f); // legacy weirdness
 					underwaterDepths[z][x][y] = heightOffset;
 				}
 			}
@@ -638,29 +612,22 @@ public class ProceduralGenerator
 
 		// Store the height offsets in a hashmap and calculate interpolated
 		// height offsets for non-corner vertices.
-		for (int z = 0; z < MAX_Z; ++z)
-		{
-			for (int x = 0; x < SCENE_SIZE; ++x)
-			{
-				for (int y = 0; y < SCENE_SIZE; ++y)
-				{
-					if (!sceneContext.tileIsWater[z][x][y])
-					{
+		for (int z = 0; z < MAX_Z; ++z) {
+			for (int x = 0; x < EXTENDED_SCENE_SIZE; ++x) {
+				for (int y = 0; y < EXTENDED_SCENE_SIZE; ++y) {
+					if (!sceneContext.tileIsWater[z][x][y]) {
 						continue;
 					}
 
 					Tile tile = tiles[z][x][y];
-					if (tile == null)
-					{
+					if (tile == null) {
 						continue;
 					}
 
-					if (tile.getBridge() != null)
-					{
+					if (tile.getBridge() != null) {
 						tile = tile.getBridge();
 					}
-					if (tile.getSceneTilePaint() != null)
-					{
+					if (tile.getSceneTilePaint() != null) {
 						int[] vertexKeys = tileVertexKeys(scene, tile);
 
 						int swVertexKey = vertexKeys[0];
@@ -686,14 +653,14 @@ public class ProceduralGenerator
 
 							for (int vertex = 0; vertex < VERTICES_PER_FACE; vertex++)
 							{
-								if (vertices[vertex][0] % Perspective.LOCAL_TILE_SIZE == 0 &&
-									vertices[vertex][1] % Perspective.LOCAL_TILE_SIZE == 0
+								if (vertices[vertex][0] % LOCAL_TILE_SIZE == 0 &&
+									vertices[vertex][1] % LOCAL_TILE_SIZE == 0
 								) {
 									// The vertex is at the corner of the tile;
 									// simply use the offset in the tile grid array.
 
-									int vX = vertices[vertex][0] / Perspective.LOCAL_TILE_SIZE;
-									int vY = vertices[vertex][1] / Perspective.LOCAL_TILE_SIZE;
+									int vX = (vertices[vertex][0] >> LOCAL_COORD_BITS) + SCENE_OFFSET;
+									int vY = (vertices[vertex][1] >> LOCAL_COORD_BITS) + SCENE_OFFSET;
 
 									sceneContext.vertexUnderwaterDepth.put(vertexKeys[vertex], underwaterDepths[z][vX][vY]);
 								}
@@ -703,16 +670,17 @@ public class ProceduralGenerator
 									// interpolate between the height offsets at each corner to get the height offset
 									// of the vertex.
 
-									int localVertexX = vertices[vertex][0] - (x * Perspective.LOCAL_TILE_SIZE);
-									int localVertexY = vertices[vertex][1] - (y * Perspective.LOCAL_TILE_SIZE);
-									float lerpX = (float) localVertexX / (float) Perspective.LOCAL_TILE_SIZE;
-									float lerpY = (float) localVertexY / (float) Perspective.LOCAL_TILE_SIZE;
-									float northHeightOffset = HDUtils.lerp(underwaterDepths[z][x][y+1], underwaterDepths[z][x+1][y+1], lerpX);
-									float southHeightOffset = HDUtils.lerp(underwaterDepths[z][x][y], underwaterDepths[z][x+1][y], lerpX);
-									int heightOffset = (int) HDUtils.lerp(southHeightOffset, northHeightOffset, lerpY);
+									float lerpX = fract(vertices[vertex][0] / (float) LOCAL_TILE_SIZE);
+									float lerpY = fract(vertices[vertex][1] / (float) LOCAL_TILE_SIZE);
+									float northHeightOffset = lerp(
+										underwaterDepths[z][x][y + 1],
+										underwaterDepths[z][x + 1][y + 1],
+										lerpX
+									);
+									float southHeightOffset = lerp(underwaterDepths[z][x][y], underwaterDepths[z][x + 1][y], lerpX);
+									int heightOffset = (int) lerp(southHeightOffset, northHeightOffset, lerpY);
 
-									if (!sceneContext.vertexIsLand.containsKey(vertexKeys[vertex]))
-									{
+									if (!sceneContext.vertexIsLand.containsKey(vertexKeys[vertex])) {
 										sceneContext.vertexUnderwaterDepth.put(vertexKeys[vertex], heightOffset);
 									}
 								}
@@ -732,7 +700,7 @@ public class ProceduralGenerator
 	{
 		sceneContext.vertexTerrainNormals = new HashMap<>();
 
-		for (Tile[][] plane : sceneContext.scene.getTiles()) {
+		for (Tile[][] plane : sceneContext.scene.getExtendedTiles()) {
 			for (Tile[] column : plane) {
 				for (Tile tile : column) {
 					if (tile != null) {
@@ -809,25 +777,34 @@ public class ProceduralGenerator
 				vertexHeights[2] += sceneContext.vertexUnderwaterDepth.getOrDefault(faceVertexKeys[face][2], 0);
 			}
 
-			float[] vertexNormals = HDUtils.calculateSurfaceNormals(
-				// Vertex Xs
-				new int[]{faceVertices[face][0][0], faceVertices[face][1][0], faceVertices[face][2][0]},
-				// Vertex Ys
-				new int[]{faceVertices[face][0][1], faceVertices[face][1][1], faceVertices[face][2][1]},
-				// Vertex Zs
-				new int[]{vertexHeights[0], vertexHeights[1], vertexHeights[2]}
+			float[] vertexNormals = calculateSurfaceNormals(
+				new float[] {
+					faceVertices[face][0][0],
+					faceVertices[face][0][1],
+					vertexHeights[0]
+				},
+				new float[] {
+					faceVertices[face][1][0],
+					faceVertices[face][1][1],
+					vertexHeights[1]
+				},
+				new float[] {
+					faceVertices[face][2][0],
+					faceVertices[face][2][1],
+					vertexHeights[2]
+				}
 			);
 
 			for (int vertex = 0; vertex < VERTICES_PER_FACE; vertex++)
 			{
 				int vertexKey = faceVertexKeys[face][vertex];
 				// accumulate normals to hashmap
-				sceneContext.vertexTerrainNormals.merge(vertexKey, vertexNormals, (a, b) -> HDUtils.vectorAdd(b, a));
+				sceneContext.vertexTerrainNormals.merge(vertexKey, vertexNormals, (a, b) -> add(a, a, b));
 			}
 		}
 	}
 
-	boolean useDefaultColor(Scene scene, Tile tile)
+	public boolean useDefaultColor(Tile tile, TileOverride override)
 	{
 		if ((tile.getSceneTilePaint() != null && tile.getSceneTilePaint().getTexture() >= 0) ||
 			(tile.getSceneTileModel() != null && tile.getSceneTileModel().getTriangleTextureId() != null))
@@ -836,81 +813,30 @@ public class ProceduralGenerator
 			return true;
 		}
 
-		Overlay overlay = Overlay.getOverlay(scene, tile, plugin);
-		if (overlay != Overlay.NONE)
-		{
-			return !overlay.blended;
-		}
-		Underlay underlay = Underlay.getUnderlay(scene, tile, plugin);
-		if (underlay != Underlay.NONE)
-		{
-			return !underlay.blended;
-		}
-		return false;
+		if (override == TileOverride.NONE)
+			return false;
+
+		return !override.blended;
 	}
 
-	private WaterType getSeasonalWaterType(WaterType waterType)
+	public WaterType seasonalWaterType(TileOverride override, int textureId)
 	{
-		return plugin.configWinterTheme && waterType == WaterType.WATER ? WaterType.ICE : waterType;
-	}
+		var waterType = override.waterType;
 
-	/**
-	 * Returns the WaterType of the provided SceneTilePaint Tile.
-	 *
-	 * @param scene that the tile is from
-	 * @param tile  to determine the WaterType of
-	 * @return the WaterType of the specified Tile
-	 */
-	WaterType tileWaterType(Scene scene, Tile tile, SceneTilePaint sceneTilePaint)
-	{
-		WaterType waterType = WaterType.NONE;
-
-		if (sceneTilePaint != null)
-		{
-			Overlay overlay = Overlay.getOverlay(scene, tile, plugin);
-			if (overlay != Overlay.NONE)
-			{
-				waterType = overlay.waterType;
+		// As a fallback, always consider vanilla textured water tiles as water
+		// We purposefully ignore material replacements here such as ice from the winter theme
+		if (waterType == WaterType.NONE) {
+			if (textureId == Material.WATER_FLAT.vanillaTextureIndex ||
+				textureId == Material.WATER_FLAT_2.vanillaTextureIndex) {
+				waterType = WaterType.WATER_FLAT;
+			} else if (textureId == Material.SWAMP_WATER_FLAT.vanillaTextureIndex) {
+				waterType = WaterType.SWAMP_WATER_FLAT;
 			}
-			else
-			{
-				Underlay underlay = Underlay.getUnderlay(scene, tile, plugin);
-				waterType = underlay.waterType;
-			}
+			return waterType;
 		}
 
-		waterType = getSeasonalWaterType(waterType);
-
-		return waterType;
-	}
-
-	/**
-	 * Returns the WaterType of the provided SceneTileModel Tile's specified face.
-	 *
-	 * @param scene that the tile is from
-	 * @param tile  that the tile model is for
-	 * @param face  the index of the specified face
-	 * @return the WaterType of the specified face on the tile model
-	 */
-	WaterType faceWaterType(Scene scene, Tile tile, int face, SceneTileModel sceneTileModel)
-	{
-		WaterType waterType = WaterType.NONE;
-
-		if (sceneTileModel != null)
-		{
-			Overlay overlay = Overlay.getOverlay(scene, tile, plugin);
-			if (isOverlayFace(tile, face) && overlay != Overlay.NONE)
-			{
-				waterType = overlay.waterType;
-			}
-			else
-			{
-				Underlay underlay = Underlay.getUnderlay(scene, tile, plugin);
-				waterType = underlay.waterType;
-			}
-		}
-
-		waterType = getSeasonalWaterType(waterType);
+		if (waterType == WaterType.WATER && plugin.configSeasonalTheme == SeasonalTheme.WINTER)
+			return WaterType.ICE;
 
 		return waterType;
 	}
@@ -928,29 +854,44 @@ public class ProceduralGenerator
 		}
 	}
 
-	public static boolean isOverlayFace(Tile tile, int face)
-	{
+	public static boolean isOverlayFace(Tile tile, int face) {
 		int tileShapeIndex = tile.getSceneTileModel().getShape() - 1;
-		if (face >= getTileOverlayTris(tileShapeIndex).length)
-		{
+		if (face >= getTileOverlayTris(tileShapeIndex).length) {
 			return false;
 		}
 		return getTileOverlayTris(tileShapeIndex)[face];
 	}
 
-	private static int[][] tileVertices(Scene scene, Tile tile)
-	{
-		int x = tile.getSceneLocation().getX();
-		int y = tile.getSceneLocation().getY();
-		int z = tile.getRenderLevel();
+	private static int[][] tileVertices(Scene scene, Tile tile) {
+		int tileX = tile.getSceneLocation().getX();
+		int tileY = tile.getSceneLocation().getY();
+		int tileExX = tileX + SCENE_OFFSET;
+		int tileExY = tileY + SCENE_OFFSET;
+		int tileZ = tile.getRenderLevel();
 		int[][][] tileHeights = scene.getTileHeights();
 
-		int[] swVertex = new int[]{x * Perspective.LOCAL_TILE_SIZE, y * Perspective.LOCAL_TILE_SIZE, tileHeights[z][x][y]};
-		int[] seVertex = new int[]{(x + 1) * Perspective.LOCAL_TILE_SIZE, y * Perspective.LOCAL_TILE_SIZE, tileHeights[z][x + 1][y]};
-		int[] nwVertex = new int[]{x * Perspective.LOCAL_TILE_SIZE, (y + 1) * Perspective.LOCAL_TILE_SIZE, tileHeights[z][x][y + 1]};
-		int[] neVertex = new int[]{(x + 1) * Perspective.LOCAL_TILE_SIZE, (y + 1) * Perspective.LOCAL_TILE_SIZE, tileHeights[z][x + 1][y + 1]};
+		int[] swVertex = new int[] {
+			tileX * LOCAL_TILE_SIZE,
+			tileY * LOCAL_TILE_SIZE,
+			tileHeights[tileZ][tileExX][tileExY]
+		};
+		int[] seVertex = new int[] {
+			(tileX + 1) * LOCAL_TILE_SIZE,
+			tileY * LOCAL_TILE_SIZE,
+			tileHeights[tileZ][tileExX + 1][tileExY]
+		};
+		int[] nwVertex = new int[] {
+			tileX * LOCAL_TILE_SIZE,
+			(tileY + 1) * LOCAL_TILE_SIZE,
+			tileHeights[tileZ][tileExX][tileExY + 1]
+		};
+		int[] neVertex = new int[] {
+			(tileX + 1) * LOCAL_TILE_SIZE,
+			(tileY + 1) * LOCAL_TILE_SIZE,
+			tileHeights[tileZ][tileExX + 1][tileExY + 1]
+		};
 
-		return new int[][]{swVertex, seVertex, nwVertex, neVertex};
+		return new int[][] { swVertex, seVertex, nwVertex, neVertex };
 	}
 
 	private static int[][] faceVertices(Tile tile, int face)
@@ -982,57 +923,31 @@ public class ProceduralGenerator
 		int sceneVertexYB = vertexY[vertexFacesB];
 		int sceneVertexYC = vertexY[vertexFacesC];
 
-		int[] vertexA = new int[]{sceneVertexXA, sceneVertexZA, sceneVertexYA};
-		int[] vertexB = new int[]{sceneVertexXB, sceneVertexZB, sceneVertexYB};
-		int[] vertexC = new int[]{sceneVertexXC, sceneVertexZC, sceneVertexYC};
+		int[] vertexA = new int[] { sceneVertexXA, sceneVertexZA, sceneVertexYA };
+		int[] vertexB = new int[] { sceneVertexXB, sceneVertexZB, sceneVertexYB };
+		int[] vertexC = new int[] { sceneVertexXC, sceneVertexZC, sceneVertexYC };
 
-		return new int[][]{vertexA, vertexB, vertexC};
+		return new int[][] { vertexA, vertexB, vertexC };
 	}
 
-	public static int[][] faceLocalVertices(Tile tile, int face)
-	{
+	/**
+	 * Returns vertex positions in local coordinates, between 0 and 128.
+	 */
+	public static int[][] faceLocalVertices(Tile tile, int face) {
+		if (tile.getSceneTileModel() == null)
+			return new int[0][0];
+
 		int x = tile.getSceneLocation().getX();
 		int y = tile.getSceneLocation().getY();
-		int baseX = x * Perspective.LOCAL_TILE_SIZE;
-		int baseY = y * Perspective.LOCAL_TILE_SIZE;
+		int baseX = x * LOCAL_TILE_SIZE;
+		int baseY = y * LOCAL_TILE_SIZE;
 
-		if (tile.getSceneTileModel() == null)
-		{
-			return new int[0][0];
+		int[][] vertices = faceVertices(tile, face);
+		for (int[] vertex : vertices) {
+			vertex[0] -= baseX;
+			vertex[1] -= baseY;
 		}
-
-		SceneTileModel sceneTileModel = tile.getSceneTileModel();
-
-		final int[] faceA = sceneTileModel.getFaceX();
-		final int[] faceB = sceneTileModel.getFaceY();
-		final int[] faceC = sceneTileModel.getFaceZ();
-
-		final int[] vertexX = sceneTileModel.getVertexX();
-		final int[] vertexY = sceneTileModel.getVertexY();
-		final int[] vertexZ = sceneTileModel.getVertexZ();
-
-		int vertexFacesA = faceA[face];
-		int vertexFacesB = faceB[face];
-		int vertexFacesC = faceC[face];
-
-		// scene X
-		int sceneVertexXA = vertexX[vertexFacesA];
-		int sceneVertexXB = vertexX[vertexFacesB];
-		int sceneVertexXC = vertexX[vertexFacesC];
-		// scene Y
-		int sceneVertexZA = vertexZ[vertexFacesA];
-		int sceneVertexZB = vertexZ[vertexFacesB];
-		int sceneVertexZC = vertexZ[vertexFacesC];
-		// scene Z - heights
-		int sceneVertexYA = vertexY[vertexFacesA];
-		int sceneVertexYB = vertexY[vertexFacesB];
-		int sceneVertexYC = vertexY[vertexFacesC];
-
-		int[] vertexA = new int[]{sceneVertexXA - baseX, sceneVertexZA - baseY, sceneVertexYA};
-		int[] vertexB = new int[]{sceneVertexXB - baseX, sceneVertexZB - baseY, sceneVertexYB};
-		int[] vertexC = new int[]{sceneVertexXC - baseX, sceneVertexZC - baseY, sceneVertexYC};
-
-		return new int[][]{vertexA, vertexB, vertexC};
+		return vertices;
 	}
 
 	/**
@@ -1048,9 +963,7 @@ public class ProceduralGenerator
 		int[] vertexHashes = new int[tileVertices.length];
 
 		for (int vertex = 0; vertex < tileVertices.length; ++vertex)
-		{
-			vertexHashes[vertex] = HDUtils.vertexHash(tileVertices[vertex]);
-		}
+			vertexHashes[vertex] = vertexHash(tileVertices[vertex]);
 
 		return vertexHashes;
 	}
@@ -1061,14 +974,12 @@ public class ProceduralGenerator
 		int[] vertexHashes = new int[faceVertices.length];
 
 		for (int vertex = 0; vertex < faceVertices.length; ++vertex)
-		{
-			vertexHashes[vertex] = HDUtils.vertexHash(faceVertices[vertex]);
-		}
+			vertexHashes[vertex] = vertexHash(faceVertices[vertex]);
 
 		return vertexHashes;
 	}
 
-	private static final int[][] tzHaarRecolored = new int[4][3];
+	private static final int[] tzHaarRecolored = new int[4];
 	// used when calculating the gradient to apply to the walls of TzHaar
 	// to emulate the style from 2008 HD rework
 	private static final int[] gradientBaseColor = new int[]{3, 4, 26};
@@ -1076,50 +987,67 @@ public class ProceduralGenerator
 	private static final int gradientBottom = 200;
 	private static final int gradientTop = -200;
 
-	public static int[][] recolorTzHaar(ModelOverride modelOverride, int aY, int bY, int cY, int packedAlphaPriority, ObjectType objectType, int color1S, int color1L, int color2S, int color2L, int color3S, int color3L)
-	{
-		// recolor tzhaar to look like the 2008+ HD version
-		if (objectType == ObjectType.GROUND_OBJECT)
-		{
-			// remove the black parts of floor objects to allow the ground to show
-			// so we can apply textures, ground blending, etc. to it
-			if (color1S <= 1)
-			{
-				packedAlphaPriority = 0xFF << 24;
-			}
-		}
-
+	public static int[] recolorTzHaar(
+		int uuid,
+		ModelOverride modelOverride,
+		Model model,
+		int face,
+		int packedAlphaPriority,
+		int color1,
+		int color2,
+		int color3
+	) {
 		// shift model hues from red->yellow
 		int hue = 7;
 		int color1H = hue;
 		int color2H = hue;
 		int color3H = hue;
+		int color1S = color1 >> 7 & 7;
+		int color1L = color1 & 0x7F;
+		int color2S = color2 >> 7 & 7;
+		int color2L = color2 & 0x7F;
+		int color3S = color3 >> 7 & 7;
+		int color3L = color3 & 0x7F;
 
-		if (modelOverride.tzHaarRecolorType == TzHaarRecolorType.GRADIENT)
-		{
+		// recolor tzhaar to look like the 2008+ HD version
+		if (ModelHash.getUuidSubType(uuid) == ModelHash.TYPE_GROUND_OBJECT) {
+			// remove the black parts of floor objects to allow the ground to show,
+			// so we can apply textures, ground blending, etc. to it
+			if (color1S <= 1)
+				packedAlphaPriority = 0xFF << 24;
+		}
+
+		if (modelOverride.tzHaarRecolorType == TzHaarRecolorType.GRADIENT) {
+			final int triA = model.getFaceIndices1()[face];
+			final int triB = model.getFaceIndices2()[face];
+			final int triC = model.getFaceIndices3()[face];
+			final float[] yVertices = model.getVerticesY();
+			float heightA = yVertices[triA];
+			float heightB = yVertices[triB];
+			float heightC = yVertices[triC];
+
 			// apply coloring to the rocky walls
-			if (color1L < 20)
-			{
-				float pos = HDUtils.clamp((float) (aY - gradientTop) / (float) gradientBottom, 0.0f, 1.0f);
-				color1H = (int)HDUtils.lerp(gradientDarkColor[0], gradientBaseColor[0], pos);
-				color1S = (int)HDUtils.lerp(gradientDarkColor[1], gradientBaseColor[1], pos);
-				color1L = (int)HDUtils.lerp(gradientDarkColor[2], gradientBaseColor[2], pos);
+			if (color1L < 20) {
+				float pos = clamp((heightA - gradientTop) / (float) gradientBottom, 0.0f, 1.0f);
+				color1H = (int) lerp(gradientDarkColor[0], gradientBaseColor[0], pos);
+				color1S = (int) lerp(gradientDarkColor[1], gradientBaseColor[1], pos);
+				color1L = (int) lerp(gradientDarkColor[2], gradientBaseColor[2], pos);
 			}
 
 			if (color2L < 20)
 			{
-				float pos = HDUtils.clamp((float) (bY - gradientTop) / (float) gradientBottom, 0.0f, 1.0f);
-				color2H = (int)HDUtils.lerp(gradientDarkColor[0], gradientBaseColor[0], pos);
-				color2S = (int)HDUtils.lerp(gradientDarkColor[1], gradientBaseColor[1], pos);
-				color2L = (int)HDUtils.lerp(gradientDarkColor[2], gradientBaseColor[2], pos);
+				float pos = clamp((heightB - gradientTop) / (float) gradientBottom, 0.0f, 1.0f);
+				color2H = (int) lerp(gradientDarkColor[0], gradientBaseColor[0], pos);
+				color2S = (int) lerp(gradientDarkColor[1], gradientBaseColor[1], pos);
+				color2L = (int) lerp(gradientDarkColor[2], gradientBaseColor[2], pos);
 			}
 
 			if (color3L < 20)
 			{
-				float pos = HDUtils.clamp((float) (cY - gradientTop) / (float) gradientBottom, 0.0f, 1.0f);
-				color3H = (int)HDUtils.lerp(gradientDarkColor[0], gradientBaseColor[0], pos);
-				color3S = (int)HDUtils.lerp(gradientDarkColor[1], gradientBaseColor[1], pos);
-				color3L = (int)HDUtils.lerp(gradientDarkColor[2], gradientBaseColor[2], pos);
+				float pos = clamp((heightC - gradientTop) / (float) gradientBottom, 0.0f, 1.0f);
+				color3H = (int) lerp(gradientDarkColor[0], gradientBaseColor[0], pos);
+				color3S = (int) lerp(gradientDarkColor[1], gradientBaseColor[1], pos);
+				color3L = (int) lerp(gradientDarkColor[2], gradientBaseColor[2], pos);
 			}
 		}
 		else if (modelOverride.tzHaarRecolorType == TzHaarRecolorType.HUE_SHIFT)
@@ -1131,16 +1059,10 @@ public class ProceduralGenerator
 			color3L += 1;
 		}
 
-		tzHaarRecolored[0][0] = color1H;
-		tzHaarRecolored[0][1] = color1S;
-		tzHaarRecolored[0][2] = color1L;
-		tzHaarRecolored[1][0] = color2H;
-		tzHaarRecolored[1][1] = color2S;
-		tzHaarRecolored[1][2] = color2L;
-		tzHaarRecolored[2][0] = color3H;
-		tzHaarRecolored[2][1] = color3S;
-		tzHaarRecolored[2][2] = color3L;
-		tzHaarRecolored[3][0] = packedAlphaPriority;
+		tzHaarRecolored[0] = color1H << 10 | color1S << 7 | color1L;
+		tzHaarRecolored[1] = color2H << 10 | color2S << 7 | color2L;
+		tzHaarRecolored[2] = color3H << 10 | color3S << 7 | color3L;
+		tzHaarRecolored[3] = packedAlphaPriority;
 
 		return tzHaarRecolored;
 	}
