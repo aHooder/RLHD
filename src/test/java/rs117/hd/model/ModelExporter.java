@@ -222,7 +222,7 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 			.replaceAll("[^0-9a-zA-Z_ -]", "")
 			.toLowerCase();
 		var exportPath = path("model-exports", filename + "." + extension);
-		exportPath.mkdirs();
+		exportPath.resolve("..").mkdirs();
 		int collisionCounter = 2;
 		while (exportPath.exists())
 			exportPath = path("model-exports", filename + "_" + (collisionCounter++) + "." + extension);
