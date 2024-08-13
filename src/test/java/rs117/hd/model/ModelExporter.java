@@ -422,7 +422,16 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 								Vector.subtract(a, v[1], v[0]);
 								Vector.subtract(b, v[2], v[0]);
 								Vector.cross(flatNormal, a, b);
-								Vector.normalize(flatNormal);
+
+								float len = Vector.length(flatNormal);
+								if (len == 0) {
+									// Force invalid faces to have valid normals, so Assimp doesn't delete all normals
+									flatNormal[1] = -1;
+								} else {
+									// Normalize
+									for (int j = 0; j < 3; j++)
+										flatNormal[j] /= len;
+								}
 							}
 							n[i] = flatNormal;
 						} else {
