@@ -74,6 +74,7 @@ import rs117.hd.scene.model_overrides.ModelOverride;
 import rs117.hd.utils.ColorUtils;
 import rs117.hd.utils.HDUtils;
 import rs117.hd.utils.ModelHash;
+import rs117.hd.utils.Vector;
 
 import static net.runelite.api.Perspective.*;
 import static org.lwjgl.assimp.Assimp.*;
@@ -390,20 +391,46 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 						}
 					}
 
+					float[][] v = new float[3][3];
+					float[][] n = new float[3][3];
 					for (int i = 0; i < 3; i++) {
+						int vertex = faceVertexOffset + i;
+						for (int c = 0; c < 3; c++) {
+							v[i][c] = Float.intBitsToFloat(sceneContext.stagingBufferVertices.getBuffer().get(vertex * 4 + c));
+							n[i][c] = sceneContext.stagingBufferNormals.getBuffer().get(vertex * 4 + c);
+						}
+
 						indices.put(indices.position());
 
-						int vertex = faceVertexOffset + i;
 						int packedColor = sceneContext.stagingBufferVertices.getBuffer().get(vertex * 4 + 3);
 						float alpha = 1 - (packedColor >>> 24 & 0xFF) / (float) 0xFF;
 						colors
 							.put(ColorUtils.packedHslToSrgb(packedColor))
 							.put(alpha);
 
-						for (int c = 0; c < 3; c++) {
-							vertices.put(Float.intBitsToFloat(sceneContext.stagingBufferVertices.getBuffer().get(vertex * 4 + c)));
-							normals.put(sceneContext.stagingBufferNormals.getBuffer().get(vertex * 4 + c));
+						vertices.put(v[i]);
+					}
+
+					float[] flatNormal = null;
+					for (int i = 0; i < 3; i++) {
+						if (Vector.dot(n[i], n[i]) == 0) {
+							if (flatNormal == null) {
+								// Compute flat normal
+								flatNormal = new float[3];
+								float[] a = new float[3];
+								float[] b = new float[3];
+								Vector.subtract(a, v[1], v[0]);
+								Vector.subtract(b, v[2], v[0]);
+								Vector.cross(flatNormal, a, b);
+								Vector.normalize(flatNormal);
+							}
+							n[i] = flatNormal;
+						} else {
+							// Normalize
+							Vector.normalize(n[i]);
 						}
+
+						normals.put(n[i]);
 					}
 				}
 
