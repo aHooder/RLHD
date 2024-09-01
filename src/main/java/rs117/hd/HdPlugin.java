@@ -684,8 +684,10 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	}
 
 	public void restartPlugin() {
-		shutDown();
-		startUp();
+		clientThread.invokeLater(() -> {
+			shutDown();
+			startUp();
+		});
 	}
 
 	private String generateFetchCases(String array, int from, int to)
@@ -1734,7 +1736,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			// Restart the plugin to avoid potential buffer corruption if the computer has likely resumed from suspension
 			if (timeStep > FIVE_MINUTES) {
 				log.debug("Restarting the plugin after probable OS suspend ({} ms time skip)", timeStep);
-				SwingUtilities.invokeLater(() -> clientThread.invoke(this::restartPlugin));
+				restartPlugin();
 				return;
 			}
 
@@ -1765,7 +1767,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			// Fixes: https://github.com/runelite/runelite/issues/12930
 			// Gracefully Handle loss of opengl buffers and context
 			log.warn("prepareInterfaceTexture exception", ex);
-			SwingUtilities.invokeLater(() -> clientThread.invoke(this::restartPlugin));
+			restartPlugin();
 			return;
 		}
 
@@ -2543,7 +2545,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 							break;
 						case KEY_LOW_MEMORY_MODE:
 							restartPlugin();
-							// since we restarted everything anyway, skip all other pending changes
+							// since we'll be restarting the plugin anyway, skip pending changes
 							return;
 					}
 				}
