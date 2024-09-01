@@ -414,7 +414,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	public boolean enableDetailedTimers;
 	public boolean enableShadowMapOverlay;
 
-	private boolean firstPluginStart = true;
 	private boolean isActive;
 	private boolean lwjglInitialized;
 	private boolean hasLoggedIn;
@@ -463,17 +462,10 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				canvas = client.getCanvas();
 
 				synchronized (canvas.getTreeLock()) {
-					if (!canvas.isValid()) {
-						// Delay plugin startup until the client's canvas is valid
-						if (firstPluginStart)
-							return false;
+					// Delay plugin startup until the client's canvas is valid
+					if (!canvas.isValid())
+						return false;
 
-						// For subsequent plugin startups, the canvas should be okay to use, but it can get stuck marked as invalid.
-						// This seems to happen when our automatic restart after probable OS suspend triggers.
-						canvas.revalidate();
-					}
-
-					firstPluginStart = false;
 					awtContext = new AWTContext(canvas);
 					awtContext.configurePixelFormat(0, 0, 0);
 				}
@@ -1742,7 +1734,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			// Restart the plugin to avoid potential buffer corruption if the computer has likely resumed from suspension
 			if (timeStep > FIVE_MINUTES) {
 				log.debug("Restarting the plugin after probable OS suspend ({} ms time skip)", timeStep);
-				restartPlugin();
+				SwingUtilities.invokeLater(() -> clientThread.invoke(this::restartPlugin));
 				return;
 			}
 
@@ -1773,7 +1765,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			// Fixes: https://github.com/runelite/runelite/issues/12930
 			// Gracefully Handle loss of opengl buffers and context
 			log.warn("prepareInterfaceTexture exception", ex);
-			restartPlugin();
+			SwingUtilities.invokeLater(() -> clientThread.invoke(this::restartPlugin));
 			return;
 		}
 
