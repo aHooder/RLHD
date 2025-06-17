@@ -101,6 +101,7 @@ vec2 worldUvs(float scale) {
 #include utils/color_filters.glsl
 #include utils/fog.glsl
 #include utils/sky.glsl
+#include utils/wireframe.glsl
 
 void main() {
     vec3 downDir = vec3(0, -1, 0);
@@ -197,6 +198,9 @@ void main() {
         // Average
         fragDelta /= 3;
         selfShadowing /= 3;
+
+        // Prevent displaced surfaces from casting flat shadows onto themselves
+        fragDelta.z = max(0, fragDelta.z);
 
         fragPos += TBN * fragDelta;
         #endif
@@ -485,7 +489,11 @@ void main() {
     outputColor.rgb = colorBlindnessCompensation(outputColor.rgb);
 
     #if APPLY_COLOR_FILTER
-    outputColor.rgb = applyColorFilter(outputColor.rgb);
+        outputColor.rgb = applyColorFilter(outputColor.rgb);
+    #endif
+
+    #if WIREFRAME
+        outputColor.rgb *= wireframeMask();
     #endif
 
     // apply fog

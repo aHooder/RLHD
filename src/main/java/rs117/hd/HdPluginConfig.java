@@ -40,6 +40,7 @@ import rs117.hd.config.DefaultSkyColor;
 import rs117.hd.config.FogDepthMode;
 import rs117.hd.config.MaxDynamicLights;
 import rs117.hd.config.Saturation;
+import rs117.hd.config.SeasonalHemisphere;
 import rs117.hd.config.SeasonalTheme;
 import rs117.hd.config.ShadingMode;
 import rs117.hd.config.ShadowDistance;
@@ -498,6 +499,18 @@ public interface HdPluginConfig extends Config
 		return SeasonalTheme.AUTOMATIC;
 	}
 
+	String KEY_SEASONAL_HEMISPHERE = "seasonalHemisphere";
+	@ConfigItem(
+		keyName = KEY_SEASONAL_HEMISPHERE,
+		name = "Seasonal Hemisphere",
+		description = "Determines which hemisphere the 'Automatic' Seasonal Theme should consider.",
+		position = 1,
+		section = environmentSettings
+	)
+	default SeasonalHemisphere seasonalHemisphere() {
+		return SeasonalHemisphere.NORTHERN;
+	}
+
 	@ConfigItem(
 		keyName = "daylightCycle",
 		name = "Daylight Cycle",
@@ -929,6 +942,17 @@ public interface HdPluginConfig extends Config
 	)
 	default boolean hideUnrelatedAreas() {
 		return true;
+	}
+
+	String KEY_WIREFRAME = "wireframe";
+	@ConfigItem(
+		keyName = KEY_WIREFRAME,
+		name = "Wireframe",
+		description = "Show the edges of individual triangles in the scene.",
+		section = experimentalSettings
+	)
+	default boolean wireframe() {
+		return false;
 	}
 
 

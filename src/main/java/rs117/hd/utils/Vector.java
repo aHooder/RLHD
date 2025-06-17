@@ -29,6 +29,12 @@ public class Vector {
 		return out;
 	}
 
+	public static int[] subtract(int[] out, int[] a, int[] b) {
+		for (int i = 0; i < out.length; i++)
+			out[i] = a[i] - b[i];
+		return out;
+	}
+
 	public static float[] subtract(float[] a, float[] b) {
 		return subtract(new float[a.length], a, b);
 	}
@@ -51,6 +57,14 @@ public class Vector {
 
 	public static float[] multiply(float[] a, float[] b) {
 		return multiply(new float[a.length], a, b);
+	}
+
+	public static float dot(int[] a, int[] b) {
+		float f = 0;
+		int len = Math.min(a.length, b.length);
+		for (int i = 0; i < len; i++)
+			f += (float) a[i] * b[i]; // cast to float to prevent int overflow
+		return f;
 	}
 
 	public static float dot(float[] a, float[] b) {
