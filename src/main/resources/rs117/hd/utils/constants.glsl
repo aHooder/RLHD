@@ -1,8 +1,7 @@
 #pragma once
 
 #define EPS 1.0e-10
-#undef PI
-#define PI 3.14159265358979323846264338327950288419716939937510582097494459230781
+#define PI 3.141592653589793 // max 64-bit float precision
 #define HALF_PI (.5*PI)
 #define TAU (2*PI)
 

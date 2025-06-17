@@ -84,11 +84,11 @@ import rs117.hd.config.SeasonalHemisphere;
 import rs117.hd.config.SeasonalTheme;
 import rs117.hd.config.ShadingMode;
 import rs117.hd.config.ShadowMode;
+import rs117.hd.config.SkyMode;
 import rs117.hd.config.UIScalingMode;
 import rs117.hd.config.VanillaShadowMode;
 import rs117.hd.data.WaterType;
 import rs117.hd.data.materials.Material;
-import rs117.hd.dynamicsky.hosek.ArHosekSkyModelData_Spectral;
 import rs117.hd.model.ModelHasher;
 import rs117.hd.model.ModelOffsets;
 import rs117.hd.model.ModelPusher;
@@ -111,7 +111,6 @@ import rs117.hd.scene.SceneContext;
 import rs117.hd.scene.SceneUploader;
 import rs117.hd.scene.TextureManager;
 import rs117.hd.scene.TileOverrideManager;
-import rs117.hd.scene.TimeOfDay;
 import rs117.hd.scene.areas.Area;
 import rs117.hd.scene.lights.Light;
 import rs117.hd.scene.model_overrides.ModelOverride;
@@ -135,7 +134,6 @@ import static org.lwjgl.opencl.CL10.*;
 import static org.lwjgl.opengl.GL43C.*;
 import static rs117.hd.HdPluginConfig.*;
 import static rs117.hd.scene.SceneContext.SCENE_OFFSET;
-import static rs117.hd.scene.TimeOfDay.MINUTES_PER_DAY;
 import static rs117.hd.utils.HDUtils.MAX_FLOAT_WITH_128TH_PRECISION;
 import static rs117.hd.utils.HDUtils.PI;
 import static rs117.hd.utils.HDUtils.clamp;
@@ -293,8 +291,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		.add(GL_FRAGMENT_SHADER, "frag.glsl");
 
 	private static final Shader UI_PROGRAM = new Shader()
-		.add(GL_VERTEX_SHADER, "vertui.glsl")
-		.add(GL_FRAGMENT_SHADER, "fragui.glsl");
+		.add(GL_VERTEX_SHADER, "ui_vert.glsl")
+		.add(GL_FRAGMENT_SHADER, "ui_frag.glsl");
 
 	private static final Shader SKY_PROGRAM = new Shader()
 		.add(GL_VERTEX_SHADER, "sky_vert.glsl")
@@ -337,13 +335,13 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	private int rboSceneColorHandle;
 	private int rboSceneDepthHandle;
 
-	private int texSky;
-
 	private int shadowMapResolution;
 	private int fboShadowMap;
 	private int texShadowMap;
 
 	private int texTileHeightMap;
+
+	private int texSky;
 
 	private final GLBuffer hStagingBufferVertices = new GLBuffer(); // temporary scene vertex buffer
 	private final GLBuffer hStagingBufferUvs = new GLBuffer(); // temporary scene uv buffer
@@ -470,13 +468,13 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	public boolean configLegacyGreyColors;
 	public boolean configModelBatching;
 	public boolean configModelCaching;
-	public boolean configDynamicSky;
 	public boolean configShadowsEnabled;
 	public boolean configExpandShadowDraw;
 	public boolean configUseFasterModelHashing;
 	public boolean configUndoVanillaShading;
 	public boolean configPreserveVanillaNormals;
 	public int configMaxDynamicLights;
+	public SkyMode configSkyMode;
 	public ShadowMode configShadowMode;
 	public SeasonalTheme configSeasonalTheme;
 	public SeasonalHemisphere configSeasonalHemisphere;
@@ -517,8 +515,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	private double lastFrameClientTime;
 	private int gameTicksUntilSceneReload = 0;
 	private long colorFilterChangedAt;
-
-	private final double latLong[] = { 51.477928, -.001545 };
 
 	@Provides
 	HdPluginConfig provideConfig(ConfigManager configManager) {
@@ -728,9 +724,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			areaManager.shutDown();
 			gamevalManager.shutDown();
 
-			// TODO: Probably move this elsewhere
-			ArHosekSkyModelData_Spectral.clearDatasets();
-
 			if (lwjglInitialized) {
 				lwjglInitialized = false;
 				waitUntilIdle();
@@ -738,6 +731,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				textureManager.shutDown();
 
 				destroyBuffers();
+				destroyInterfaceTexture();
 				destroyPrograms();
 				destroyVaos();
 				destroySceneFbo();
@@ -993,8 +987,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		uniUnderwaterCausticsColor = glGetUniformLocation(glSceneProgram, "underwaterCausticsColor");
 		uniUnderwaterCausticsStrength = glGetUniformLocation(glSceneProgram, "underwaterCausticsStrength");
 		uniCameraPos = glGetUniformLocation(glSceneProgram, "cameraPos");
-		uniTextureArray = glGetUniformLocation(glSceneProgram, "textureArray");
-		uniElapsedTime = glGetUniformLocation(glSceneProgram, "elapsedTime");
 
 		if (configColorFilter != ColorFilter.NONE) {
 			uniColorFilter = glGetUniformLocation(glSceneProgram, "colorFilter");
@@ -1304,16 +1296,12 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	private void destroyInterfaceTexture()
 	{
 		if (interfacePbo != 0)
-		{
 			glDeleteBuffers(interfacePbo);
-			interfacePbo = 0;
-		}
+		interfacePbo = 0;
 
 		if (interfaceTexture != 0)
-		{
 			glDeleteTextures(interfaceTexture);
-			interfaceTexture = 0;
-		}
+		interfaceTexture = 0;
 	}
 
 	private void initCameraUniformBuffer()
@@ -1405,20 +1393,16 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	private void destroySceneFbo()
 	{
 		if (fboSceneHandle != 0)
-		{
 			glDeleteFramebuffers(fboSceneHandle);
-			fboSceneHandle = 0;
-		}
+		fboSceneHandle = 0;
 
-		if (rboSceneColorHandle != 0) {
+		if (rboSceneColorHandle != 0)
 			glDeleteRenderbuffers(rboSceneColorHandle);
-			rboSceneColorHandle = 0;
-		}
+		rboSceneColorHandle = 0;
 
-		if (rboSceneDepthHandle != 0) {
+		if (rboSceneDepthHandle != 0)
 			glDeleteRenderbuffers(rboSceneDepthHandle);
-			rboSceneDepthHandle = 0;
-		}
+		rboSceneDepthHandle = 0;
 	}
 
 	private void initShadowMapFbo() {
@@ -1494,136 +1478,32 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		fboShadowMap = 0;
 	}
 
-	private void initSkyTexture() {
-		if (!configDynamicSky)
+	private void initSkyTexture() throws IOException {
+		if (configSkyMode == SkyMode.SOLID_COLOR)
 			return;
 
-		try {
-//			var imagePath = path(TextureManager.class, "hdris/mod_ash.png");
-			var imagePath = path(TextureManager.class, "hdris/DaySkyHDRI015A_4K-TONEMAPPED.jpg");
-//			var imagePath = path(TextureManager.class, "hdris/EveningSkyHDRI020B_8K-TONEMAPPED.jpg");
-			var image = imagePath.loadImage();
-			int width = image.getWidth();
-			int height = image.getHeight();
+		var imagePath = path(TextureManager.class, "hdris/EveningSkyHDRI020B_8K-TONEMAPPED.jpg");
+		var image = imagePath.loadImage();
+		int width = image.getWidth();
+		int height = image.getHeight();
 
-			var reformattedImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
-			AffineTransform t = new AffineTransform();
-			AffineTransformOp scaleOp = new AffineTransformOp(t, AffineTransformOp.TYPE_NEAREST_NEIGHBOR);
-			scaleOp.filter(image, reformattedImage);
-			int[] pixels = ((DataBufferInt) reformattedImage.getRaster().getDataBuffer()).getData();
+		var reformattedImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+		AffineTransform t = new AffineTransform();
+		AffineTransformOp scaleOp = new AffineTransformOp(t, AffineTransformOp.TYPE_NEAREST_NEIGHBOR);
+		scaleOp.filter(image, reformattedImage);
+		int[] pixels = ((DataBufferInt) reformattedImage.getRaster().getDataBuffer()).getData();
 
-//			float lightPitch = (float) Math.toRadians(environmentManager.currentSunAngles[0]);
-//			float lightYaw = (float) Math.toRadians(environmentManager.currentSunAngles[1]);
-//			switch (config.daylightCycle()) {
-//				case HOUR_LONG_DAYS:
-//					double[] sunAngles = TimeOfDay.getSunAngles(latLong, MINUTES_PER_DAY);
-//					lightPitch = (float) sunAngles[1];
-//					lightYaw = (float) sunAngles[0];
-//					break;
-//			}
-//
-//			int width = 64;
-//			int height = 64;
-//			int[] pixels = new int[width * height];
-//
-//			double turbidity = 4; // "haziness" from 1 to 10, with 50 being foggy, but unsupported by the model
-////			double albedo = .09; // grass
-//			double albedo = .5; // snow
-//			double solarElevation = (Math.cos(elapsedTime * Math.PI / 10) + 1) / 2 * Math.PI / 2; // radians from 0 to pi/2
-//			solarElevation = lightPitch;
-////			System.out.println("elevation: " + Math.toDegrees(solarElevation));
-//
-//			// See https://cgg.mff.cuni.cz/projects/SkylightModelling/
-//			ArHosekSkyModelData_Spectral.loadDatasets(gson);
-//
-//			ArHosekSkyModelState model;
-//			model = ArHosekSkyModel.arhosek_rgb_skymodelstate_alloc_init(turbidity, albedo, solarElevation);
-////			model = ArHosekSkyModel.arhosek_xyz_skymodelstate_alloc_init(turbidity, albedo, solarElevation);
-////			model = ArHosekSkyModel.arhosekskymodelstate_alloc_init(turbidity, albedo, solarElevation);
-////			double[] wavelengths = {
-////				590, // red
-////				530, // green
-////				500, // blue
-////			};
-////			double[] sensitivities = {
-////				0.7570,
-////				0.8620,
-////				0.3230,
-////			};
-//
-//			for (int y = 0; y < height; ++y) {
-//				for (int x = 0; x < width; ++x) {
-////					double u = (x + .5) / width * 2 - 1;
-////					double v = (y + .5) / height * 2 - 1;
-////					double dist = Math.sqrt(u * u + v * v);
-////					if (dist > 1)
-////						continue;
-////					double gamma = Math.abs(Math.atan2(v, u));
-////					double theta = Math.acos(dist);
-//
-////					double gamma = u * model.solar_radius;
-////					double theta = solarElevation + v * model.solar_radius;
-//
-////					double gamma = (x + .5) / width * Math.PI + 4 * Math.PI - Math.PI / 2 - lightYaw; // azimuthal angle
-////					double theta = (y + .5) / height * Math.PI; // angle from zenith
-//
-//					double theta = Math.acos(1 - 2 * (y + .5) / height); // angle from zenith
-//
-//					double azimuth = (x + .5) / width * 2 * Math.PI - lightYaw + Math.PI;
-//					float[] viewDir = {
-//						(float) (Math.sin(azimuth) * Math.cos(theta)),
-//						(float) (Math.sin(theta)),
-//						(float) (Math.cos(azimuth) * Math.cos(theta))
-//					};
-//					float[] sunDir = {
-//						0,
-//						(float) Math.cos(solarElevation),
-//						(float) Math.sin(solarElevation)
-//					};
-//
-//					double gamma = Math.acos(Vector.dot(viewDir, sunDir));
-//
-////					gamma = (u + .5) * 2 * Math.PI + Math.PI;
-////					theta = dist * Math.PI;
-//
-////					float[] sunDir = { 0, (float) Math.sin(solarElevation), (float) Math.cos(solarElevation) };
-////					float phi = (float) gamma;
-////					float[] v = {
-////						(float) (Math.cos(phi) * Math.sin(theta)),
-////						(float) Math.cos(theta),
-////						(float) (Math.sin(phi) * Math.sin(theta))
-////					};
-////					gamma = Math.acos(clamp(dot(v, sunDir), -1, 1));
-//
-//					int pixel = 0xFF << 24;
-//					for (int c = 0; c < 3; c++) {
-//						double radiance = ArHosekSkyModel.arhosek_tristim_skymodel_radiance(model, theta, gamma, c);
-//						pixel |= clamp((int) (radiance * 2.5), 0, 0xFF) << 8 * (2 - c);
-////						double radiance = ArHosekSkyModel.arhosekskymodel_radiance(model, theta, gamma, wavelengths[c]);
-////						pixel |= clamp((int) (radiance * 1 * 255), 0, 0xFF) << 8 * (2 - c);
-////						double radiance = ArHosekSkyModel.arhosekskymodel_solar_radiance(model, theta, gamma, wavelengths[c]);
-////						radiance *= sensitivities[c];
-////						pixel |= clamp((int) (radiance * .01), 0, 0xFF) << 8 * (2 - c);
-//					}
-//
-//					pixels[y * width + x] = pixel;
-//				}
-//			}
+		texSky = glGenTextures();
+		glActiveTexture(TEXTURE_UNIT_SKY);
+		glBindTexture(GL_TEXTURE_2D, texSky);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8, width, height, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, pixels);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
-			texSky = glGenTextures();
-			glActiveTexture(TEXTURE_UNIT_SKY);
-			glBindTexture(GL_TEXTURE_2D, texSky);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8, width, height, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, pixels);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-			glGenerateMipmap(GL_TEXTURE_2D);
-		} catch (Exception ex) {
-			throw new RuntimeException(ex);
-		}
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+		glGenerateMipmap(GL_TEXTURE_2D);
 	}
 
 	private void destroySkyTexture() {
@@ -1652,9 +1532,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		}
 		tileBuffer.flip();
 
-		glActiveTexture(TEXTURE_UNIT_TILE_HEIGHT_MAP);
-
 		texTileHeightMap = glGenTextures();
+		glActiveTexture(TEXTURE_UNIT_TILE_HEIGHT_MAP);
 		glBindTexture(GL_TEXTURE_3D, texTileHeightMap);
 		glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 		glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -2033,6 +1912,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	private void prepareInterfaceTexture(int canvasWidth, int canvasHeight) {
 		frameTimer.begin(Timer.UPLOAD_UI);
 
+		glActiveTexture(TEXTURE_UNIT_UI);
 		if (canvasWidth != lastCanvasWidth || canvasHeight != lastCanvasHeight) {
 			lastCanvasWidth = canvasWidth;
 			lastCanvasHeight = canvasHeight;
@@ -2043,7 +1923,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 			glBindTexture(GL_TEXTURE_2D, interfaceTexture);
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, canvasWidth, canvasHeight, 0, GL_BGRA, GL_UNSIGNED_BYTE, 0);
-			glBindTexture(GL_TEXTURE_2D, 0);
 		}
 
 		final BufferProvider bufferProvider = client.getBufferProvider();
@@ -2062,7 +1941,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, 0);
 		}
 		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-		glBindTexture(GL_TEXTURE_2D, 0);
 
 		frameTimer.end(Timer.UPLOAD_UI);
 	}
@@ -2162,43 +2040,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 			glBindVertexArray(vaoSceneHandle);
 
-			float[] lightColor = Vector.multiply(environmentManager.currentDirectionalColor, environmentManager.currentDirectionalStrength);
-			float[] ambientColor = Vector.multiply(environmentManager.currentAmbientColor, environmentManager.currentAmbientStrength);
-			float[] fogColor = ColorUtils.linearToSrgb(environmentManager.currentFogColor);
-			float[] waterColor = environmentManager.currentWaterColor;
-
-			float lightPitch = environmentManager.currentSunAngles[0];
-			float lightYaw = environmentManager.currentSunAngles[1];
-			switch (config.daylightCycle()) {
-				case HOUR_LONG_DAYS:
-					lightColor = TimeOfDay.getLightColor(latLong, MINUTES_PER_DAY);
-					ambientColor = TimeOfDay.getAmbientColor(latLong, MINUTES_PER_DAY);
-
-					double[] sunAngles = TimeOfDay.getSunAngles(latLong, MINUTES_PER_DAY);
-					double[] shadowAngles = TimeOfDay.getShadowAngles(latLong, MINUTES_PER_DAY);
-					lightPitch = (float) shadowAngles[1] - PI;
-					lightYaw = (float) shadowAngles[0];
-
-					fogColor = TimeOfDay.getSkyColor(latLong, MINUTES_PER_DAY);
-//					fogColor = ColorUtils.linearToSrgb(multiply(ambientColor, (float) clamp(Math.sin(sunAngles[1]), 0, 1)));
-					waterColor = fogColor;
-
-					// Blend shadows between day and night
-					float shadowVisibility = 1 - (float) Math.pow(1 - Math.abs(Math.sin(sunAngles[1])), 5);
-					shadowVisibility *= (float) (1 - Math.pow(1 - Math.sin(shadowAngles[1]), 2));
-					shadowVisibility = clamp(shadowVisibility, 0, 1);
-					ambientColor = Vector.add(ambientColor, Vector.multiply(lightColor, 1 - shadowVisibility));
-					lightColor = Vector.multiply(lightColor, shadowVisibility);
-					break;
-				case ALWAYS_NIGHT:
-					ambientColor = TimeOfDay.getNightAmbientColor();
-					lightColor = TimeOfDay.getNightLightColor();
-					fogColor = new float[] { 0, 0, 0 };
-					break;
-			}
-
-			float[] lightViewMatrix = Mat4.rotateX(lightPitch);
-			Mat4.mul(lightViewMatrix, Mat4.rotateY(PI - lightYaw));
+			float[] lightViewMatrix = Mat4.rotateX(environmentManager.currentSunAngles[0]);
+			Mat4.mul(lightViewMatrix, Mat4.rotateY(PI - environmentManager.currentSunAngles[1]));
 
 			float[] lightProjectionMatrix = Mat4.identity();
 			if (configShadowsEnabled && fboShadowMap != 0 && environmentManager.currentDirectionalStrength > 0) {
@@ -2284,6 +2127,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				}
 			}
 
+			float[] fogColor = ColorUtils.linearToSrgb(environmentManager.currentFogColor);
 			float fogDepth = 0;
 			switch (config.fogDepthMode()) {
 				case USER_DEFINED:
@@ -2302,7 +2146,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			glUniform1i(uniExpandedMapLoadingChunks, sceneContext.expandedMapLoadingChunks);
 			glUniform1f(uniColorBlindnessIntensity, config.colorBlindnessIntensity() / 100.f);
 
-			float[] waterColorHsv = ColorUtils.srgbToHsv(waterColor);
+			float[] waterColorHsv = ColorUtils.srgbToHsv(environmentManager.currentWaterColor);
 			float lightBrightnessMultiplier = 0.8f;
 			float midBrightnessMultiplier = 0.45f;
 			float darkBrightnessMultiplier = 0.05f;
@@ -2326,6 +2170,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			glUniform3fv(uniWaterColorDark, waterColorDark);
 
 			float brightness = config.brightness() / 20f;
+			float[] lightColor = Vector.multiply(environmentManager.currentDirectionalColor, environmentManager.currentDirectionalStrength);
+			float[] ambientColor = Vector.multiply(environmentManager.currentAmbientColor, environmentManager.currentAmbientStrength);
 			glUniform3fv(uniAmbientColor, Vector.multiply(ambientColor, brightness));
 			glUniform3fv(uniLightColor, Vector.multiply(lightColor, brightness));
 
@@ -2397,7 +2243,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			glToggle(GL_MULTISAMPLE, numSamples > 1);
 			glViewport(dpiViewport[0], dpiViewport[1], dpiViewport[2], dpiViewport[3]);
 
-			if (configDynamicSky) {
+			if (configSkyMode != SkyMode.SOLID_COLOR) {
 				frameTimer.begin(Timer.RENDER_SKY);
 				drawSky(projectionMatrix, lightViewMatrix, lightColor, dpiViewport[2], dpiViewport[3]);
 				frameTimer.end(Timer.RENDER_SKY);
@@ -2424,11 +2270,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 			// Draw with buffers bound to scene VAO
 			glBindVertexArray(vaoSceneHandle);
-
-			if (configShadowsEnabled) {
-				glActiveTexture(TEXTURE_UNIT_SHADOW_MAP);
-				glBindTexture(GL_TEXTURE_2D, texShadowMap);
-			}
 
 			// When there are custom tiles, we need depth testing to draw them in the correct order, but the rest of the
 			// scene doesn't support depth testing, so we only write depths for custom tiles.
@@ -2530,9 +2371,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		if (client.getGameState().getState() < GameState.LOADING.getState())
 			overlayColor = 0;
 
-		glActiveTexture(TEXTURE_UNIT_UI);
-		glBindTexture(GL_TEXTURE_2D, interfaceTexture);
-
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -2566,7 +2404,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		frameTimer.end(Timer.RENDER_UI);
 
 		// Reset
-		glBindTexture(GL_TEXTURE_2D, 0);
 		glBindVertexArray(0);
 		glUseProgram(0);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -2574,9 +2411,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	}
 
 	private void drawSky(float[] projectionMatrix, float[] lightViewMatrix, float[] lightColor, int viewportWidth, int viewportHeight) {
-//		destroySkyTexture();
-//		initSkyTexture();
-
 		// Use the texture bound in the first pass
 		glUseProgram(glSkyProgram);
 		glActiveTexture(TEXTURE_UNIT_SKY);
@@ -2822,7 +2656,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		configModelBatching = config.modelBatching();
 		configModelCaching = config.modelCaching();
 		configMaxDynamicLights = config.maxDynamicLights().getValue();
-		configDynamicSky = config.dynamicSky();
+		configSkyMode = config.skyMode();
 		configExpandShadowDraw = config.expandShadowDraw();
 		configUseFasterModelHashing = config.fasterModelHashing();
 		configUndoVanillaShading = config.shadingMode() != ShadingMode.VANILLA;
@@ -2948,7 +2782,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 							case KEY_WIREFRAME:
 								recompilePrograms = true;
 								break;
-							case KEY_DYNAMIC_SKY:
+							case KEY_SKY_MODE:
 								destroySkyTexture();
 								initSkyTexture();
 								recompilePrograms();

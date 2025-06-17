@@ -23,7 +23,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#define PI 3.1415926535897932384626433832795f
+#define PI 3.141592653589793 // max 64-bit float precision
 #define UNIT PI / 1024.0f
 
 float3 to_screen(__constant struct uniform *uni, float3 vertex);

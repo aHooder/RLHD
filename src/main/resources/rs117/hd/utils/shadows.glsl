@@ -45,11 +45,9 @@ float sampleShadowMap(vec3 fragPos, int waterTypeIndex, vec2 distortion, float l
 
     // Fade out shadows near shadow texture edges
     float fadeOut = smoothstep(.75, 1., dot(shadowPos.xy, shadowPos.xy));
-
     // TODO: make this more physically correct
     fadeOut += 1 - abs(lightDir.y);
     fadeOut = min(1, fadeOut);
-
     if (fadeOut >= 1)
         return 0.f;
 
