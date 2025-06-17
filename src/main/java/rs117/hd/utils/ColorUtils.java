@@ -305,7 +305,7 @@ public class ColorUtils {
 		};
 	}
 
-	public static float[] rgb(Color c) { // TODO rename this
+	public static float[] srgb(Color c) {
 		return srgb(c.getRed(), c.getGreen(), c.getBlue());
 	}
 

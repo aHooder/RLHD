@@ -37,7 +37,6 @@ import static java.lang.Math.atan2;
 import static java.lang.Math.cos;
 import static java.lang.Math.sin;
 import static java.lang.Math.tan;
-import static rs117.hd.utils.ColorUtils.rgb;
 import static rs117.hd.utils.HDUtils.clamp;
 import static rs117.hd.utils.HDUtils.lerp;
 
@@ -170,7 +169,7 @@ public class SunCalc
 			i++;
 
 		if (i == end)
-			return rgb((Color) keyframesDegreesSrgb[end][1]);
+			return ColorUtils.srgb((Color) keyframesDegreesSrgb[end][1]);
 
 		var from = keyframesDegreesSrgb[i];
 		var to = keyframesDegreesSrgb[i + 1];
@@ -178,7 +177,7 @@ public class SunCalc
 		var x2 = ((Number) to[0]).floatValue();
 
 		float t = clamp((x - x1) / (x2 - x1), 0, 1);
-		return lerp(rgb((Color) from[1]), rgb((Color) to[1]), t);
+		return lerp(ColorUtils.srgb((Color) from[1]), ColorUtils.srgb((Color) to[1]), t);
 	}
 
 	/**
