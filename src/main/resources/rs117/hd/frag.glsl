@@ -437,6 +437,15 @@ void main() {
             getMaterialIsUnlit(material2),
             getMaterialIsUnlit(material3)
         ));
+
+        #if VANILLA_COLOR_BANDING
+            outputColor.rgb = linearToSrgb(outputColor.rgb);
+            outputColor.rgb = srgbToHsv(outputColor.rgb);
+            outputColor.b = floor(outputColor.b * 127) / 127;
+            outputColor.rgb = hsvToSrgb(outputColor.rgb);
+            outputColor.rgb = srgbToLinear(outputColor.rgb);
+        #endif
+
         outputColor.rgb *= mix(compositeLight, vec3(1), unlit);
         outputColor.rgb = linearToSrgb(outputColor.rgb);
 
@@ -452,14 +461,6 @@ void main() {
         // This is required if we always draw all underwater terrain.
         outputColor.a *= -256;
     }
-
-    #if VANILLA_COLOR_BANDING
-    outputColor.rgb = linearToSrgb(outputColor.rgb);
-    outputColor.rgb = srgbToHsv(outputColor.rgb);
-    outputColor.b = floor(outputColor.b * 127) / 127;
-    outputColor.rgb = hsvToSrgb(outputColor.rgb);
-    outputColor.rgb = srgbToLinear(outputColor.rgb);
-    #endif
 
     outputColor.rgb = clamp(outputColor.rgb, 0, 1);
 
