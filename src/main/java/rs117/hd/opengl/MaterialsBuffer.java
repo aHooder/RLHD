@@ -1,13 +1,14 @@
 package rs117.hd.opengl;
 
-import rs117.hd.data.materials.Material;
+import static org.lwjgl.opengl.GL15C.*;
 
 public class MaterialsBuffer extends UniformBuffer{
-	public MaterialsBuffer() {
-		super("Materials");
+	public MaterialsBuffer(int materialCount) {
+		super("Materials", GL_STATIC_DRAW);
+		materials = addStructs(new MaterialStruct[materialCount], MaterialStruct::new);
 	}
 
-	public MaterialStruct[] materials = addStructs(new MaterialStruct[Material.values().length], MaterialStruct::new);
+	public final MaterialStruct[] materials;
 
 	public static class MaterialStruct extends StructProperty {
 		public Property colorMap = addProperty(PropertyType.Int, "colorMap");
