@@ -27,8 +27,7 @@
 layout (location = 0) in vec3 vPos;
 layout (location = 1) in vec2 vUv;
 
-uniform mat4 projectionMatrix;
-uniform vec2 viewportDimensions;
+#include uniforms/sky.glsl
 
 out vec3 fRay;
 out vec2 fUv;

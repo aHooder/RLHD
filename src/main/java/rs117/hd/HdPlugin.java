@@ -103,6 +103,7 @@ import rs117.hd.opengl.shader.Template;
 import rs117.hd.opengl.uniforms.ComputeUniforms;
 import rs117.hd.opengl.uniforms.GlobalUniforms;
 import rs117.hd.opengl.uniforms.LightUniforms;
+import rs117.hd.opengl.uniforms.SkyUniforms;
 import rs117.hd.opengl.uniforms.UIUniforms;
 import rs117.hd.overlays.FrameTimer;
 import rs117.hd.overlays.Timer;
@@ -191,6 +192,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	public static final int UNIFORM_BLOCK_LIGHTS = 3;
 	public static final int UNIFORM_BLOCK_GLOBAL = 4;
 	public static final int UNIFORM_BLOCK_UI = 5;
+	public static final int UNIFORM_BLOCK_SKY = 6;
 
 	public static final float NEAR_PLANE = 50;
 	public static final int MAX_FACE_COUNT = 6144;
@@ -404,6 +406,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	private final GlobalUniforms uboGlobal = new GlobalUniforms();
 	private final UIUniforms uboUI = new UIUniforms();
 	private final LightUniforms uboLights = new LightUniforms();
+	private final SkyUniforms uboSky = new SkyUniforms();
 
 	@Getter
 	@Nullable
@@ -442,11 +445,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 	// Sky program uniforms
 	private int uniSkySkyTexture;
-	private int uniSkyProjectionMatrix;
-	private int uniSkyViewportDimensions;
-	private int uniSkyColorBlindnessIntensity;
-	private int uniSkyLightDir;
-	private int uniSkyLightColor;
+	private int uniSkyBlockSky;
 
 	// Configs used frequently enough to be worth caching
 	public boolean configGroundTextures;
@@ -975,23 +974,17 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	private void initUniforms() {
 		uniShadowMap = glGetUniformLocation(glSceneProgram, "shadowMap");
 		uniTextureArray = glGetUniformLocation(glSceneProgram, "textureArray");
-
-		uniUiTexture = glGetUniformLocation(glUiProgram, "uiTexture");
-		uniUiBlockUi = glGetUniformBlockIndex(glUiProgram, "UIUniforms");
-
+		uniSkyTexture = glGetUniformLocation(glSceneProgram, "skyTexture");
 		uniSceneBlockMaterials = glGetUniformBlockIndex(glSceneProgram, "MaterialUniforms");
 		uniSceneBlockWaterTypes = glGetUniformBlockIndex(glSceneProgram, "WaterTypeUniforms");
 		uniSceneBlockPointLights = glGetUniformBlockIndex(glSceneProgram, "PointLightUniforms");
 		uniSceneBlockGlobals = glGetUniformBlockIndex(glSceneProgram, "GlobalUniforms");
 
-		uniSkyTexture = glGetUniformLocation(glSceneProgram, "skyTexture");
-
 		uniSkySkyTexture = glGetUniformLocation(glSkyProgram, "skyTexture");
-		uniSkyProjectionMatrix = glGetUniformLocation(glSkyProgram, "projectionMatrix");
-		uniSkyViewportDimensions = glGetUniformLocation(glSkyProgram, "viewportDimensions");
-		uniSkyColorBlindnessIntensity = glGetUniformLocation(glSkyProgram, "colorBlindnessIntensity");
-		uniSkyLightDir = glGetUniformLocation(glSkyProgram, "lightDir");
-		uniSkyLightColor = glGetUniformLocation(glSkyProgram, "lightColor");
+		uniSkyBlockSky = glGetUniformBlockIndex(glSkyProgram, "SkyUniforms");
+
+		uniUiTexture = glGetUniformLocation(glUiProgram, "uiTexture");
+		uniUiBlockUi = glGetUniformBlockIndex(glUiProgram, "UIUniforms");
 
 		if (computeMode == ComputeMode.OPENGL) {
 			for (int sortingProgram : glModelSortingComputePrograms) {
@@ -1206,9 +1199,10 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		hModelPassthroughBuffer.initialize();
 
 		uboCompute.initialize(UNIFORM_BLOCK_COMPUTE);
+		uboLights.initialize(UNIFORM_BLOCK_LIGHTS);
 		uboGlobal.initialize(UNIFORM_BLOCK_GLOBAL);
 		uboUI.initialize(UNIFORM_BLOCK_UI);
-		uboLights.initialize(UNIFORM_BLOCK_LIGHTS);
+		uboSky.initialize(UNIFORM_BLOCK_SKY);
 	}
 
 	private void destroyBuffers() {
@@ -1223,9 +1217,10 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		hModelPassthroughBuffer.destroy();
 
 		uboCompute.destroy();
+		uboLights.destroy();
 		uboGlobal.destroy();
 		uboUI.destroy();
-		uboLights.destroy();
+		uboSky.destroy();
 	}
 
 	private void initInterfaceTexture()
@@ -2381,15 +2376,19 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	}
 
 	private void drawSky(float[] projectionMatrix, float[] lightViewMatrix, float[] lightColor, int viewportWidth, int viewportHeight) {
-		// Use the texture bound in the first pass
 		glUseProgram(glSkyProgram);
 		glActiveTexture(TEXTURE_UNIT_SKY);
 		glBindTexture(GL_TEXTURE_2D, texSky);
-		glUniformMatrix4fv(uniSkyProjectionMatrix, false, projectionMatrix);
-		glUniform2f(uniSkyViewportDimensions, viewportWidth, viewportHeight);
-		glUniform1f(uniSkyColorBlindnessIntensity, config.colorBlindnessIntensity() / 100f);
-		glUniform3f(uniSkyLightDir, lightViewMatrix[2], lightViewMatrix[6], lightViewMatrix[10]);
-		glUniform3fv(uniSkyLightColor, lightColor);
+
+		uboSky.projectionMatrix.set(projectionMatrix);
+		uboSky.viewportDimensions.set(viewportWidth, viewportHeight);
+		uboSky.colorBlindnessIntensity.set(config.colorBlindnessIntensity() / 100f);
+		uboSky.lightDir.set(lightViewMatrix[2], lightViewMatrix[6], lightViewMatrix[10]);
+		uboSky.lightColor.set(lightColor);
+		uboSky.gammaCorrection.set(100f / config.brightness());
+		uboSky.upload();
+
+		glUniformBlockBinding(glSkyProgram, uniSkyBlockSky, UNIFORM_BLOCK_SKY);
 
 		glBindVertexArray(vaoQuadHandle);
 		glDrawArrays(GL_TRIANGLE_FAN, 0, 4);

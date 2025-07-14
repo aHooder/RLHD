@@ -26,11 +26,7 @@
 
 uniform sampler2D skyTexture;
 
-uniform mat4 projectionMatrix;
-uniform vec2 viewportDimensions;
-uniform float colorBlindnessIntensity;
-uniform vec3 lightDir;
-uniform vec3 lightColor;
+#include uniforms/sky.glsl
 
 #include utils/sky.glsl
 #include utils/color_utils.glsl
