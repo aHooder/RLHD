@@ -976,7 +976,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		uniSkyLightDir = glGetUniformLocation(glSkyProgram, "lightDir");
 		uniSkyLightColor = glGetUniformLocation(glSkyProgram, "lightColor");
 
-
 		if (computeMode == ComputeMode.OPENGL) {
 			for (int sortingProgram : glModelSortingComputePrograms) {
 				int uniBlock = glGetUniformBlockIndex(sortingProgram, "ComputeUniforms");
