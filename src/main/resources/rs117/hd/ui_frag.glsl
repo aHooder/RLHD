@@ -30,16 +30,14 @@
 #define SAMPLING_CATROM 2
 #define SAMPLING_XBR 3
 
-uniform sampler2D uiTexture;
+#include uniforms/ui.glsl
 
-uniform ivec2 sourceDimensions;
-uniform ivec2 targetDimensions;
-uniform float colorBlindnessIntensity;
-uniform vec4 alphaOverlay;
+uniform sampler2D uiTexture;
 
 #include scaling/bicubic.glsl
 #include utils/constants.glsl
 #include utils/color_blindness.glsl
+#include utils/gamma_calibration_ui.glsl
 
 #if SHADOW_MAP_OVERLAY
 uniform sampler2D shadowMap;
@@ -84,6 +82,8 @@ void main() {
 
     c = alphaBlend(c, alphaOverlay);
     c.rgb = colorBlindnessCompensation(c.rgb);
+
+    gammaCalibrationUi(c, TexCoord, targetDimensions);
 
     FragColor = c;
 }

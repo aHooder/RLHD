@@ -48,7 +48,7 @@ public class FrameTimerOverlay extends OverlayPanel implements FrameTimer.Listen
 	public void onFrameCompletion(FrameTimings timings) {
 		long now = System.nanoTime();
 		while (!frames.isEmpty()) {
-			if (now - frames.peekFirst().frameTimestamp < 3e9) // remove entries older than 3 seconds
+			if (now - frames.peekFirst().frameTimestamp < 10e9) // remove older entries
 				break;
 			frames.removeFirst();
 		}
@@ -57,6 +57,8 @@ public class FrameTimerOverlay extends OverlayPanel implements FrameTimer.Listen
 
 	@Override
 	public Dimension render(Graphics2D g) {
+		long time = System.nanoTime();
+
 		var timings = getAverageTimings();
 		if (timings.length != Timer.values().length) {
 			panelComponent.getChildren().add(TitleComponent.builder()
@@ -69,13 +71,10 @@ public class FrameTimerOverlay extends OverlayPanel implements FrameTimer.Listen
 				if (!t.isGpuTimer && t != Timer.DRAW_FRAME)
 					addTiming(t, timings);
 
-			long gpuTime = 0;
-			for (var t : Timer.values())
-				if (t.isGpuTimer)
-					gpuTime += timings[t.ordinal()];
+			long gpuTime = timings[Timer.RENDER_FRAME.ordinal()];
 			addTiming("GPU", gpuTime, true);
 			for (var t : Timer.values())
-				if (t.isGpuTimer)
+				if (t.isGpuTimer && t != Timer.RENDER_FRAME)
 					addTiming(t, timings);
 
 			panelComponent.getChildren().add(LineComponent.builder()
@@ -91,9 +90,16 @@ public class FrameTimerOverlay extends OverlayPanel implements FrameTimer.Listen
 				.rightFont(FontManager.getRunescapeBoldFont())
 				.right(String.format("%.1f FPS", 1 / (Math.max(cpuTime, gpuTime) / 1e9)))
 				.build());
+
+			panelComponent.getChildren().add(LineComponent.builder()
+				.left("Error compensation:")
+				.right(String.format("%d ns", frameTimer.errorCompensation))
+				.build());
 		}
 
-		return super.render(g);
+		var result = super.render(g);
+		frameTimer.cumulativeError += System.nanoTime() - time;
+		return result;
 	}
 
 	private long[] getAverageTimings() {
@@ -106,7 +112,7 @@ public class FrameTimerOverlay extends OverlayPanel implements FrameTimer.Listen
 				timers[i] += frame.timers[i];
 
 		for (int i = 0; i < timers.length; i++)
-			timers[i] /= frames.size();
+			timers[i] = Math.max(0, timers[i] / frames.size());
 
 		return timers;
 	}
@@ -121,7 +127,7 @@ public class FrameTimerOverlay extends OverlayPanel implements FrameTimer.Listen
 
 		// Round timers to zero if they are less than a microsecond off
 		String result = "~0 ms";
-		if (nanos < -1e5 || nanos > 3e3) {
+		if (Math.abs(nanos) > 1e3) {
 			result = sb.append(Math.round(nanos / 1e3) / 1e3).append(" ms").toString();
 			sb.setLength(0);
 		}

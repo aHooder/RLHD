@@ -36,6 +36,7 @@ import rs117.hd.config.ColorBlindMode;
 import rs117.hd.config.ColorFilter;
 import rs117.hd.config.Contrast;
 import rs117.hd.config.DefaultSkyColor;
+import rs117.hd.config.FishingSpotStyle;
 import rs117.hd.config.FogDepthMode;
 import rs117.hd.config.MaxDynamicLights;
 import rs117.hd.config.Saturation;
@@ -288,19 +289,54 @@ public interface HdPluginConfig extends Config
 		return Contrast.DEFAULT;
 	}
 
+	String KEY_BRIGHTNESS = "screenBrightness";
+	@Range(
+		min = 50,
+		max = 200
+	)
+	@Units(Units.PERCENT)
+	@ConfigItem(
+		keyName = KEY_BRIGHTNESS,
+		name = "Brightness",
+		description =
+			"Controls the brightness of the game, excluding UI.<br>" +
+			"Adjust until the disk on the left is barely visible.",
+		position = 13,
+		section = generalSettings
+	)
+	default int brightness() {
+		return 100;
+	}
+
+	@ConfigItem(
+		keyName = "useLegacyBrightness",
+		name = "Enable Legacy Brightness",
+		description =
+			"Whether the legacy brightness option below should be applied.<br>" +
+			"We recommend leaving this disabled.",
+		position = 14,
+		section = generalSettings
+	)
+	default boolean useLegacyBrightness() {
+		return false;
+	}
+
 	@Range(
 		min = 1,
 		max = 50
 	)
 	@ConfigItem(
 		keyName = "brightness2",
-		name = "Brightness",
-		description = "Controls the brightness of environmental lighting.<br>" +
+		name = "Legacy Brightness",
+		description =
+			"Controls the strength of the sun and ambient lighting.<br>" +
 			"A brightness value of 20 is recommended.",
-		position = 13,
+		position = 15,
 		section = generalSettings
 	)
-	default int brightness() { return 20; }
+	default int legacyBrightness() {
+		return 20;
+	}
 
 
 	/*====== Lighting settings ======*/
@@ -668,6 +704,29 @@ public interface HdPluginConfig extends Config
 		return true;
 	}
 
+	String KEY_WIND_DISPLACEMENT = "windDisplacement";
+	@ConfigItem(
+		keyName = KEY_WIND_DISPLACEMENT,
+		name = "Wind Displacement",
+		description = "Controls whether things like grass and leaves should be affected by wind.",
+		position = 13,
+		section = environmentSettings
+	)
+	default boolean windDisplacement() {
+		return true;
+	}
+
+	String KEY_CHARACTER_DISPLACEMENT = "characterDisplacement";
+	@ConfigItem(
+		keyName = KEY_CHARACTER_DISPLACEMENT,
+		name = "Character Displacement",
+		description = "Let players & NPCs affect things like grass whilst walking around.",
+		position = 14,
+		section = environmentSettings
+	)
+	default boolean characterDisplacement() {
+		return true;
+	}
 
 	/*====== Model caching settings ======*/
 
@@ -806,15 +865,15 @@ public interface HdPluginConfig extends Config
 		return false;
 	}
 
-	String KEY_REPLACE_FISHING_SPOTS = "replaceFishingSpots";
+	String KEY_FISHING_SPOT_STYLE = "fishingSpotStyle";
 	@ConfigItem(
-		keyName = KEY_REPLACE_FISHING_SPOTS,
-		name = "Replace Fishing Spots",
-		description = "Replace certain fishing spots with more appropriate models that are easier to see.",
+		keyName = KEY_FISHING_SPOT_STYLE,
+		name = "Fishing spot style",
+		description = "Choose the appearance of most fishing spots. Bubbles are the easiest to see on top of 117 HD's water style.",
 		section = miscellaneousSettings
 	)
-	default boolean replaceFishingSpots() {
-		return true;
+	default FishingSpotStyle fishingSpotStyle() {
+		return FishingSpotStyle.HD;
 	}
 
 	String KEY_COLOR_FILTER = "colorFilter";
@@ -943,6 +1002,16 @@ public interface HdPluginConfig extends Config
 		return false;
 	}
 
+	String KEY_ASYNC_UI_COPY = "experimentalAsyncUICopy";
+	@ConfigItem(
+		keyName = KEY_ASYNC_UI_COPY,
+		name = "Perform UI copy asynchronously",
+		description = "Slightly improves performance by delaying the UI by one frame.",
+		section = experimentalSettings
+	)
+	default boolean asyncUICopy() {
+		return false;
+	}
 
 	/*====== Internal settings ======*/
 

@@ -41,7 +41,6 @@ import net.runelite.client.ui.overlay.Overlay;
 import net.runelite.client.ui.overlay.OverlayLayer;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.ui.overlay.OverlayPosition;
-import net.runelite.client.util.ColorUtil;
 import net.runelite.client.util.Text;
 import org.apache.commons.lang3.tuple.Pair;
 import rs117.hd.HdPlugin;
@@ -157,7 +156,7 @@ public class TileInfoOverlay extends Overlay implements MouseListener, MouseWhee
 	}
 
 	@Override
-	public Dimension render(Graphics2D g) {
+	public synchronized Dimension render(Graphics2D g) {
 		// Disable the overlay while loading a scene, since tile overrides aren't thread safe
 		if (plugin.isLoadingScene())
 			return null;
@@ -479,6 +478,13 @@ public class TileInfoOverlay extends Overlay implements MouseListener, MouseWhee
 				worldPos[0] >> 6,
 				worldPos[1] >> 6
 			));
+
+			for (var environment : sceneContext.environments) {
+				if (environment.area.containsPoint(worldPos)) {
+					lines.add("Environment: " + environment);
+					break;
+				}
+			}
 
 			int overlayId = scene.getOverlayIds()[tileZ][tileExX][tileExY];
 			var overlay = tileOverrideManager.getOverrideBeforeReplacements(worldPos, OVERLAY_FLAG | overlayId);
@@ -1458,7 +1464,7 @@ public class TileInfoOverlay extends Overlay implements MouseListener, MouseWhee
 
 	private void copyToClipboard(String toCopy, @Nullable String description) {
 		Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
-		StringSelection string = new StringSelection("\"" + toCopy + "\"");
+		StringSelection string = new StringSelection(toCopy);
 		clipboard.setContents(string, null);
 		clientThread.invoke(() -> client.addChatMessage(
 			ChatMessageType.GAMEMESSAGE,
@@ -1478,7 +1484,7 @@ public class TileInfoOverlay extends Overlay implements MouseListener, MouseWhee
 	}
 
 	@Override
-	public MouseEvent mousePressed(MouseEvent e) {
+	public synchronized MouseEvent mousePressed(MouseEvent e) {
 		var sceneContext = plugin.getSceneContext();
 		if (sceneContext == null)
 			return e;
@@ -1526,13 +1532,12 @@ public class TileInfoOverlay extends Overlay implements MouseListener, MouseWhee
 				pendingSelection = null;
 			}
 		} else if (SwingUtilities.isRightMouseButton(e)) {
-			e.consume();
 			if (!hoveredGamevals.isEmpty()) {
 				if (copiedGamevalsHash != hoveredGamevalsHash) {
 					copiedGamevalsHash = hoveredGamevalsHash;
 					hoveredGamevalsIndex = 0;
 				}
-				copyToClipboard(hoveredGamevals.get(hoveredGamevalsIndex));
+				copyToClipboard('"' + hoveredGamevals.get(hoveredGamevalsIndex) + '"');
 				hoveredGamevalsIndex = (hoveredGamevalsIndex + 1) % hoveredGamevals.size();
 			}
 		}
