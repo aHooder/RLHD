@@ -8,8 +8,13 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.callback.ClientThread;
 import rs117.hd.HdPlugin;
 
-import static org.lwjgl.opengl.GL33C.*;
-import static org.lwjgl.opengl.GL43C.*;
+import static org.lwjgl.opengl.GL31C.*;
+import static org.lwjgl.opengl.GL33C.GL_TIMESTAMP;
+import static org.lwjgl.opengl.GL33C.glGetQueryObjectui64;
+import static org.lwjgl.opengl.GL33C.glQueryCounter;
+import static org.lwjgl.opengl.GL43C.GL_DEBUG_SOURCE_APPLICATION;
+import static org.lwjgl.opengl.GL43C.glPopDebugGroup;
+import static org.lwjgl.opengl.GL43C.glPushDebugGroup;
 
 @Slf4j
 @Singleton

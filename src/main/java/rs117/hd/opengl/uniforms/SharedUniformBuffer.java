@@ -1,4 +1,4 @@
-package rs117.hd.opengl;
+package rs117.hd.opengl.uniforms;
 
 import rs117.hd.utils.buffer.SharedGLBuffer;
 

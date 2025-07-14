@@ -29,8 +29,11 @@ import lombok.extern.slf4j.Slf4j;
 import rs117.hd.HdPlugin;
 import rs117.hd.utils.HDUtils;
 
-import static org.lwjgl.opengl.GL15C.*;
-import static org.lwjgl.opengl.GL43C.*;
+import static org.lwjgl.opengl.GL31C.*;
+import static org.lwjgl.opengl.GL43C.GL_BUFFER;
+import static org.lwjgl.opengl.GL43C.GL_COPY_READ_BUFFER;
+import static org.lwjgl.opengl.GL43C.glCopyBufferSubData;
+import static org.lwjgl.opengl.GL43C.glObjectLabel;
 import static rs117.hd.HdPlugin.checkGLErrors;
 
 @Slf4j

@@ -75,7 +75,9 @@ import net.runelite.client.util.LinkBrowser;
 import net.runelite.client.util.OSType;
 import net.runelite.rlawt.AWTContext;
 import org.lwjgl.BufferUtils;
-import org.lwjgl.opengl.*;
+import org.lwjgl.opengl.GL;
+import org.lwjgl.opengl.GLCapabilities;
+import org.lwjgl.opengl.GLUtil;
 import org.lwjgl.system.Callback;
 import org.lwjgl.system.Configuration;
 import rs117.hd.config.AntiAliasingMode;
@@ -93,15 +95,15 @@ import rs117.hd.model.ModelHasher;
 import rs117.hd.model.ModelOffsets;
 import rs117.hd.model.ModelPusher;
 import rs117.hd.opengl.AsyncUICopy;
-import rs117.hd.opengl.ComputeUniforms;
-import rs117.hd.opengl.GlobalUniforms;
-import rs117.hd.opengl.LightUniforms;
-import rs117.hd.opengl.UIUniforms;
 import rs117.hd.opengl.compute.ComputeMode;
 import rs117.hd.opengl.compute.OpenCLManager;
 import rs117.hd.opengl.shader.Shader;
 import rs117.hd.opengl.shader.ShaderException;
 import rs117.hd.opengl.shader.Template;
+import rs117.hd.opengl.uniforms.ComputeUniforms;
+import rs117.hd.opengl.uniforms.GlobalUniforms;
+import rs117.hd.opengl.uniforms.LightUniforms;
+import rs117.hd.opengl.uniforms.UIUniforms;
 import rs117.hd.overlays.FrameTimer;
 import rs117.hd.overlays.Timer;
 import rs117.hd.scene.AreaManager;
@@ -137,7 +139,22 @@ import static net.runelite.api.Constants.*;
 import static net.runelite.api.Constants.SCENE_SIZE;
 import static net.runelite.api.Perspective.*;
 import static org.lwjgl.opencl.CL10.*;
-import static org.lwjgl.opengl.GL43C.*;
+import static org.lwjgl.opengl.GL31C.*;
+import static org.lwjgl.opengl.GL32C.GL_GEOMETRY_SHADER;
+import static org.lwjgl.opengl.GL43C.GL_COMPUTE_SHADER;
+import static org.lwjgl.opengl.GL43C.GL_DEBUG_SEVERITY_NOTIFICATION;
+import static org.lwjgl.opengl.GL43C.GL_DEBUG_SOURCE_API;
+import static org.lwjgl.opengl.GL43C.GL_DEBUG_SOURCE_APPLICATION;
+import static org.lwjgl.opengl.GL43C.GL_DEBUG_TYPE_OTHER;
+import static org.lwjgl.opengl.GL43C.GL_DEBUG_TYPE_PERFORMANCE;
+import static org.lwjgl.opengl.GL43C.GL_DEBUG_TYPE_POP_GROUP;
+import static org.lwjgl.opengl.GL43C.GL_DEBUG_TYPE_PUSH_GROUP;
+import static org.lwjgl.opengl.GL43C.GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS;
+import static org.lwjgl.opengl.GL43C.GL_SHADER_STORAGE_BARRIER_BIT;
+import static org.lwjgl.opengl.GL43C.GL_SHADER_STORAGE_BUFFER;
+import static org.lwjgl.opengl.GL43C.glDebugMessageControl;
+import static org.lwjgl.opengl.GL43C.glDispatchCompute;
+import static org.lwjgl.opengl.GL43C.glMemoryBarrier;
 import static rs117.hd.HdPluginConfig.*;
 import static rs117.hd.scene.SceneContext.SCENE_OFFSET;
 import static rs117.hd.utils.HDUtils.MAX_FLOAT_WITH_128TH_PRECISION;
@@ -2115,7 +2132,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				// Render to the shadow depth map
 				glViewport(0, 0, shadowMapResolution, shadowMapResolution);
 				glBindFramebuffer(GL_FRAMEBUFFER, fboShadowMap);
-				glClearDepthf(1);
+				glClearDepth(1);
 				glClear(GL_DEPTH_BUFFER_BIT);
 				glDepthFunc(GL_LEQUAL);
 
@@ -2188,7 +2205,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 					gammaCorrectedFogColor[2],
 					1f
 				);
-				glClearDepthf(0);
+				glClearDepth(0);
 				glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 				frameTimer.end(Timer.CLEAR_SCENE);
 			} else {

@@ -1,4 +1,4 @@
-package rs117.hd.opengl;
+package rs117.hd.opengl.uniforms;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
