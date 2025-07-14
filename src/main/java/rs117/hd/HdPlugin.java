@@ -1236,8 +1236,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	}
 
-	private void destroyInterfaceTexture()
-	{
+	private void destroyInterfaceTexture() {
 		if (interfacePbo != 0)
 			glDeleteBuffers(interfacePbo);
 		interfacePbo = 0;
@@ -1404,6 +1403,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 //		var imagePath = path(TextureManager.class, "hdris/EveningSkyHDRI020B_8K-TONEMAPPED.jpg");
 		var imagePath = path(TextureManager.class, "hdris/rs3_magicblue.png");
+//		var imagePath = path(TextureManager.class, "hdris/qwantani_dusk_2_puresky_2k.jpg");
+//		var imagePath = path(TextureManager.class, "hdris/kloppenheim_06_puresky_4k.png");
 		var image = imagePath.loadImage();
 		int width = image.getWidth();
 		int height = image.getHeight();
@@ -1418,12 +1419,10 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		glActiveTexture(TEXTURE_UNIT_SKY);
 		glBindTexture(GL_TEXTURE_2D, texSky);
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8, width, height, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, pixels);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_NEAREST);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
 		glGenerateMipmap(GL_TEXTURE_2D);
 	}
 
@@ -1847,6 +1846,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			glBufferData(GL_PIXEL_UNPACK_BUFFER, canvasWidth * canvasHeight * 4L, GL_STREAM_DRAW);
 			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 
+			glActiveTexture(TEXTURE_UNIT_UI);
 			glBindTexture(GL_TEXTURE_2D, interfaceTexture);
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, canvasWidth, canvasHeight, 0, GL_BGRA, GL_UNSIGNED_BYTE, 0);
 		}
@@ -2360,6 +2360,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		// See https://www.khronos.org/opengl/wiki/Sampler_Object for details.
 		// GL_NEAREST makes sampling for bicubic/xBR simpler, so it should be used whenever linear isn't
 		final int function = config.uiScalingMode() == UIScalingMode.LINEAR ? GL_LINEAR : GL_NEAREST;
+		glActiveTexture(TEXTURE_UNIT_UI);
+		glBindTexture(GL_TEXTURE_2D, interfaceTexture);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, function);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, function);
 

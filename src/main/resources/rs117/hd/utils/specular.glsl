@@ -22,10 +22,16 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+#include utils/sky.glsl
 
 float specular(vec3 viewDir, vec3 reflectDir, vec3 specularGloss, vec3 specularStrength)
 {
     float vDotR = clamp(dot(viewDir, reflectDir), 1e-10, 1.);
     vec3 spec = pow(vec3(vDotR), specularGloss) * specularStrength;
     return dot(spec, IN.texBlend);
+}
+
+vec3 specularAmbient(vec3 viewDir, vec3 normals, vec3 specularGloss, vec3 specularStrength)
+{
+    return sampleSky(reflect(-viewDir, normals), exp(-specularGloss.x)) * specularStrength.x;
 }

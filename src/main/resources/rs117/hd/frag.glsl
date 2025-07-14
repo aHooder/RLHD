@@ -311,6 +311,8 @@ void main() {
         // ambient light
         vec3 ambientLightOut = ambientColor;
 
+        ambientLightOut = specularAmbient(viewDir, normals, vSpecularGloss, vSpecularStrength);
+
         float aoFactor =
             IN.texBlend.x * (material1.ambientOcclusionMap == -1 ? 1 : texture(textureArray, vec3(uv1, material1.ambientOcclusionMap)).r) +
             IN.texBlend.y * (material2.ambientOcclusionMap == -1 ? 1 : texture(textureArray, vec3(uv2, material2.ambientOcclusionMap)).r) +
