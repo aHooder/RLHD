@@ -1402,7 +1402,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		if (configSkyMode == SkyMode.SOLID_COLOR)
 			return;
 
-		var imagePath = path(TextureManager.class, "hdris/EveningSkyHDRI020B_8K-TONEMAPPED.jpg");
+//		var imagePath = path(TextureManager.class, "hdris/EveningSkyHDRI020B_8K-TONEMAPPED.jpg");
+		var imagePath = path(TextureManager.class, "hdris/rs3_magicblue.png");
 		var image = imagePath.loadImage();
 		int width = image.getWidth();
 		int height = image.getHeight();
