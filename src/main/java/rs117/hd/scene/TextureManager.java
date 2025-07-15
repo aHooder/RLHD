@@ -236,7 +236,7 @@ public class TextureManager {
 		int mipLevels = 1 + (int) Math.floor(HDUtils.log2(textureSize));
 		int format = GL_SRGB8_ALPHA8;
 		if (HdPlugin.GL_CAPS.glTexStorage3D != 0) {
-			GL42C.glTexStorage3D(GL_TEXTURE_2D_ARRAY, mipLevels, format, textureSize, textureSize, textureLayers.size());
+			ARBTextureStorage.glTexStorage3D(GL_TEXTURE_2D_ARRAY, mipLevels, format, textureSize, textureSize, textureLayers.size());
 		} else {
 			// Allocate each mip level separately
 			for (int i = 0; i < mipLevels; i++) {
