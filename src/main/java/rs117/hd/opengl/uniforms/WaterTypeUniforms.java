@@ -2,7 +2,7 @@ package rs117.hd.opengl.uniforms;
 
 import rs117.hd.data.WaterType;
 
-import static org.lwjgl.opengl.GL31C.*;
+import static org.lwjgl.opengl.GL33C.*;
 
 public class WaterTypeUniforms extends UniformBuffer {
 	public WaterTypeUniforms() {

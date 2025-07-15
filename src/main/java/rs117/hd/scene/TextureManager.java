@@ -43,8 +43,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.client.callback.ClientThread;
 import org.lwjgl.BufferUtils;
-import org.lwjgl.opengl.EXTTextureFilterAnisotropic;
-import org.lwjgl.opengl.GL;
+import org.lwjgl.opengl.*;
 import rs117.hd.HdPlugin;
 import rs117.hd.HdPluginConfig;
 import rs117.hd.data.WaterType;
@@ -56,7 +55,7 @@ import rs117.hd.utils.HDUtils;
 import rs117.hd.utils.Props;
 import rs117.hd.utils.ResourcePath;
 
-import static org.lwjgl.opengl.GL43C.*;
+import static org.lwjgl.opengl.GL33C.*;
 import static rs117.hd.HdPlugin.TEXTURE_UNIT_GAME;
 import static rs117.hd.HdPlugin.TEXTURE_UNIT_UI;
 import static rs117.hd.utils.HDUtils.HALF_PI;
@@ -236,8 +235,8 @@ public class TextureManager {
 
 		int mipLevels = 1 + (int) Math.floor(HDUtils.log2(textureSize));
 		int format = GL_SRGB8_ALPHA8;
-		if (HdPlugin.glCaps.glTexStorage3D != 0) {
-			glTexStorage3D(GL_TEXTURE_2D_ARRAY, mipLevels, format, textureSize, textureSize, textureLayers.size());
+		if (HdPlugin.GL_CAPS.glTexStorage3D != 0) {
+			GL42C.glTexStorage3D(GL_TEXTURE_2D_ARRAY, mipLevels, format, textureSize, textureSize, textureLayers.size());
 		} else {
 			// Allocate each mip level separately
 			for (int i = 0; i < mipLevels; i++) {

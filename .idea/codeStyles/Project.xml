@@ -17,12 +17,14 @@
       <option name="NEW_LINE_AFTER_LPAREN_IN_ANNOTATION" value="true" />
       <option name="RPAREN_ON_NEW_LINE_IN_ANNOTATION" value="true" />
       <option name="CLASS_COUNT_TO_USE_IMPORT_ON_DEMAND" value="999" />
-      <option name="NAMES_COUNT_TO_USE_IMPORT_ON_DEMAND" value="25" />
+      <option name="NAMES_COUNT_TO_USE_IMPORT_ON_DEMAND" value="999" />
       <option name="PACKAGES_TO_USE_IMPORT_ON_DEMAND">
         <value>
-          <package name="org.lwjgl.opengl.GL31C" withSubpackages="true" static="true" />
+          <package name="org.lwjgl.opengl" withSubpackages="false" static="false" />
+          <package name="org.lwjgl.opengl.GL33C" withSubpackages="true" static="true" />
           <package name="org.lwjgl.opencl.CL10" withSubpackages="true" static="true" />
           <package name="net.runelite.api" withSubpackages="true" static="false" />
+          <package name="rs117.hd.HdPluginConfig" withSubpackages="true" static="true" />
         </value>
       </option>
       <option name="IMPORT_LAYOUT_TABLE">

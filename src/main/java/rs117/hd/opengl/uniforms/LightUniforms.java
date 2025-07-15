@@ -2,7 +2,7 @@ package rs117.hd.opengl.uniforms;
 
 import rs117.hd.config.MaxDynamicLights;
 
-import static org.lwjgl.opengl.GL31C.*;
+import static org.lwjgl.opengl.GL33C.*;
 
 public class LightUniforms extends UniformBuffer {
 	public LightUniforms() {
