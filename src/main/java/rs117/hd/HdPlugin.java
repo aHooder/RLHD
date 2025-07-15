@@ -2369,7 +2369,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		glActiveTexture(TEXTURE_UNIT_SKY);
 		glBindTexture(GL_TEXTURE_2D, texSky);
 
-		uboSky.projectionMatrix.set(projectionMatrix);
+		uboSky.inverseProjectionMatrix.set(Mat4.inverse(projectionMatrix));
 		uboSky.viewportDimensions.set(viewportWidth, viewportHeight);
 		uboSky.colorBlindnessIntensity.set(config.colorBlindnessIntensity() / 100f);
 		uboSky.lightDir.set(lightViewMatrix[2], lightViewMatrix[6], lightViewMatrix[10]);

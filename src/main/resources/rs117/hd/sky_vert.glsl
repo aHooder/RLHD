@@ -38,9 +38,8 @@ void main()
     vec2 uv = (vUv * 2 - 1) * vec2(1, -1);
 
     const float eps = .001;
-    mat4 invProj = inverse(projectionMatrix);
-    vec4 nearPos = invProj * vec4(uv, 1 - eps, 1);
-    vec4 farPos = invProj * vec4(uv, eps, 1);
+    vec4 nearPos = inverseProjectionMatrix * vec4(uv, 1 - eps, 1);
+    vec4 farPos = inverseProjectionMatrix * vec4(uv, eps, 1);
     nearPos.xyz /= nearPos.w;
     farPos.xyz /= farPos.w;
     vec3 ray = normalize(farPos.xyz - nearPos.xyz);

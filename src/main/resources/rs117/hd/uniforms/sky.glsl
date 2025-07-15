@@ -1,7 +1,7 @@
 #pragma once
 
 layout(std140) uniform SkyUniforms {
-    mat4 projectionMatrix;
+    mat4 inverseProjectionMatrix;
     ivec2 viewportDimensions;
     float colorBlindnessIntensity;
     vec3 lightDir;

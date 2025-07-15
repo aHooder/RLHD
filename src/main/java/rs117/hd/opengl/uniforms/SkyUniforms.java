@@ -7,7 +7,7 @@ public class SkyUniforms extends UniformBuffer {
 		super("Sky", GL_DYNAMIC_DRAW);
 	}
 
-	public Property projectionMatrix = addProperty(PropertyType.Mat4, "projectionMatrix");
+	public Property inverseProjectionMatrix = addProperty(PropertyType.Mat4, "inverseProjectionMatrix");
 	public Property viewportDimensions = addProperty(PropertyType.IVec2, "viewportDimensions");
 	public Property colorBlindnessIntensity = addProperty(PropertyType.Float, "colorBlindnessIntensity");
 	public Property lightDir = addProperty(PropertyType.FVec3, "lightDir");
