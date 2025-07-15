@@ -225,21 +225,6 @@ public class OpenCLManager {
 						if (!deviceCaps.cl_khr_gl_sharing && !deviceCaps.cl_APPLE_gl_sharing)
 							continue;
 
-						if (OSType.getOSType() == OSType.MacOS) {
-							var buf = stack.mallocPointer(1);
-							checkCLError(clGetGLContextInfoAPPLE(
-								context,
-								awtContext.getGLContext(),
-								CL_CGL_DEVICE_FOR_CURRENT_VIRTUAL_SCREEN_APPLE,
-								buf,
-								null
-							));
-							if (buf.get(0) != device) {
-								log.debug("Skipping capable but not current virtual screen device...");
-								continue;
-							}
-						}
-
 						// Initialize a context from the device if one hasn't already been created
 						if (context == 0) {
 							try {
@@ -247,6 +232,22 @@ public class OpenCLManager {
 									log.error("[LWJGL] cl_context_callback: {}", memUTF8(errinfo)));
 								long context = clCreateContext(ctxProps, device, callback, NULL, errcode_ret);
 								checkCLError(errcode_ret);
+
+								if (OSType.getOSType() == OSType.MacOS) {
+									var buf = stack.mallocPointer(1);
+									checkCLError(clGetGLContextInfoAPPLE(
+										context,
+										awtContext.getGLContext(),
+										CL_CGL_DEVICE_FOR_CURRENT_VIRTUAL_SCREEN_APPLE,
+										buf,
+										null
+									));
+									if (buf.get(0) != device) {
+										log.debug("Skipping capable but not current virtual screen device...");
+										clReleaseContext(context);
+										continue;
+									}
+								}
 
 								this.device = device;
 								OpenCLManager.context = context;
