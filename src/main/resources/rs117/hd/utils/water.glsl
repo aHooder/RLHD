@@ -128,6 +128,17 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
     float finalFresnel = clamp(mix(baseOpacity, 1.0, fresnel * 1.2), 0.0, 1.0);
     vec3 surfaceColor = vec3(0);
 
+    vec3 waterColorLight = waterColorLight;
+    {
+        const float iorFrom = 1;
+        const float iorTo = 1.325;
+        float R0 = (iorFrom - iorTo) / (iorFrom + iorTo);
+        R0 *= R0;
+        fresnel = R0 + (1 - R0) * pow(1 - dot(viewDir, normals), 5);
+        // This is still ugly, but it's in line with the old water
+        waterColorLight = mix(waterColorMid, linearToSrgb(sampleSky(reflect(-viewDir, normals))), fresnel);
+    }
+
     // add sky gradient
     if (finalFresnel < 0.5) {
         surfaceColor = mix(waterColorDark, waterColorMid, finalFresnel * 2);
@@ -135,10 +146,7 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
         surfaceColor = mix(waterColorMid, waterColorLight, (finalFresnel - 0.5) * 2);
     }
 
-    vec3 ray = normalize(reflect(-viewDir, normals));
-    surfaceColor = sampleSky(ray);
-    surfaceColor = mix(srgbToLinear(waterColorDark), surfaceColor, pow(fresnel, 3.));
-    surfaceColor = linearToSrgb(surfaceColor);
+//    surfaceColor = mix(waterColorDark, linearToSrgb(sampleSky(reflect(-viewDir, normals))), pow(fresnel, 3.));
 
     vec3 surfaceColorOut = surfaceColor * max(combinedSpecularStrength, 0.2);
 
