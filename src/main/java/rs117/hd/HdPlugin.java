@@ -1401,6 +1401,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		if (configSkyMode == SkyMode.SOLID_COLOR)
 			return;
 
+		// TODO: Associate skyboxes with environments
 //		var imagePath = path(TextureManager.class, "hdris/EveningSkyHDRI020B_8K-TONEMAPPED.jpg");
 		var imagePath = path(TextureManager.class, "hdris/rs3_magicblue.png");
 //		var imagePath = path(TextureManager.class, "hdris/qwantani_dusk_2_puresky_2k.jpg");

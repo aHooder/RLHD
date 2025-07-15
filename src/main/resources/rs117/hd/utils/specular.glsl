@@ -30,8 +30,3 @@ float specular(vec3 viewDir, vec3 reflectDir, vec3 specularGloss, vec3 specularS
     vec3 spec = pow(vec3(vDotR), specularGloss) * specularStrength;
     return dot(spec, IN.texBlend);
 }
-
-vec3 specularAmbient(vec3 viewDir, vec3 normals, vec3 specularGloss, vec3 specularStrength)
-{
-    return sampleSky(reflect(-viewDir, normals), exp(-specularGloss.x)) * specularStrength.x;
-}

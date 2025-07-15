@@ -67,5 +67,6 @@ void main() {
     c = linearToSrgb(c);
 
     c = colorBlindnessCompensation(c.rgb);
+    c = pow(c, vec3(gammaCorrection));
     FragColor = vec4(c, 1);
 }
