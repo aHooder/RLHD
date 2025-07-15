@@ -77,14 +77,6 @@ public class Vector {
 		return pow(new float[in.length], in, exp);
 	}
 
-	public static float dot(int[] a, int[] b) {
-		float f = 0;
-		int len = Math.min(a.length, b.length);
-		for (int i = 0; i < len; i++)
-			f += (float) a[i] * b[i]; // cast to float to prevent int overflow
-		return f;
-	}
-
 	public static float dot(float[] a, float[] b) {
 		float f = 0;
 		int len = Math.min(a.length, b.length);

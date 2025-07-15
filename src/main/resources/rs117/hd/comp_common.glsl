@@ -24,6 +24,7 @@
  */
 
 #include utils/constants.glsl
+
 #define UNIT PI / 1024.0f
 
 #define WIND_DISPLACEMENT_DISABLED 0

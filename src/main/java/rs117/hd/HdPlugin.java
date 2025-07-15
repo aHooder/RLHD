@@ -965,11 +965,11 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		uniSceneBlockPointLights = glGetUniformBlockIndex(glSceneProgram, "PointLightUniforms");
 		uniSceneBlockGlobals = glGetUniformBlockIndex(glSceneProgram, "GlobalUniforms");
 
-		uniSkySkyTexture = glGetUniformLocation(glSkyProgram, "skyTexture");
-		uniSkyBlockSky = glGetUniformBlockIndex(glSkyProgram, "SkyUniforms");
-
 		uniUiTexture = glGetUniformLocation(glUiProgram, "uiTexture");
 		uniUiBlockUi = glGetUniformBlockIndex(glUiProgram, "UIUniforms");
+
+		uniSkySkyTexture = glGetUniformLocation(glSkyProgram, "skyTexture");
+		uniSkyBlockSky = glGetUniformBlockIndex(glSkyProgram, "SkyUniforms");
 
 		if (computeMode == ComputeMode.OPENGL) {
 			for (int sortingProgram : glModelSortingComputePrograms) {
