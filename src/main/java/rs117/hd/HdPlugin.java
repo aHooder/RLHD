@@ -2133,8 +2133,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				GL43C.glMemoryBarrier(GL43C.GL_SHADER_STORAGE_BARRIER_BIT);
 			}
 
-			glBindVertexArray(vaoSceneHandle);
-
 			final AntiAliasingMode antiAliasingMode = config.antiAliasingMode();
 			final Dimension stretchedDimensions = client.getStretchedDimensions();
 			final int stretchedCanvasWidth = client.isStretchedEnabled() ? stretchedDimensions.width : canvasWidth;
@@ -2305,6 +2303,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				glEnable(GL_DEPTH_TEST);
 
 				// Draw with buffers bound to scene VAO
+				glBindVertexArray(vaoSceneHandle);
 				glDrawArrays(GL_TRIANGLES, 0, renderBufferOffset);
 
 				glDisable(GL_CULL_FACE);
@@ -2330,9 +2329,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			glUniformBlockBinding(glSceneProgram, uniSceneBlockWaterTypes, UNIFORM_BLOCK_WATER_TYPES);
 			glUniformBlockBinding(glSceneProgram, uniSceneBlockPointLights, UNIFORM_BLOCK_LIGHTS);
 			glUniformBlockBinding(glSceneProgram, uniSceneBlockGlobals, UNIFORM_BLOCK_GLOBAL);
-
-			// Draw with buffers bound to scene VAO
-			glBindVertexArray(vaoSceneHandle);
 
 			if (configLinearAlphaBlending) {
 				glEnable(GL_FRAMEBUFFER_SRGB);
@@ -2377,8 +2373,10 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 				glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fboWaterReflection);
 
+				glClearDepth(0);
 				if (configSkyMode == SkyMode.SOLID_COLOR) {
 					// Clear scene
+					// TODO: requires cumulative GPU timers
 //					frameTimer.begin(Timer.CLEAR_SCENE);
 					float[] gammaCorrectedFogColor = pow(fogColor, gammaCorrection);
 					glClearColor(
@@ -2387,14 +2385,12 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 						gammaCorrectedFogColor[2],
 						1f
 					);
-					glClearDepth(0);
 					glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 //					frameTimer.end(Timer.CLEAR_SCENE);
 				} else {
 					// Render sky
 //					frameTimer.begin(Timer.RENDER_SKY);
-					glClearDepth(0);
-					glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+					glClear(GL_DEPTH_BUFFER_BIT);
 					drawSky(projectionMatrix, lightViewMatrix, lightColor, dpiViewport[2], dpiViewport[3]);
 //					frameTimer.end(Timer.RENDER_SKY);
 					glUseProgram(glSceneProgram);
@@ -2410,6 +2406,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				glDepthFunc(GL_GEQUAL);
 
 				glUniform1i(uniRenderPass, 1);
+				glBindVertexArray(vaoSceneHandle);
 				glDrawArrays(GL_TRIANGLES, 0, renderBufferOffset);
 
 				// Bind the water reflection texture to index 4
@@ -2452,6 +2449,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			uboGlobal.projectionMatrix.set(projectionMatrix);
 			uboGlobal.upload();
 
+			glClearDepth(0);
 			if (configSkyMode == SkyMode.SOLID_COLOR) {
 				// Clear scene
 				frameTimer.begin(Timer.CLEAR_SCENE);
@@ -2462,12 +2460,12 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 					gammaCorrectedFogColor[2],
 					1f
 				);
-				glClearDepth(0);
 				glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 				frameTimer.end(Timer.CLEAR_SCENE);
 			} else {
 				// Render sky
 				frameTimer.begin(Timer.RENDER_SKY);
+				glClear(GL_DEPTH_BUFFER_BIT);
 				drawSky(projectionMatrix, lightViewMatrix, lightColor, dpiViewport[2], dpiViewport[3]);
 				frameTimer.end(Timer.RENDER_SKY);
 				glUseProgram(glSceneProgram);
@@ -2476,8 +2474,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			frameTimer.begin(Timer.RENDER_SCENE);
 
 			glUseProgram(glSceneProgram);
-
-			// Draw with buffers bound to scene VAO
 			glBindVertexArray(vaoSceneHandle);
 
 			// We just allow the GL to do face culling. Note this requires the priority renderer
@@ -2642,12 +2638,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	}
 
 	private void drawSky(float[] projectionMatrix, float[] lightViewMatrix, float[] lightColor, int viewportWidth, int viewportHeight) {
-		glClearDepth(0);
-		glClear(GL_DEPTH_BUFFER_BIT);
-
-		glDisable(GL_DEPTH_TEST);
-		glDisable(GL_CULL_FACE);
-
 		glUseProgram(glSkyProgram);
 		glActiveTexture(TEXTURE_UNIT_SKY);
 		glBindTexture(GL_TEXTURE_2D, texSky);
