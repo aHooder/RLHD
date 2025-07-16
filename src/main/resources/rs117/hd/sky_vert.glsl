@@ -37,12 +37,10 @@ void main()
     gl_Position = vec4(vPos, 1.0);
     vec2 uv = (vUv * 2 - 1) * vec2(1, -1);
 
-    const float eps = .001;
-    vec4 nearPos = inverseProjectionMatrix * vec4(uv, 1 - eps, 1);
+    const float eps = 1e-10;
     vec4 farPos = inverseProjectionMatrix * vec4(uv, eps, 1);
-    nearPos.xyz /= nearPos.w;
     farPos.xyz /= farPos.w;
-    vec3 ray = normalize(farPos.xyz - nearPos.xyz);
+    vec3 ray = normalize(farPos.xyz);
 
     fRay = ray;
     fUv = vUv;
