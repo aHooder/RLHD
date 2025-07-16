@@ -122,6 +122,7 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
     vec3 directionalLight = lightColor * lightStrength;
     vec3 ambientLight = ambientColor * ambientStrength;
     vec3 seabedAlbedo = outputColor;
+    seabedAlbedo *= .3; // Adjust the brightness to something which feels more natural
 
     // Naming convention taken from http://graphics.cs.cmu.edu/courses/15-468/2021_spring/lectures/lecture17.pdf
 
@@ -209,9 +210,9 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
 //        case WATER_TYPE_SCAR_SLUDGE:
 //        case WATER_TYPE_CYAN_WATER:
 //        case WATER_TYPE_ARAXXOR_WASTE:
-            depth += 48;
-            sunToFragDist = depth / refractedSunDir.y;
-            fragToSurfaceDist = abs(depth / camToFrag.y);
+//            depth += 48;
+//            sunToFragDist = depth / refractedSunDir.y;
+//            fragToSurfaceDist = abs(depth / camToFrag.y);
 //            break;
 //    }
 
