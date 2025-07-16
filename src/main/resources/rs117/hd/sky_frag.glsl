@@ -63,7 +63,7 @@ void main() {
 
     c = sampleSky(ray);
 
-    c = linearToSrgb(c);
+//    c = linearToSrgb(c);
 
     c = colorBlindnessCompensation(c.rgb);
     c = pow(c, vec3(gammaCorrection));

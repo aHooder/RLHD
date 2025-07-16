@@ -187,19 +187,19 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
     }
 
     // Kind of hacky way to fix the edges for some water types
-    switch (waterTypeIndex) {
-        case WATER_TYPE_BLOOD:
-        case WATER_TYPE_SWAMP_WATER:
-        case WATER_TYPE_POISON_WASTE:
-        case WATER_TYPE_MUDDY_WATER:
-        case WATER_TYPE_SCAR_SLUDGE:
-        case WATER_TYPE_CYAN_WATER:
-        case WATER_TYPE_ARAXXOR_WASTE:
+//    switch (waterTypeIndex) {
+//        case WATER_TYPE_BLOOD:
+//        case WATER_TYPE_SWAMP_WATER:
+//        case WATER_TYPE_POISON_WASTE:
+//        case WATER_TYPE_MUDDY_WATER:
+//        case WATER_TYPE_SCAR_SLUDGE:
+//        case WATER_TYPE_CYAN_WATER:
+//        case WATER_TYPE_ARAXXOR_WASTE:
             depth += 48;
             sunToFragDist = depth / refractedSunDir.y;
             fragToSurfaceDist = abs(depth / camToFrag.y);
-            break;
-    }
+//            break;
+//    }
 
     // Convert coefficients from meters to in-game units
     sigma_a_particles /= 128;
@@ -324,7 +324,7 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
             * P_hg / B_hg
             * (1 - exp(zeta_star_particles * (1 / mu - 1 / mu_sw)))
     );
-    L += QSSA;
+//    L += QSSA;
 
     // Fresnel reflection upon leaving the water body is already accounted for by the water surface fragment
     outputColor = L;

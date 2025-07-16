@@ -37,6 +37,7 @@ void main()
     gl_Position = vec4(vPos, 1.0);
     vec2 uv = (vUv * 2 - 1) * vec2(1, -1);
 
+    // TODO: fix when looking straight down
     const float eps = 1e-10;
     vec4 farPos = inverseProjectionMatrix * vec4(uv, eps, 1);
     farPos.xyz /= farPos.w;
