@@ -1171,10 +1171,10 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		FloatBuffer vboUiData = BufferUtils.createFloatBuffer(5 * 4)
 			.put(new float[] {
 				// vertices, UVs
-				1, 1, 0, 1, 0, // top right
-				1, -1, 0, 1, 1, // bottom right
+				1, 1, 0, 1, 0,   // top right
+				-1, 1, 0, 0, 0,  // top left
 				-1, -1, 0, 0, 1, // bottom left
-				-1, 1, 0, 0, 0  // top left
+				1, -1, 0, 1, 1,  // bottom right
 			})
 			.flip();
 		glBindBuffer(GL_ARRAY_BUFFER, vboQuadHandle);
