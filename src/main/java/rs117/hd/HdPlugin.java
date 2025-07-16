@@ -1521,6 +1521,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 		// Create texture
 		texWaterReflection = glGenTextures();
+		glActiveTexture(TEXTURE_UNIT_WATER_REFLECTION_MAP);
 		glBindTexture(GL_TEXTURE_2D, texWaterReflection);
 		glTexImage2D(GL_TEXTURE_2D, 0, format, dimensions[0], dimensions[1], 0, GL_RGB, GL_UNSIGNED_BYTE, 0);
 		// TODO: consider disabling mipmapping for less flickering
@@ -1545,7 +1546,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		checkGLErrors();
 
 		// Reset
-		glBindTexture(GL_TEXTURE_2D, 0);
 		glBindFramebuffer(GL_FRAMEBUFFER, awtContext.getFramebuffer(false));
 	}
 
@@ -1614,8 +1614,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		textureManager.setAnisotropicFilteringLevel(GL_TEXTURE_2D_ARRAY, config.anisotropicFilteringLevel());
 
 		glGenerateMipmap(GL_TEXTURE_2D_ARRAY);
-
-		glActiveTexture(TEXTURE_UNIT_UI); // default state
 	}
 
 	private void destroyWaterNormalMaps() {
@@ -2031,12 +2029,12 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 			frameTimer.begin(Timer.UPLOAD_UI);
 			glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
+			glActiveTexture(TEXTURE_UNIT_UI);
 			glBindTexture(GL_TEXTURE_2D, interfaceTexture);
 			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, 0);
 			frameTimer.end(Timer.UPLOAD_UI);
 		}
 		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-		glBindTexture(GL_TEXTURE_2D, 0);
 	}
 
 	@Override
