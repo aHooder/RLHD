@@ -55,7 +55,7 @@ import static rs117.hd.utils.Vector.add;
 @Slf4j
 @Singleton
 public class ProceduralGenerator {
-	public static int[] DEPTH_LEVEL_SLOPE = new int[50];
+	public static int[] DEPTH_LEVEL_SLOPE = new int[] { 150, 300, 470, 610, 700, 750, 820, 920, 1080, 1300, 1350, 1380 };
 
 	public static final int VERTICES_PER_FACE = 3;
 	public static final boolean[][] TILE_OVERLAY_TRIS = new boolean[][]
@@ -86,14 +86,15 @@ public class ProceduralGenerator {
 			// TODO: improve
 			float minDepth = 96;
 			float maxDepth = 3200;
-			DEPTH_LEVEL_SLOPE[0] = 128;
-			float B = 3.f;
-			float A = B * (maxDepth - minDepth) / (1 - (float) Math.exp(-B));
-			for (int i = 1; i < DEPTH_LEVEL_SLOPE.length; i++) {
-				float x = (float) i / DEPTH_LEVEL_SLOPE.length;
-				ProceduralGenerator.DEPTH_LEVEL_SLOPE[i] = Math.round(A / B * (1 - (float) Math.exp(-B * x)) + minDepth);
-			}
-			log.debug("depth slope: {}", ProceduralGenerator.DEPTH_LEVEL_SLOPE);
+//			DEPTH_LEVEL_SLOPE = new int[50];
+//			DEPTH_LEVEL_SLOPE[0] = 128;
+//			float B = 3.f;
+//			float A = B * (maxDepth - minDepth) / (1 - (float) Math.exp(-B));
+//			for (int i = 1; i < DEPTH_LEVEL_SLOPE.length; i++) {
+//				float x = (float) i / DEPTH_LEVEL_SLOPE.length;
+//				ProceduralGenerator.DEPTH_LEVEL_SLOPE[i] = Math.round(A / B * (1 - (float) Math.exp(-B * x)) + minDepth);
+//			}
+//			log.debug("depth slope: {}", ProceduralGenerator.DEPTH_LEVEL_SLOPE);
 		}
 
 		long timerTotal = System.currentTimeMillis();

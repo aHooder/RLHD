@@ -324,7 +324,7 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
             * P_hg / B_hg
             * (1 - exp(zeta_star_particles * (1 / mu - 1 / mu_sw)))
     );
-//    L += QSSA;
+    L += QSSA;
 
     // Fresnel reflection upon leaving the water body is already accounted for by the water surface fragment
     outputColor = L;
