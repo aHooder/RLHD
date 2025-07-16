@@ -153,9 +153,23 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
             // https://www.researchgate.net/figure/Left-Jerlov-water-types-based-on-the-attenuation-coefficients-bl-Types-I-III-are_fig1_338015606
 
             // Jerlov I
-            sigma_a_particles = vec3(.228, .062, .018);
-            sigma_s_particles = vec3(1.22E-03, 1.70E-03, 3.81E-03);
-            g = .88;
+            //            sigma_a_particles = vec3(.228, .062, .018);
+            //            sigma_s_particles = vec3(1.22E-03, 1.70E-03, 3.81E-03);
+//            g = .88;
+
+            // Add Chlorophyll
+            sigma_a_particles += vec3(.005, .005, .04) * 1.5 / .04;
+            sigma_s_particles += vec3(.045, .054, .073);
+            // Add cDOM
+            sigma_a_particles += vec3(.003, .005, .024) * 1.5 / .04;
+            // Add TSM
+            sigma_a_particles += vec3(.001, .003, .014) * 1.5 / .04;
+            sigma_s_particles += vec3(.017, .02, .0275);
+
+//                    // Reduce concentration somewhat
+//                    const float particleConcentration = .7;
+//                    sigma_a_particles *= particleConcentration;
+//                    sigma_s_particles *= particleConcentration;
             break;
         case WATER_TYPE_BLOOD:
             sigma_a_particles = (1 - vec3(.9, .1, .2)) * 7;
@@ -211,6 +225,7 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
     vec3 sigma_s = sigma_s_pureWater + sigma_s_particles;
     // extinction coefficient = absorption + scattering
     vec3 sigma_t = sigma_a + sigma_s;
+    vec3 singleScatteringAlbedo = sigma_s / sigma_t;
 
     // Compute single-scattering of directional light
     float cosTheta = dot(-omega_i, omega_o);
@@ -306,26 +321,50 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
     // Attenuate the reflected light as it travels back up towards the surface
     L *= exp(-sigma_t * fragToSurfaceDist);
 
-    // QSSA for upwelling radiance at the surface for a given depth
-    // https://www.oceanopticsbook.info/view/radiative-transfer-theory/level-2/the-quasi-single-scattering-approximation
+    vec3 P = vec3(P_pureWater);
+    vec3 B = vec3(B_pureWater);
+
+    P = vec3(P_hg);
+    B = vec3(B_hg);
+
+    // Crude single-scattering approximation
+    vec3 T_d = sigma_t * (1 / -omega_o.y + 1 / -omega_i.y);// optical thickness
+    vec3 L_ss = directionalLight * sigma_s * P / T_d * (1 - exp(-depth * T_d));
+//    L += L_ss;
+
+    // Analytical multiple-scattering approximation from https://doi.org/10.1111/cgf.15009
+    // https://graphics.unizar.es/projects/EG24Underwater/
+    vec3 E_d0 = directionalLight * refractedSunDir.y;// downwelling plane irradiance at the surface
+    vec3 r = seabedAlbedo;// reflectance coefficient of the sea floor
+    float y_f = depth;// depth of the sea floor
+    float y_omega = omega_o.y;// Y-component of view direction
+    // Y-component of the origin, in our case we always view from the ocean surface
+    float y_o = 0;// view point depth
+    vec3 L_ms = sigma_s * E_d0 / (4 * PI * (K_d * y_omega - sigma_t))
+        * (exp((K_d * y_omega - sigma_t) * fragToSurfaceDist) - 1)
+        * (exp(-K_d * y_o) + r / PI * exp(-K_d * (2 * y_f - y_o)));
+//    L += L_ms;
+
+    vec3 b_b = sigma_s * B;// backscatter coefficient
+
+    // SSA https://www.oceanopticsbook.info/view/radiative-transfer-theory/level-2/the-single-scattering-approximation
     float mu_sw = refractedSunDir.y; // cos(theta) between downward direction in water and the sunlight's direction
     float mu = omega_o.y;
-    vec3 E_d0 = (directionalLight * .5 + ambientLight) * mu_sw; // downwelling plane irradiance at the surface
-    vec3 b_pureWater = sigma_s_pureWater * B_pureWater; // backscatter coefficient
-    vec3 zeta_star_pureWater = (sigma_a + b_pureWater) * depth; // optical depth
-    vec3 b_particles = sigma_s_particles * B_hg; // backscatter coefficient
-    vec3 zeta_star_particles = (sigma_a + b_particles) * depth; // optical depth
+    E_d0 = directionalLight * mu_sw;// TODO: this is wrong, directionalLight isn't perpendicular
+    vec3 L_ssa = singleScatteringAlbedo * E_d0 * P / (mu_sw - mu);
+//    L += L_ssa;
 
-    // Add scattering contribution from pure water and particles
-    vec3 QSSA = E_d0 / (mu_sw - mu) * (
-        b_pureWater / (sigma_a + b_pureWater)
-            * P_pureWater / B_pureWater
-            * (1 - exp(zeta_star_pureWater * (1 / mu - 1 / mu_sw)))
-        + b_particles / (sigma_a + b_particles)
-            * P_hg / B_hg
-            * (1 - exp(zeta_star_particles * (1 / mu - 1 / mu_sw)))
-    );
-    L += QSSA;
+    // QSSA https://www.oceanopticsbook.info/view/radiative-transfer-theory/level-2/the-quasi-single-scattering-approximation
+    vec3 L_qssa = E_d0 * b_b / (sigma_a + b_b) / B * P / (mu_sw - mu);
+//    L += L_qssa;
+
+    // My own derivation of SSA upwelling radiance
+    vec3 L_cssa = singleScatteringAlbedo * E_d0 * P / (mu_sw - mu) * (1 - exp(sigma_t * depth * (1 / mu - 1 / mu_sw)));
+//    L += L_cssa;
+
+    vec3 zeta_star = (sigma_a + b_b) * depth;
+    vec3 L_cqssa = E_d0 * b_b / (sigma_a + b_b) * P / B / (mu_sw - mu) * (1 - exp(zeta_star * (1 / mu - 1 / mu_sw)));
+    L += L_cqssa;
 
     // Fresnel reflection upon leaving the water body is already accounted for by the water surface fragment
     outputColor = L;
