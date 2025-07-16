@@ -23,6 +23,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #include utils/constants.glsl
+#include utils/sky.glsl
 
 vec3 sampleWaterReflection(vec3 flatR, vec3 R, float distortionFactor) {
     // Only use the reflection map when enabled, the height difference is negligible & the surface is roughly flat
@@ -31,7 +32,7 @@ vec3 sampleWaterReflection(vec3 flatR, vec3 R, float distortionFactor) {
         !waterReflectionEnabled ||
         abs(IN.position.y - waterHeight) > WATER_REFLECTION_HEIGHT_THRESHOLD ||
         -IN.flatNormal.y < .7)
-        return srgbToLinear(fogColor);
+        return srgbToLinear(fogColor); // TODO: sampleSky
 
     float dist = length(IN.position - cameraPos);
     distortionFactor *= 1 - exp(-dist * .0004);

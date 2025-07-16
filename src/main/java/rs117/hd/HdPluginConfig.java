@@ -46,6 +46,7 @@ import rs117.hd.config.ShadingMode;
 import rs117.hd.config.ShadowDistance;
 import rs117.hd.config.ShadowMode;
 import rs117.hd.config.ShadowResolution;
+import rs117.hd.config.SkyMode;
 import rs117.hd.config.TextureResolution;
 import rs117.hd.config.UIScalingMode;
 import rs117.hd.config.VanillaShadowMode;
@@ -522,12 +523,51 @@ public interface HdPluginConfig extends Config
 	)
 	String environmentSettings = "environmentSettings";
 
+	String KEY_SKY_MODE = "skyboxMode";
+	@ConfigItem(
+		keyName = KEY_SKY_MODE,
+		name = "Skybox Mode",
+		description = "Whether the sky should be",
+		position = -2,
+		section = environmentSettings
+	)
+	default SkyMode skyMode() {
+		return SkyMode.STATIC;
+	}
+
+	@ConfigItem(
+		keyName = "defaultSkyColor",
+		name = "Default Sky",
+		description =
+			"Specify a sky color to use when the current area doesn't have a sky color defined.<br>" +
+			"This only applies when the default summer seasonal theme is active.<br>" +
+			"If set to 'RuneLite Skybox', the sky color from RuneLite's Skybox plugin will be used.<br>" +
+			"If set to 'Old School Black', the sky will be black and water will remain blue, but for any<br>" +
+			"other option, the water color will be influenced by the sky color.",
+		position = 0,
+		section = environmentSettings
+	)
+	default DefaultSkyColor defaultSkyColor() {
+		return DefaultSkyColor.DEFAULT;
+	}
+
+	@ConfigItem(
+		keyName = "overrideSky",
+		name = "Override Sky Color",
+		description = "Forces the default sky color to be used in all environments.",
+		position = 1,
+		section = environmentSettings
+	)
+	default boolean overrideSky() {
+		return false;
+	}
+
 	String KEY_SEASONAL_THEME = "seasonalTheme";
 	@ConfigItem(
 		keyName = KEY_SEASONAL_THEME,
 		name = "Seasonal Theme",
 		description = "Festive themes for Gielinor.",
-		position = 0,
+		position = 2,
 		section = environmentSettings
 	)
 	default SeasonalTheme seasonalTheme() {
@@ -539,7 +579,7 @@ public interface HdPluginConfig extends Config
 		keyName = KEY_SEASONAL_HEMISPHERE,
 		name = "Seasonal Hemisphere",
 		description = "Determines which hemisphere the 'Automatic' Seasonal Theme should consider.",
-		position = 1,
+		position = 3,
 		section = environmentSettings
 	)
 	default SeasonalHemisphere seasonalHemisphere() {
@@ -553,7 +593,7 @@ public interface HdPluginConfig extends Config
 			"Determines how the fog amount is controlled.<br>" +
 			"'Dynamic' changes fog depth based on the area, while<br>" +
 			"'Static' respects the manually defined fog depth.",
-		position = 2,
+		position = 4,
 		section = environmentSettings
 	)
 	default FogDepthMode fogDepthMode()
@@ -570,7 +610,7 @@ public interface HdPluginConfig extends Config
 		description =
 			"Specify how far from the edge fog should reach.<br>" +
 			"This applies only when 'Fog Depth Mode' is set to 'Static'.",
-		position = 3,
+		position = 5,
 		section = environmentSettings
 	)
 	default int fogDepth()
@@ -582,39 +622,11 @@ public interface HdPluginConfig extends Config
 		keyName = "groundFog",
 		name = "Ground Fog",
 		description = "Enables a height-based fog effect that covers the ground in certain areas.",
-		position = 4,
+		position = 6,
 		section = environmentSettings
 	)
 	default boolean groundFog() {
 		return true;
-	}
-
-	@ConfigItem(
-		keyName = "defaultSkyColor",
-		name = "Default Sky",
-		description =
-			"Specify a sky color to use when the current area doesn't have a sky color defined.<br>" +
-			"This only applies when the default summer seasonal theme is active.<br>" +
-			"If set to 'RuneLite Skybox', the sky color from RuneLite's Skybox plugin will be used.<br>" +
-			"If set to 'Old School Black', the sky will be black and water will remain blue, but for any<br>" +
-			"other option, the water color will be influenced by the sky color.",
-		position = 5,
-		section = environmentSettings
-	)
-	default DefaultSkyColor defaultSkyColor()
-	{
-		return DefaultSkyColor.DEFAULT;
-	}
-
-	@ConfigItem(
-		keyName = "overrideSky",
-		name = "Override Sky Color",
-		description = "Forces the default sky color to be used in all environments.",
-		position = 6,
-		section = environmentSettings
-	)
-	default boolean overrideSky() {
-		return false;
 	}
 
 	String KEY_MODEL_TEXTURES = "objectTextures";

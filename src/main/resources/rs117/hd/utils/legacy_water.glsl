@@ -24,6 +24,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #include utils/color_utils.glsl
+#include utils/sky.glsl
 
 vec4 sampleLegacyWater(int waterTypeIndex, vec3 viewDir) {
     WaterType waterType = getWaterType(waterTypeIndex);
@@ -145,6 +146,23 @@ vec4 sampleLegacyWater(int waterTypeIndex, vec3 viewDir) {
     vec3 waterColorLight = linearToSrgb(hsvToSrgb(waterColorHsv * vec3(1, 1, 0.8)));
     vec3 waterColorMid = linearToSrgb(hsvToSrgb(waterColorHsv * vec3(1, 1, 0.45)));
     vec3 waterColorDark = linearToSrgb(hsvToSrgb(waterColorHsv * vec3(1, 1, 0.05)));
+
+    {
+        const float iorFrom = 1;
+        const float iorTo = 1.325;
+        float R0 = (iorFrom - iorTo) / (iorFrom + iorTo);
+        R0 *= R0;
+        fresnel = R0 + (1 - R0) * pow(1 - dot(viewDir, normals), 5);
+        // This is still ugly, but it's in line with the old water
+        waterColorLight = mix(waterColorMid, linearToSrgb(sampleSky(reflect(-viewDir, normals))), fresnel);
+    }
+
+    // add sky gradient
+    if (finalFresnel < 0.5) {
+        surfaceColor = mix(waterColorDark, waterColorMid, finalFresnel * 2);
+    } else {
+        surfaceColor = mix(waterColorMid, waterColorLight, (finalFresnel - 0.5) * 2);
+    }
 
     // add sky gradient
     if (finalFresnel < 0.5) {

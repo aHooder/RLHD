@@ -22,6 +22,7 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+#include utils/sky.glsl
 
 float specular(vec3 viewDir, vec3 reflectDir, vec3 specularGloss, vec3 specularStrength)
 {

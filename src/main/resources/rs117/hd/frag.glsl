@@ -34,6 +34,7 @@
 
 uniform sampler2DArray textureArray;
 uniform sampler2D shadowMap;
+uniform sampler2D skyTexture;
 uniform sampler2D waterReflectionMap;
 uniform sampler2DArray waterNormalMaps;
 
@@ -77,6 +78,7 @@ vec2 worldUvs(float scale) {
 #include utils/water.glsl
 #include utils/color_filters.glsl
 #include utils/fog.glsl
+#include utils/sky.glsl
 #include utils/wireframe.glsl
 
 void main() {
@@ -328,7 +330,7 @@ void main() {
         // calculate lighting
 
         // ambient light
-        vec3 ambientLightOut = ambientColor * ambientStrength;
+        vec3 ambientLightOut = ambientColor;
 
         float aoFactor =
             IN.texBlend.x * (material1.ambientOcclusionMap == -1 ? 1 : texture(textureArray, vec3(uv1, material1.ambientOcclusionMap)).r) +
@@ -337,7 +339,7 @@ void main() {
         ambientLightOut *= aoFactor;
 
         // directional light
-        vec3 dirLightColor = lightColor * lightStrength;
+        vec3 dirLightColor = lightColor;
 
         // underwater caustics based on directional light
         if (underwaterEnvironment && underwaterCaustics) {
@@ -361,18 +363,17 @@ void main() {
             vec3 extinctionColors = exp(-depth * absorptionColor);
 
             vec3 causticsColor = underwaterCausticsColor * extinctionColors * 10;
-            dirLightColor += caustics * causticsColor * lightDotNormals * pow(lightStrength, 1.5);
+            dirLightColor += caustics * causticsColor * lightDotNormals * pow(length(dirLightColor), 1.5);
         }
 
         // apply shadows
         dirLightColor *= inverseShadow;
 
-        vec3 lightColor = dirLightColor;
-        vec3 lightOut = max(lightDotNormals, 0.0) * lightColor;
+        vec3 lightOut = max(lightDotNormals, 0.0) * dirLightColor;
 
         // directional light specular
         vec3 lightReflectDir = reflect(-lightDir, normals);
-        vec3 lightSpecularOut = lightColor * specular(viewDir, lightReflectDir, vSpecularGloss, vSpecularStrength);
+        vec3 lightSpecularOut = dirLightColor * specular(viewDir, lightReflectDir, vSpecularGloss, vSpecularStrength);
 
         // point lights
         vec3 pointLightsOut = vec3(0);

@@ -27,6 +27,7 @@ public enum Timer {
 	UPLOAD_UI(true, "Upload UI"),
 	COMPUTE(true),
 	CLEAR_SCENE(true),
+	RENDER_SKY(true),
 	RENDER_SHADOWS(true),
 	RENDER_REFLECTIONS(true),
 	REFLECTION_MIPMAPS(true),

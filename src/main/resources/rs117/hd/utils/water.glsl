@@ -405,8 +405,8 @@ vec4 sampleWater(int waterTypeIndex, vec3 viewDir) {
     float specularGloss = 500; // Ignore values set per water type, as they don't make a lot of sense
     float specularStrength = 1;
 
-    vec3 ambientLight = ambientColor * ambientStrength;
-    vec3 directionalLight = lightColor * lightStrength;
+    vec3 ambientLight = ambientColor;
+    vec3 directionalLight = lightColor;
 
     vec3 N = sampleWaterSurfaceNormal(waterTypeIndex, IN.position);
 

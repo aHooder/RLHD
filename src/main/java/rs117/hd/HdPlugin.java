@@ -84,6 +84,7 @@ import rs117.hd.config.SeasonalHemisphere;
 import rs117.hd.config.SeasonalTheme;
 import rs117.hd.config.ShadingMode;
 import rs117.hd.config.ShadowMode;
+import rs117.hd.config.SkyMode;
 import rs117.hd.config.UIScalingMode;
 import rs117.hd.config.VanillaShadowMode;
 import rs117.hd.data.WaterType;
@@ -100,6 +101,7 @@ import rs117.hd.opengl.shader.Template;
 import rs117.hd.opengl.uniforms.ComputeUniforms;
 import rs117.hd.opengl.uniforms.GlobalUniforms;
 import rs117.hd.opengl.uniforms.LightUniforms;
+import rs117.hd.opengl.uniforms.SkyUniforms;
 import rs117.hd.opengl.uniforms.UIUniforms;
 import rs117.hd.overlays.FrameTimer;
 import rs117.hd.overlays.Timer;
@@ -127,6 +129,7 @@ import rs117.hd.utils.ModelHash;
 import rs117.hd.utils.PopupUtils;
 import rs117.hd.utils.Props;
 import rs117.hd.utils.ResourcePath;
+import rs117.hd.utils.Vector;
 import rs117.hd.utils.buffer.GLBuffer;
 import rs117.hd.utils.buffer.GpuIntBuffer;
 import rs117.hd.utils.buffer.SharedGLBuffer;
@@ -164,8 +167,9 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	public static final int TEXTURE_UNIT_GAME = TEXTURE_UNIT_BASE + 1;
 	public static final int TEXTURE_UNIT_SHADOW_MAP = TEXTURE_UNIT_BASE + 2;
 	public static final int TEXTURE_UNIT_TILE_HEIGHT_MAP = TEXTURE_UNIT_BASE + 3;
-	public static final int TEXTURE_UNIT_WATER_REFLECTION_MAP = TEXTURE_UNIT_BASE + 4;
-	public static final int TEXTURE_UNIT_WATER_NORMAL_MAPS = TEXTURE_UNIT_BASE + 5;
+	public static final int TEXTURE_UNIT_SKY = TEXTURE_UNIT_BASE + 4;
+	public static final int TEXTURE_UNIT_WATER_REFLECTION_MAP = TEXTURE_UNIT_BASE + 5;
+	public static final int TEXTURE_UNIT_WATER_NORMAL_MAPS = TEXTURE_UNIT_BASE + 6;
 
 	public static final int UNIFORM_BLOCK_COMPUTE = 0;
 	public static final int UNIFORM_BLOCK_MATERIALS = 1;
@@ -173,6 +177,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	public static final int UNIFORM_BLOCK_LIGHTS = 3;
 	public static final int UNIFORM_BLOCK_GLOBAL = 4;
 	public static final int UNIFORM_BLOCK_UI = 5;
+	public static final int UNIFORM_BLOCK_SKY = 6;
 
 	public static final float NEAR_PLANE = 50;
 	public static final float APPROX_MAX_HEIGHT = 5000;
@@ -311,6 +316,10 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		.add(GL_VERTEX_SHADER, "ui_vert.glsl")
 		.add(GL_FRAGMENT_SHADER, "ui_frag.glsl");
 
+	private static final Shader SKY_PROGRAM = new Shader()
+		.add(GL_VERTEX_SHADER, "sky_vert.glsl")
+		.add(GL_FRAGMENT_SHADER, "sky_frag.glsl");
+
 	private static final Shader SHADOW_PROGRAM_FAST = new Shader()
 		.add(GL_VERTEX_SHADER, "shadow_vert.glsl")
 		.add(GL_FRAGMENT_SHADER, "shadow_frag.glsl");
@@ -332,6 +341,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 	public int glSceneProgram;
 	public int glUiProgram;
+	public int glSkyProgram;
 	public int glShadowProgram;
 	public int glModelPassthroughComputeProgram;
 	public int[] glModelSortingComputePrograms = {};
@@ -356,6 +366,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	private int texWaterReflectionDepthMap;
 
 	private int texTileHeightMap;
+	private int texSky;
 	private int texWaterNormalMaps;
 
 	private final SharedGLBuffer hStagingBufferVertices = new SharedGLBuffer(
@@ -389,6 +400,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	private final GlobalUniforms uboGlobal = new GlobalUniforms();
 	private final UIUniforms uboUI = new UIUniforms();
 	private final LightUniforms uboLights = new LightUniforms();
+	private final SkyUniforms uboSky = new SkyUniforms();
 
 	@Getter
 	@Nullable
@@ -437,6 +449,12 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	private int uniSceneBlockPointLights;
 	private int uniSceneBlockGlobals;
 
+	private int uniSkyTexture;
+
+	// Sky program uniforms
+	private int uniSkySkyTexture;
+	private int uniSkyBlockSky;
+
 	// Configs used frequently enough to be worth caching
 	public boolean configGroundTextures;
 	public boolean configGroundBlending;
@@ -461,6 +479,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	public boolean configWaterTransparency;
 	public boolean configLegacyWater;
 	public int configMaxDynamicLights;
+	public SkyMode configSkyMode;
 	public ShadowMode configShadowMode;
 	public SeasonalTheme configSeasonalTheme;
 	public SeasonalHemisphere configSeasonalHemisphere;
@@ -654,6 +673,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				initPrograms();
 				initShaderHotswapping();
 				initInterfaceTexture();
+				initSkyTexture();
 				initShadowMapFbo();
 				initWaterNormalMaps();
 
@@ -749,6 +769,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				destroyPrograms();
 				destroyVaos();
 				destroySceneFbo();
+				destroySkyTexture();
 				destroyShadowMapFbo();
 				destroyTileHeightMap();
 				destroyPlanarReflectionFbo();
@@ -917,6 +938,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 		glSceneProgram = PROGRAM.compile(template);
 		glUiProgram = UI_PROGRAM.compile(template);
+		glSkyProgram = SKY_PROGRAM.compile(template);
 
 		switch (configShadowMode) {
 			case FAST:
@@ -951,6 +973,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		glUseProgram(glSceneProgram);
 		glUniform1i(uniTextureArray, TEXTURE_UNIT_GAME - TEXTURE_UNIT_BASE);
 		glUniform1i(uniShadowMap, TEXTURE_UNIT_SHADOW_MAP - TEXTURE_UNIT_BASE);
+		glUniform1i(uniSkyTexture, TEXTURE_UNIT_SKY - TEXTURE_UNIT_BASE);
 		glUniform1i(uniWaterReflectionMap, TEXTURE_UNIT_WATER_REFLECTION_MAP - TEXTURE_UNIT_BASE);
 		glUniform1i(uniWaterNormalMaps, TEXTURE_UNIT_WATER_NORMAL_MAPS - TEXTURE_UNIT_BASE);
 
@@ -963,6 +986,9 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			String err = glGetProgramInfoLog(glSceneProgram);
 			throw new ShaderException(err);
 		}
+
+		glUseProgram(glSkyProgram);
+		glUniform1i(uniSkySkyTexture, TEXTURE_UNIT_SKY - TEXTURE_UNIT_BASE);
 
 		glUseProgram(glUiProgram);
 		glUniform1i(uniUiTexture, TEXTURE_UNIT_UI - TEXTURE_UNIT_BASE);
@@ -984,6 +1010,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 		uniShadowMap = glGetUniformLocation(glSceneProgram, "shadowMap");
 		uniTextureArray = glGetUniformLocation(glSceneProgram, "textureArray");
+		uniSkyTexture = glGetUniformLocation(glSceneProgram, "skyTexture");
 		uniSceneBlockMaterials = glGetUniformBlockIndex(glSceneProgram, "MaterialUniforms");
 		uniSceneBlockWaterTypes = glGetUniformBlockIndex(glSceneProgram, "WaterTypeUniforms");
 		uniSceneBlockPointLights = glGetUniformBlockIndex(glSceneProgram, "PointLightUniforms");
@@ -991,6 +1018,9 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 		uniUiTexture = glGetUniformLocation(glUiProgram, "uiTexture");
 		uniUiBlockUi = glGetUniformBlockIndex(glUiProgram, "UIUniforms");
+
+		uniSkySkyTexture = glGetUniformLocation(glSkyProgram, "skyTexture");
+		uniSkyBlockSky = glGetUniformBlockIndex(glSkyProgram, "SkyUniforms");
 
 		if (computeMode == ComputeMode.OPENGL) {
 			for (int sortingProgram : glModelSortingComputePrograms) {
@@ -1021,6 +1051,10 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		if (glUiProgram != 0)
 			glDeleteProgram(glUiProgram);
 		glUiProgram = 0;
+
+		if (glSkyProgram != 0)
+			glDeleteProgram(glSkyProgram);
+		glSkyProgram = 0;
 
 		if (glShadowProgram != 0)
 			glDeleteProgram(glShadowProgram);
@@ -1204,6 +1238,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		uboLights.initialize(UNIFORM_BLOCK_LIGHTS);
 		uboGlobal.initialize(UNIFORM_BLOCK_GLOBAL);
 		uboUI.initialize(UNIFORM_BLOCK_UI);
+		uboSky.initialize(UNIFORM_BLOCK_SKY);
 	}
 
 	private void destroyBuffers() {
@@ -1221,6 +1256,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		uboLights.destroy();
 		uboGlobal.destroy();
 		uboUI.destroy();
+		uboSky.destroy();
 	}
 
 	private void initInterfaceTexture()
@@ -1395,6 +1431,42 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		if (fboShadowMap != 0)
 			glDeleteFramebuffers(fboShadowMap);
 		fboShadowMap = 0;
+	}
+
+	private void initSkyTexture() throws IOException {
+		if (configSkyMode == SkyMode.SOLID_COLOR)
+			return;
+
+		// TODO: Associate skyboxes with environments
+//		var imagePath = path(TextureManager.class, "hdris/EveningSkyHDRI020B_8K-TONEMAPPED.jpg");
+		var imagePath = path(TextureManager.class, "hdris/rs3_magicblue.png");
+//		var imagePath = path(TextureManager.class, "hdris/qwantani_dusk_2_puresky_2k.jpg");
+//		var imagePath = path(TextureManager.class, "hdris/kloppenheim_06_puresky_4k.png");
+		var image = imagePath.loadImage();
+		int width = image.getWidth();
+		int height = image.getHeight();
+
+		var reformattedImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+		AffineTransform t = new AffineTransform();
+		AffineTransformOp scaleOp = new AffineTransformOp(t, AffineTransformOp.TYPE_NEAREST_NEIGHBOR);
+		scaleOp.filter(image, reformattedImage);
+		int[] pixels = ((DataBufferInt) reformattedImage.getRaster().getDataBuffer()).getData();
+
+		texSky = glGenTextures();
+		glActiveTexture(TEXTURE_UNIT_SKY);
+		glBindTexture(GL_TEXTURE_2D, texSky);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8, width, height, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, pixels);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+		glGenerateMipmap(GL_TEXTURE_2D);
+	}
+
+	private void destroySkyTexture() {
+		if (texSky != 0)
+			glDeleteTextures(texSky);
+		texSky = 0;
 	}
 
 	private void initTileHeightMap(Scene scene) {
@@ -2138,10 +2210,12 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				ambientStrength *= factor;
 				directionalStrength *= factor;
 			}
+			float[] lightColor = Vector.multiply(environmentManager.currentDirectionalColor, directionalStrength);
+			float[] ambientColor = Vector.multiply(environmentManager.currentAmbientColor, ambientStrength);
 			uboGlobal.ambientStrength.set(ambientStrength);
-			uboGlobal.ambientColor.set(environmentManager.currentAmbientColor);
+			uboGlobal.ambientColor.set(ambientColor);
 			uboGlobal.lightStrength.set(directionalStrength);
-			uboGlobal.lightColor.set(environmentManager.currentDirectionalColor);
+			uboGlobal.lightColor.set(lightColor);
 
 			uboGlobal.underglowStrength.set(environmentManager.currentUnderglowStrength);
 			uboGlobal.underglowColor.set(environmentManager.currentUnderglowColor);
@@ -2266,8 +2340,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				fogColor = ColorUtils.srgbToLinear(fogColor);
 			}
 
-			glClearColor(fogColor[0], fogColor[1], fogColor[2], 1f);
-
 			glEnable(GL_BLEND);
 			// We only use source alpha for blending
 			glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ZERO);
@@ -2304,8 +2376,29 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				glViewport(0, 0, reflectionWidth, reflectionHeight);
 
 				glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fboWaterReflection);
-				glClearDepth(0);
-				glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+				if (configSkyMode == SkyMode.SOLID_COLOR) {
+					// Clear scene
+//					frameTimer.begin(Timer.CLEAR_SCENE);
+					float[] gammaCorrectedFogColor = pow(fogColor, gammaCorrection);
+					glClearColor(
+						gammaCorrectedFogColor[0],
+						gammaCorrectedFogColor[1],
+						gammaCorrectedFogColor[2],
+						1f
+					);
+					glClearDepth(0);
+					glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+//					frameTimer.end(Timer.CLEAR_SCENE);
+				} else {
+					// Render sky
+//					frameTimer.begin(Timer.RENDER_SKY);
+					glClearDepth(0);
+					glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+					drawSky(projectionMatrix, lightViewMatrix, lightColor, dpiViewport[2], dpiViewport[3]);
+//					frameTimer.end(Timer.RENDER_SKY);
+					glUseProgram(glSceneProgram);
+				}
 
 				// Since the game was never designed to be viewed from below, a lot of
 				// things are missing triangles underneath. In most cases, it's fine
@@ -2338,29 +2431,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			glToggle(GL_MULTISAMPLE, numSamples > 1);
 			glViewport(dpiViewport[0], dpiViewport[1], dpiViewport[2], dpiViewport[3]);
 
-			// Clear scene
-			frameTimer.begin(Timer.CLEAR_SCENE);
-
-			float[] gammaCorrectedFogColor = pow(fogColor, gammaCorrection);
-			glClearColor(
-				gammaCorrectedFogColor[0],
-				gammaCorrectedFogColor[1],
-				gammaCorrectedFogColor[2],
-				1f
-			);
-			glClearDepth(0);
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-			frameTimer.end(Timer.CLEAR_SCENE);
-
-			frameTimer.begin(Timer.RENDER_SCENE);
-
-			uboGlobal.cameraPos.set(cameraPosition);
-
-			// We just allow the GL to do face culling. Note this requires the priority renderer
-			// to have logic to disregard culled faces in the priority depth testing.
-			glEnable(GL_CULL_FACE);
-			glCullFace(GL_BACK);
-
 			// Calculate projection matrix
 			float[] projectionMatrix = Mat4.scale(client.getScale(), client.getScale(), 1);
 			if (orthographicProjection) {
@@ -2371,13 +2441,49 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			}
 			Mat4.mul(projectionMatrix, Mat4.rotateX(cameraOrientation[1]));
 			Mat4.mul(projectionMatrix, Mat4.rotateY(cameraOrientation[0]));
-			Mat4.mul(projectionMatrix, Mat4.translate(
-				-cameraPosition[0],
-				-cameraPosition[1],
-				-cameraPosition[2]
-			));
+			Mat4.mul(
+				projectionMatrix, Mat4.translate(
+					-cameraPosition[0],
+					-cameraPosition[1],
+					-cameraPosition[2]
+				)
+			);
+			uboGlobal.cameraPos.set(cameraPosition);
 			uboGlobal.projectionMatrix.set(projectionMatrix);
 			uboGlobal.upload();
+
+			if (configSkyMode == SkyMode.SOLID_COLOR) {
+				// Clear scene
+				frameTimer.begin(Timer.CLEAR_SCENE);
+				float[] gammaCorrectedFogColor = pow(fogColor, gammaCorrection);
+				glClearColor(
+					gammaCorrectedFogColor[0],
+					gammaCorrectedFogColor[1],
+					gammaCorrectedFogColor[2],
+					1f
+				);
+				glClearDepth(0);
+				glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+				frameTimer.end(Timer.CLEAR_SCENE);
+			} else {
+				// Render sky
+				frameTimer.begin(Timer.RENDER_SKY);
+				drawSky(projectionMatrix, lightViewMatrix, lightColor, dpiViewport[2], dpiViewport[3]);
+				frameTimer.end(Timer.RENDER_SKY);
+				glUseProgram(glSceneProgram);
+			}
+
+			frameTimer.begin(Timer.RENDER_SCENE);
+
+			glUseProgram(glSceneProgram);
+
+			// Draw with buffers bound to scene VAO
+			glBindVertexArray(vaoSceneHandle);
+
+			// We just allow the GL to do face culling. Note this requires the priority renderer
+			// to have logic to disregard culled faces in the priority depth testing.
+			glEnable(GL_CULL_FACE);
+			glCullFace(GL_BACK);
 
 			glUniform1i(uniRenderPass, 0);
 			glUniform1i(uniWaterReflectionEnabled, renderWaterReflections ? 1 : 0);
@@ -2533,6 +2639,31 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		glUseProgram(0);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 		glDisable(GL_BLEND);
+	}
+
+	private void drawSky(float[] projectionMatrix, float[] lightViewMatrix, float[] lightColor, int viewportWidth, int viewportHeight) {
+		glClearDepth(0);
+		glClear(GL_DEPTH_BUFFER_BIT);
+
+		glDisable(GL_DEPTH_TEST);
+		glDisable(GL_CULL_FACE);
+
+		glUseProgram(glSkyProgram);
+		glActiveTexture(TEXTURE_UNIT_SKY);
+		glBindTexture(GL_TEXTURE_2D, texSky);
+
+		uboSky.inverseProjectionMatrix.set(Mat4.inverse(projectionMatrix));
+		uboSky.viewportDimensions.set(viewportWidth, viewportHeight);
+		uboSky.colorBlindnessIntensity.set(config.colorBlindnessIntensity() / 100f);
+		uboSky.lightDir.set(lightViewMatrix[2], lightViewMatrix[6], lightViewMatrix[10]);
+		uboSky.lightColor.set(lightColor);
+		uboSky.gammaCorrection.set(100f / config.brightness());
+		uboSky.upload();
+
+		glUniformBlockBinding(glSkyProgram, uniSkyBlockSky, UNIFORM_BLOCK_SKY);
+
+		glBindVertexArray(vaoQuadHandle);
+		glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 	}
 
 	/**
@@ -2762,6 +2893,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		configModelBatching = config.modelBatching();
 		configModelCaching = config.modelCaching();
 		configMaxDynamicLights = config.maxDynamicLights().getValue();
+		configSkyMode = config.skyMode();
 		configExpandShadowDraw = config.expandShadowDraw();
 		configUseFasterModelHashing = config.fasterModelHashing();
 		configUndoVanillaShading = config.shadingMode() != ShadingMode.VANILLA;
@@ -2924,6 +3056,11 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 							case KEY_LEGACY_WATER:
 							case KEY_WATER_FOAM:
 								recompilePrograms = true;
+								break;
+							case KEY_SKY_MODE:
+								destroySkyTexture();
+								initSkyTexture();
+								recompilePrograms();
 								break;
 							case KEY_SHADOW_MODE:
 							case KEY_SHADOW_TRANSPARENCY:
