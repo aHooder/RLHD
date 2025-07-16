@@ -264,7 +264,8 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
     if (waterTransparency && !waterType.isFlat /* Disable shadows for flat water, as it needs more work */) {
         // For shadows, we can take refraction into account, since sunlight is parallel
         vec3 surfaceSunPos = fragPos - refractedSunDir * sunToFragDist;
-        surfaceSunPos += refractedSunDir * 32; // Push the position a short distance below the surface
+        // Push the position back down to the seabed
+        surfaceSunPos += sunDir * sunToFragDist;
         vec2 distortion = vec2(0);
         {
             vec2 flowMapUv = worldUvs(26) + animationFrame(26 * waterType.duration);
