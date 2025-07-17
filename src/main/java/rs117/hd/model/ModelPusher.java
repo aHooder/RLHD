@@ -1,7 +1,5 @@
 package rs117.hd.model;
 
-import java.nio.FloatBuffer;
-import java.nio.IntBuffer;
 import java.util.Arrays;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -236,29 +234,41 @@ public class ModelPusher {
 			assert client.isClientThread() : "Model caching isn't thread-safe";
 
 			vertexHash = modelHasher.vertexHash;
-			IntBuffer vertexData = modelCache.getIntBuffer(vertexHash);
-			if (vertexData != null && vertexData.remaining() == bufferSize) {
-				sceneContext.stagingBufferVertices.put(vertexData);
-				vertexData.rewind();
+			var cacheBuffer = modelCache.getBuffer(vertexHash, bufferSize);
+			if (cacheBuffer != null) {
+				MemoryUtil.memCopy(
+					cacheBuffer.address,
+					MemoryUtil.memAddress(sceneContext.stagingBufferVertices.getBuffer()),
+					cacheBuffer.byteCapacity
+				);
+				sceneContext.stagingBufferVertices.advance(bufferSize);
 				foundCachedVertexData = true;
 			}
 
 			if (!foundCachedNormalData) {
 				normalHash = modelHasher.calculateNormalCacheHash();
-				FloatBuffer normalData = modelCache.getFloatBuffer(normalHash);
-				if (normalData != null && normalData.remaining() == bufferSize) {
-					sceneContext.stagingBufferNormals.put(normalData);
-					normalData.rewind();
+				cacheBuffer = modelCache.getBuffer(normalHash, bufferSize);
+				if (cacheBuffer != null) {
+					MemoryUtil.memCopy(
+						cacheBuffer.address,
+						MemoryUtil.memAddress(sceneContext.stagingBufferNormals.getBuffer()),
+						cacheBuffer.byteCapacity
+					);
+					sceneContext.stagingBufferNormals.advance(bufferSize);
 					foundCachedNormalData = true;
 				}
 			}
 
 			if (!foundCachedUvData) {
 				uvHash = modelHasher.calculateUvCacheHash(preOrientation, modelOverride);
-				FloatBuffer uvData = modelCache.getFloatBuffer(uvHash);
-				if (uvData != null && uvData.remaining() == bufferSize) {
-					sceneContext.stagingBufferUvs.put(uvData);
-					uvData.rewind();
+				cacheBuffer = modelCache.getBuffer(uvHash, bufferSize);
+				if (cacheBuffer != null) {
+					MemoryUtil.memCopy(
+						cacheBuffer.address,
+						MemoryUtil.memAddress(sceneContext.stagingBufferUvs.getBuffer()),
+						cacheBuffer.byteCapacity
+					);
+					sceneContext.stagingBufferUvs.advance(bufferSize);
 					foundCachedUvData = true;
 				}
 			}
@@ -279,15 +289,14 @@ public class ModelPusher {
 			modelOverride.revertRotation(model);
 
 			if (useCache) {
-				IntBuffer cacheBuffer = modelCache.reserveIntBuffer(vertexHash, bufferSize);
+				var cacheBuffer = modelCache.reserveBuffer(vertexHash, bufferSize);
 				if (cacheBuffer == null) {
 					log.error("failed to reserve vertex buffer");
 				} else {
-					long numBytes = bufferSize * 4L;
 					MemoryUtil.memCopy(
-						MemoryUtil.memAddress(sceneContext.stagingBufferVertices.getBuffer()) - numBytes,
-						MemoryUtil.memAddress(cacheBuffer),
-						numBytes
+						MemoryUtil.memAddress(sceneContext.stagingBufferVertices.getBuffer()) - cacheBuffer.byteCapacity,
+						cacheBuffer.address,
+						cacheBuffer.byteCapacity
 					);
 				}
 			}
@@ -306,15 +315,14 @@ public class ModelPusher {
 			}
 
 			if (useCache) {
-				FloatBuffer cacheBuffer = modelCache.reserveFloatBuffer(normalHash, bufferSize);
+				var cacheBuffer = modelCache.reserveBuffer(normalHash, bufferSize);
 				if (cacheBuffer == null) {
 					log.error("failed to reserve normal buffer");
 				} else {
-					long numBytes = bufferSize * 4L;
 					MemoryUtil.memCopy(
-						MemoryUtil.memAddress(sceneContext.stagingBufferNormals.getBuffer()) - numBytes,
-						MemoryUtil.memAddress(cacheBuffer),
-						numBytes
+						MemoryUtil.memAddress(sceneContext.stagingBufferNormals.getBuffer()) - cacheBuffer.byteCapacity,
+						cacheBuffer.address,
+						cacheBuffer.byteCapacity
 					);
 				}
 			}
@@ -384,15 +392,14 @@ public class ModelPusher {
 			}
 
 			if (useCache) {
-				FloatBuffer cacheBuffer = modelCache.reserveFloatBuffer(uvHash, bufferSize);
+				var cacheBuffer = modelCache.reserveBuffer(uvHash, bufferSize);
 				if (cacheBuffer == null) {
 					log.error("failed to reserve UV buffer");
 				} else {
-					long numBytes = bufferSize * 4L;
 					MemoryUtil.memCopy(
-						MemoryUtil.memAddress(sceneContext.stagingBufferUvs.getBuffer()) - numBytes,
-						MemoryUtil.memAddress(cacheBuffer),
-						numBytes
+						MemoryUtil.memAddress(sceneContext.stagingBufferUvs.getBuffer()) - cacheBuffer.byteCapacity,
+						cacheBuffer.address,
+						cacheBuffer.byteCapacity
 					);
 				}
 			}

@@ -1,7 +1,5 @@
 package rs117.hd.model;
 
-import java.nio.FloatBuffer;
-import java.nio.IntBuffer;
 import java.util.ArrayDeque;
 import java.util.HashMap;
 import lombok.extern.slf4j.Slf4j;
@@ -52,35 +50,24 @@ public class ModelCache {
 		}
 	}
 
-	private static class Buffer {
+	public static class Buffer {
 		final boolean endMarker;
 		final long hash;
+		final long address;
 		final long byteCapacity;
-		final IntBuffer intBuffer;
-		final FloatBuffer floatBuffer;
 
 		public Buffer(long byteCapacity) {
 			endMarker = true;
-			this.hash = 0;
+			hash = 0;
+			address = 0L;
 			this.byteCapacity = byteCapacity;
-			intBuffer = null;
-			floatBuffer = null;
 		}
 
-		public Buffer(long hash, IntBuffer buffer) {
+		public Buffer(long hash, long address, long byteCapacity) {
 			endMarker = false;
 			this.hash = hash;
-			byteCapacity = buffer.capacity() * 4L;
-			intBuffer = buffer;
-			floatBuffer = null;
-		}
-
-		public Buffer(long hash, FloatBuffer buffer) {
-			endMarker = false;
-			this.hash = hash;
-			byteCapacity = buffer.capacity() * 4L;
-			intBuffer = null;
-			floatBuffer = buffer;
+			this.address = address;
+			this.byteCapacity = byteCapacity;
 		}
 	}
 
@@ -149,6 +136,7 @@ public class ModelCache {
 		buffers.clear();
 		currentAllocation = null;
 
+		assert allocations != null;
 		for (int i = 0; i < allocations.length; i++) {
 			if (allocations[i] != null) {
 				allocations[i].destroy();
@@ -177,10 +165,6 @@ public class ModelCache {
 				allocation.freeBytesAhead = allocation.byteCapacity;
 			}
 		}
-	}
-
-	private Buffer get(long hash) {
-		return cache.get(hash);
 	}
 
 	private void nextAllocation() {
@@ -263,8 +247,7 @@ public class ModelCache {
 				cache.remove(buffer.hash, buffer);
 				// Normally, these addresses will be equal, but in case they've been "shifted" as detailed in the
 				// reserve function, the buffer's actual address will be larger than the cursor position
-				assert currentAllocation.address + currentAllocation.cursor + currentAllocation.freeBytesAhead <=
-					MemoryUtil.memAddress0(buffer.intBuffer == null ? buffer.floatBuffer : buffer.intBuffer);
+				assert currentAllocation.address + currentAllocation.cursor + currentAllocation.freeBytesAhead <= buffer.address;
 			}
 
 			currentAllocation.freeBytesAhead += buffer.byteCapacity;
@@ -274,37 +257,21 @@ public class ModelCache {
 		return buffer;
 	}
 
-	public IntBuffer getIntBuffer(long hash) {
-		Buffer buffer = get(hash);
-		if (buffer == null)
+	public Buffer getBuffer(long hash, int capacity) {
+		Buffer buffer = cache.get(hash);
+		if (buffer == null || buffer.byteCapacity != capacity * 4L)
 			return null;
-		return buffer.intBuffer;
+		return buffer;
 	}
 
-	public FloatBuffer getFloatBuffer(long hash) {
-		Buffer buffer = get(hash);
-		if (buffer == null)
-			return null;
-		return buffer.floatBuffer;
-	}
-
-	public IntBuffer reserveIntBuffer(long hash, int capacity) {
-		long address = reserve(capacity * 4L);
+	public Buffer reserveBuffer(long hash, int capacity) {
+		long numBytes = capacity * 4L;
+		long address = reserve(numBytes);
 		if (address == 0L)
 			return null;
-		Buffer buffer = new Buffer(hash, MemoryUtil.memIntBuffer(address, capacity));
+		Buffer buffer = new Buffer(hash, address, numBytes);
 		cache.put(hash, buffer);
 		buffers.addLast(buffer);
-		return buffer.intBuffer;
-	}
-
-	public FloatBuffer reserveFloatBuffer(long hash, int capacity) {
-		long address = reserve(capacity * 4L);
-		if (address == 0L)
-			return null;
-		Buffer buffer = new Buffer(hash, MemoryUtil.memFloatBuffer(address, capacity));
-		cache.put(hash, buffer);
-		buffers.addLast(buffer);
-		return buffer.floatBuffer;
+		return buffer;
 	}
 }

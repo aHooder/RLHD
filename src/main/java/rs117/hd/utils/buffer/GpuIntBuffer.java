@@ -25,9 +25,11 @@
 package rs117.hd.utils.buffer;
 
 import java.nio.IntBuffer;
+import lombok.Getter;
 import org.lwjgl.system.MemoryUtil;
 import rs117.hd.HdPlugin;
 
+@Getter
 public class GpuIntBuffer
 {
 	private IntBuffer buffer;
@@ -84,6 +86,10 @@ public class GpuIntBuffer
 		return buffer.position();
 	}
 
+	public void advance(int steps) {
+		buffer.position(buffer.position() + steps);
+	}
+
 	public void flip() {
 		buffer.flip();
 	}
@@ -116,8 +122,4 @@ public class GpuIntBuffer
 		return this;
 	}
 
-	public IntBuffer getBuffer()
-	{
-		return buffer;
-	}
 }
