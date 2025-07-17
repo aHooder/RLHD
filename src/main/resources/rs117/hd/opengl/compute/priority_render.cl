@@ -477,6 +477,7 @@ void sort_and_insert(
 
   if (localId < size) {
     int outOffset = minfo.idx;
+    int normalOffset = minfo.normalOffset;
     int uvOffset = minfo.uvOffset;
     int flags = minfo.flags;
     int modelY = minfo.y >> 16;
@@ -500,9 +501,14 @@ void sort_and_insert(
       }
     }
 
-    float4 normA = normal[offset + localId * 3];
-    float4 normB = normal[offset + localId * 3 + 1];
-    float4 normC = normal[offset + localId * 3 + 2];
+    float4 normA, normB, normC;
+    if (normalOffset < 0) {
+      normA = normB = normC = (float4)(0.0, 0.0, 0.0, 0.0);
+    } else {
+      normA = normal[offset + localId * 3    ];
+      normB = normal[offset + localId * 3 + 1];
+      normC = normal[offset + localId * 3 + 2];
+    }
 
     float4 vertA = (float4)(thisrvA.x, thisrvA.y, thisrvA.z, 0);
     float4 vertB = (float4)(thisrvB.x, thisrvB.y, thisrvB.z, 0);

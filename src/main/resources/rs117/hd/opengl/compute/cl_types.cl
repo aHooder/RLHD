@@ -57,7 +57,8 @@ struct shared_data {
 };
 
 struct ModelInfo {
-  int offset;   // offset into buffer
+  int offset;   // offset into vertex buffer
+  int normalOffset; // offset into normal buffer
   int uvOffset; // offset into uv buffer
   int size;     // length in faces
   int idx;      // write idx in target buffer

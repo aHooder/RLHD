@@ -188,7 +188,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 	private static final float COLOR_FILTER_FADE_DURATION = 500;
 
-	private static final int[] eightIntWrite = new int[8];
+	public static final int RENDERABLE_INFO_SIZE = 9;
+	private static final int[] renderableInfo = new int[RENDERABLE_INFO_SIZE];
 
 	private static final int[] RENDERBUFFER_FORMATS_SRGB = {
 		GL_SRGB8,
@@ -384,6 +385,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	private SceneContext nextSceneContext;
 
 	private int dynamicOffsetVertices;
+	private int dynamicOffsetNormals;
 	private int dynamicOffsetUvs;
 	private int renderBufferOffset;
 
@@ -1455,7 +1457,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 					.ensureCapacity(staticUnordered.limit())
 					.put(staticUnordered);
 				staticUnordered.rewind();
-				numPassthroughModels += staticUnordered.limit() / 8;
+				numPassthroughModels += staticUnordered.limit() / RENDERABLE_INFO_SIZE;
 			}
 
 			if (updateUniforms) {
@@ -1579,7 +1581,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			updateBuffer(
 				hStagingBufferNormals,
 				GL_ARRAY_BUFFER,
-				dynamicOffsetVertices * NORMAL_SIZE,
+				dynamicOffsetNormals * NORMAL_SIZE,
 				sceneContext.stagingBufferNormals.getBuffer()
 			);
 			sceneContext.stagingBufferVertices.clear();
@@ -1672,9 +1674,10 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 		++numPassthroughModels;
 		modelPassthroughBuffer
-			.ensureCapacity(16)
+			.ensureCapacity(RENDERABLE_INFO_SIZE)
 			.getBuffer()
 			.put(paint.getBufferOffset())
+			.put(paint.getBufferOffset()) // TODO
 			.put(paint.getUvBufferOffset())
 			.put(vertexCount / 3)
 			.put(renderBufferOffset)
@@ -1711,7 +1714,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		final int localZ = tileY * LOCAL_TILE_SIZE;
 
 		GpuIntBuffer b = modelPassthroughBuffer;
-		b.ensureCapacity(16);
+		b.ensureCapacity(RENDERABLE_INFO_SIZE * 2);
 		IntBuffer buffer = b.getBuffer();
 
 		int bufferLength = model.getBufferLen();
@@ -1732,6 +1735,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			++numPassthroughModels;
 
 			buffer.put(model.getBufferOffset() + bufferLength);
+			buffer.put(model.getBufferOffset() + bufferLength); // TODO
 			buffer.put(model.getUvBufferOffset() + bufferLength);
 			buffer.put(bufferLength / 3);
 			buffer.put(renderBufferOffset);
@@ -1744,6 +1748,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		++numPassthroughModels;
 
 		buffer.put(model.getBufferOffset());
+		buffer.put(model.getBufferOffset()); // TODO
 		buffer.put(model.getUvBufferOffset());
 		buffer.put(bufferLength / 3);
 		buffer.put(renderBufferOffset);
@@ -2439,6 +2444,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		sceneContext.staticUnorderedModelBuffer.flip();
 
 		dynamicOffsetVertices = sceneContext.getVertexOffset();
+		dynamicOffsetNormals = sceneContext.getNormalOffset();
 		dynamicOffsetUvs = sceneContext.getUvOffset();
 
 		sceneContext.stagingBufferVertices.flip();
@@ -2989,11 +2995,11 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		if (enableDetailedTimers)
 			frameTimer.begin(Timer.DRAW_RENDERABLE);
 
-		eightIntWrite[3] = renderBufferOffset;
-		eightIntWrite[4] = orientation;
-		eightIntWrite[5] = x;
-		eightIntWrite[6] = y << 16 | height & 0xFFFF; // Pack Y into the upper bits to easily preserve the sign
-		eightIntWrite[7] = z;
+		renderableInfo[4] = renderBufferOffset;
+		renderableInfo[5] = orientation;
+		renderableInfo[6] = x;
+		renderableInfo[7] = y << 16 | height & 0xFFFF; // Pack Y into the upper bits to easily preserve the sign
+		renderableInfo[8] = z;
 
 		int plane = ModelHash.getPlane(hash);
 		int faceCount;
@@ -3006,10 +3012,11 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			int uvOffset = offsetModel.getUvBufferOffset();
 			boolean hillskew = offsetModel != model;
 
-			eightIntWrite[0] = vertexOffset;
-			eightIntWrite[1] = uvOffset;
-			eightIntWrite[2] = faceCount;
-			eightIntWrite[4] |= (hillskew ? 1 : 0) << 26 | plane << 24;
+			renderableInfo[0] = vertexOffset;
+			renderableInfo[1] = vertexOffset; // TODO: Associate normalOffset with Model instances
+			renderableInfo[2] = uvOffset;
+			renderableInfo[3] = faceCount;
+			renderableInfo[5] |= (hillskew ? 1 : 0) << 26 | plane << 24;
 		} else {
 			// Temporary model (animated or otherwise not a static Model already in the scene buffer)
 			if (enableDetailedTimers)
@@ -3030,9 +3037,10 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 			if (modelOffsets != null && modelOffsets.faceCount == model.getFaceCount()) {
 				faceCount = modelOffsets.faceCount;
-				eightIntWrite[0] = modelOffsets.vertexOffset;
-				eightIntWrite[1] = modelOffsets.uvOffset;
-				eightIntWrite[2] = modelOffsets.faceCount;
+				renderableInfo[0] = modelOffsets.vertexOffset;
+				renderableInfo[1] = modelOffsets.normalOffset;
+				renderableInfo[2] = modelOffsets.uvOffset;
+				renderableInfo[3] = modelOffsets.faceCount;
 			} else {
 				if (enableDetailedTimers)
 					frameTimer.begin(Timer.MODEL_PUSHING);
@@ -3044,6 +3052,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 					return;
 
 				int vertexOffset = dynamicOffsetVertices + sceneContext.getVertexOffset();
+				int normalOffset = dynamicOffsetNormals + sceneContext.getNormalOffset();
 				int uvOffset = dynamicOffsetUvs + sceneContext.getUvOffset();
 
 				int preOrientation = 0;
@@ -3064,29 +3073,32 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 					}
 				}
 
-				modelPusher.pushModel(sceneContext, null, uuid, model, modelOverride, preOrientation, true);
+				var results = modelPusher.pushModel(sceneContext, null, uuid, model, modelOverride, preOrientation, true);
 
-				faceCount = sceneContext.modelPusherResults[0];
-				if (sceneContext.modelPusherResults[1] == 0)
+				faceCount = results.faceCount;
+				if (results.skipNormals)
+					normalOffset = -1;
+				if (results.skipUvs)
 					uvOffset = -1;
 
 				if (enableDetailedTimers)
 					frameTimer.end(Timer.MODEL_PUSHING);
 
-				eightIntWrite[0] = vertexOffset;
-				eightIntWrite[1] = uvOffset;
-				eightIntWrite[2] = faceCount;
+				renderableInfo[0] = vertexOffset;
+				renderableInfo[1] = normalOffset;
+				renderableInfo[2] = uvOffset;
+				renderableInfo[3] = faceCount;
 
 				// add this temporary model to the map for batching purposes
 				if (configModelBatching)
-					frameModelInfoMap.put(batchHash, new ModelOffsets(faceCount, vertexOffset, uvOffset));
+					frameModelInfoMap.put(batchHash, new ModelOffsets(faceCount, vertexOffset, normalOffset, uvOffset));
 			}
 		}
 
 		if (enableDetailedTimers)
 			frameTimer.end(Timer.DRAW_RENDERABLE);
 
-		if (eightIntWrite[0] == -1)
+		if (renderableInfo[0] == -1)
 			return; // Hidden model
 
 		if (configCharacterDisplacement && renderable instanceof Actor && renderable != client.getLocalPlayer()) {
@@ -3100,8 +3112,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		}
 
 		bufferForTriangles(faceCount)
-			.ensureCapacity(8)
-			.put(eightIntWrite);
+			.ensureCapacity(RENDERABLE_INFO_SIZE)
+			.put(renderableInfo);
 		renderBufferOffset += faceCount * 3;
 	}
 

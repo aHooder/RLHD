@@ -14,6 +14,7 @@ import net.runelite.api.kit.*;
 import net.runelite.client.RuneLite;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.util.LinkBrowser;
+import org.lwjgl.system.MemoryUtil;
 import rs117.hd.HdPlugin;
 import rs117.hd.HdPluginConfig;
 import rs117.hd.data.WaterType;
@@ -151,8 +152,7 @@ public class ModelPusher {
 	}
 
 	/**
-	 * Pushes model data to staging buffers in the provided {@link SceneContext}, and writes the pushed number of
-	 * vertices and UVs to {@link SceneContext#modelPusherResults}.
+	 * Pushes model data to staging buffers in the provided {@link SceneContext} and returns the results.
 	 *
 	 * @param sceneContext   object for the scene to push model data for
 	 * @param tile           that the model is associated with, if any
@@ -162,7 +162,7 @@ public class ModelPusher {
 	 * @param preOrientation which the vertices have already been rotated by
 	 * @param needsCaching   whether the model should be cached for future reuse, if enabled
 	 */
-	public void pushModel(
+	public Results pushModel(
 		SceneContext sceneContext,
 		@Nullable Tile tile,
 		int uuid,
@@ -175,9 +175,16 @@ public class ModelPusher {
 		if (modelCache == null)
 			useCache = false;
 
-		final int faceCount = Math.min(model.getFaceCount(), MAX_FACE_COUNT);
-		final int bufferSize = faceCount * DATUM_PER_FACE;
-		int texturedFaceCount = 0;
+		Results results = sceneContext.modelPusherResults;
+		results.faceCount = Math.min(model.getFaceCount(), MAX_FACE_COUNT);
+
+		// Don't skip normals during static scene caching, since we're unable to associate the normal offset with the Model instance
+		results.skipNormals = needsCaching && (
+			modelOverride.flatNormals ||
+			model.getVertexNormalsX() == null ||
+			model.getVertexNormalsY() == null ||
+			model.getVertexNormalsZ() == null
+		);
 
 		final short[] faceTextures = model.getFaceTextures();
 		final byte[] textureFaces = model.getTextureFaces();
@@ -205,20 +212,22 @@ public class ModelPusher {
 				textureMaterial = Material.NONE;
 		}
 
-		boolean skipUVs =
+		results.skipUvs =
 			!isVanillaTextured &&
 			packMaterialData(baseMaterial, -1, modelOverride, UvType.GEOMETRY, false) == 0 &&
 			modelOverride.colorOverrides == null;
 
 		// ensure capacity upfront
+		final int bufferSize = results.faceCount * DATUM_PER_FACE;
 		sceneContext.stagingBufferVertices.ensureCapacity(bufferSize);
-		sceneContext.stagingBufferNormals.ensureCapacity(bufferSize);
-		if (!skipUVs)
+		if (!results.skipNormals)
+			sceneContext.stagingBufferNormals.ensureCapacity(bufferSize);
+		if (!results.skipUvs)
 			sceneContext.stagingBufferUvs.ensureCapacity(bufferSize);
 
 		boolean foundCachedVertexData = false;
-		boolean foundCachedNormalData = false;
-		boolean foundCachedUvData = skipUVs;
+		boolean foundCachedNormalData = results.skipNormals;
+		boolean foundCachedUvData = results.skipUvs;
 		long vertexHash = 0;
 		long normalHash = 0;
 		long uvHash = 0;
@@ -227,74 +236,35 @@ public class ModelPusher {
 			assert client.isClientThread() : "Model caching isn't thread-safe";
 
 			vertexHash = modelHasher.vertexHash;
-			IntBuffer vertexData = this.modelCache.getIntBuffer(vertexHash);
-			foundCachedVertexData = vertexData != null && vertexData.remaining() == bufferSize;
-			if (foundCachedVertexData) {
+			IntBuffer vertexData = modelCache.getIntBuffer(vertexHash);
+			if (vertexData != null && vertexData.remaining() == bufferSize) {
 				sceneContext.stagingBufferVertices.put(vertexData);
 				vertexData.rewind();
+				foundCachedVertexData = true;
 			}
 
-			normalHash = modelHasher.calculateNormalCacheHash();
-			FloatBuffer normalData = this.modelCache.getFloatBuffer(normalHash);
-			foundCachedNormalData = normalData != null && normalData.remaining() == bufferSize;
-			if (foundCachedNormalData) {
-				sceneContext.stagingBufferNormals.put(normalData);
-				normalData.rewind();
+			if (!foundCachedNormalData) {
+				normalHash = modelHasher.calculateNormalCacheHash();
+				FloatBuffer normalData = modelCache.getFloatBuffer(normalHash);
+				if (normalData != null && normalData.remaining() == bufferSize) {
+					sceneContext.stagingBufferNormals.put(normalData);
+					normalData.rewind();
+					foundCachedNormalData = true;
+				}
 			}
 
 			if (!foundCachedUvData) {
 				uvHash = modelHasher.calculateUvCacheHash(preOrientation, modelOverride);
-				FloatBuffer uvData = this.modelCache.getFloatBuffer(uvHash);
-				foundCachedUvData = uvData != null && uvData.remaining() == bufferSize;
-				if (foundCachedUvData) {
-					texturedFaceCount = faceCount;
+				FloatBuffer uvData = modelCache.getFloatBuffer(uvHash);
+				if (uvData != null && uvData.remaining() == bufferSize) {
 					sceneContext.stagingBufferUvs.put(uvData);
 					uvData.rewind();
+					foundCachedUvData = true;
 				}
 			}
 
-			if (foundCachedVertexData && foundCachedNormalData && foundCachedUvData) {
-				sceneContext.modelPusherResults[0] = faceCount;
-				sceneContext.modelPusherResults[1] = texturedFaceCount;
-				return;
-			}
-		}
-
-		IntBuffer fullVertexData = null;
-		FloatBuffer fullNormalData = null;
-		FloatBuffer fullUvData = null;
-
-		boolean cacheVertexData = false;
-		boolean cacheNormalData = false;
-		boolean cacheUvData = false;
-		if (useCache) {
-			cacheVertexData = !foundCachedVertexData;
-			cacheNormalData = !foundCachedNormalData;
-			cacheUvData = !foundCachedUvData;
-
-			if (cacheVertexData) {
-				fullVertexData = this.modelCache.reserveIntBuffer(vertexHash, bufferSize);
-				if (fullVertexData == null) {
-					log.error("failed to reserve vertex buffer");
-					cacheVertexData = false;
-				}
-			}
-
-			if (cacheNormalData) {
-				fullNormalData = this.modelCache.reserveFloatBuffer(normalHash, bufferSize);
-				if (fullNormalData == null) {
-					log.error("failed to reserve normal buffer");
-					cacheNormalData = false;
-				}
-			}
-
-			if (cacheUvData) {
-				fullUvData = this.modelCache.reserveFloatBuffer(uvHash, bufferSize);
-				if (fullUvData == null) {
-					log.error("failed to reserve uv buffer");
-					cacheUvData = false;
-				}
-			}
+			if (foundCachedVertexData && foundCachedNormalData && foundCachedUvData)
+				return results;
 		}
 
 		if (!foundCachedVertexData) {
@@ -302,13 +272,25 @@ public class ModelPusher {
 				frameTimer.begin(Timer.MODEL_PUSHING_VERTEX);
 
 			modelOverride.applyRotation(model);
-			for (int face = 0; face < faceCount; face++) {
+			for (int face = 0; face < results.faceCount; face++) {
 				int[] data = getFaceVertices(sceneContext, tile, uuid, model, modelOverride, face);
 				sceneContext.stagingBufferVertices.put(data);
-				if (cacheVertexData)
-					fullVertexData.put(data);
 			}
 			modelOverride.revertRotation(model);
+
+			if (useCache) {
+				IntBuffer cacheBuffer = modelCache.reserveIntBuffer(vertexHash, bufferSize);
+				if (cacheBuffer == null) {
+					log.error("failed to reserve vertex buffer");
+				} else {
+					long numBytes = bufferSize * 4L;
+					MemoryUtil.memCopy(
+						MemoryUtil.memAddress(sceneContext.stagingBufferVertices.getBuffer()) - numBytes,
+						MemoryUtil.memAddress(cacheBuffer),
+						numBytes
+					);
+				}
+			}
 
 			if (plugin.enableDetailedTimers)
 				frameTimer.end(Timer.MODEL_PUSHING_VERTEX);
@@ -318,11 +300,23 @@ public class ModelPusher {
 			if (plugin.enableDetailedTimers)
 				frameTimer.begin(Timer.MODEL_PUSHING_NORMAL);
 
-			for (int face = 0; face < faceCount; face++) {
-				getNormalDataForFace(sceneContext, model, modelOverride, face);
+			for (int face = 0; face < results.faceCount; face++) {
+				getNormalDataForFace(sceneContext, model, face);
 				sceneContext.stagingBufferNormals.put(sceneContext.modelFaceNormals);
-				if (cacheNormalData)
-					fullNormalData.put(sceneContext.modelFaceNormals);
+			}
+
+			if (useCache) {
+				FloatBuffer cacheBuffer = modelCache.reserveFloatBuffer(normalHash, bufferSize);
+				if (cacheBuffer == null) {
+					log.error("failed to reserve normal buffer");
+				} else {
+					long numBytes = bufferSize * 4L;
+					MemoryUtil.memCopy(
+						MemoryUtil.memAddress(sceneContext.stagingBufferNormals.getBuffer()) - numBytes,
+						MemoryUtil.memAddress(cacheBuffer),
+						numBytes
+					);
+				}
 			}
 
 			if (plugin.enableDetailedTimers)
@@ -335,7 +329,7 @@ public class ModelPusher {
 
 			int[] faceColors = model.getFaceColors1();
 			byte[] faceTransparencies = model.getFaceTransparencies();
-			for (int face = 0; face < faceCount; face++) {
+			for (int face = 0; face < results.faceCount; face++) {
 				UvType uvType = UvType.GEOMETRY;
 				Material material = baseMaterial;
 
@@ -358,7 +352,7 @@ public class ModelPusher {
 					}
 
 					// Color overrides are heavy. Only apply them if the UVs will be cached or don't need caching
-					if (modelOverride.colorOverrides != null && (cacheUvData || !needsCaching)) {
+					if (modelOverride.colorOverrides != null && (useCache || !needsCaching)) {
 						int ahsl = (faceTransparencies == null ? 0xFF : 0xFF - (faceTransparencies[face] & 0xFF)) << 16 | faceColors[face];
 						for (var override : modelOverride.colorOverrides) {
 							if (override.ahslCondition.test(ahsl)) {
@@ -387,30 +381,32 @@ public class ModelPusher {
 				}
 
 				sceneContext.stagingBufferUvs.put(uvData);
-				if (cacheUvData)
-					fullUvData.put(uvData);
+			}
 
-				++texturedFaceCount;
+			if (useCache) {
+				FloatBuffer cacheBuffer = modelCache.reserveFloatBuffer(uvHash, bufferSize);
+				if (cacheBuffer == null) {
+					log.error("failed to reserve UV buffer");
+				} else {
+					long numBytes = bufferSize * 4L;
+					MemoryUtil.memCopy(
+						MemoryUtil.memAddress(sceneContext.stagingBufferUvs.getBuffer()) - numBytes,
+						MemoryUtil.memAddress(cacheBuffer),
+						numBytes
+					);
+				}
 			}
 
 			if (plugin.enableDetailedTimers)
 				frameTimer.end(Timer.MODEL_PUSHING_UV);
 		}
 
-		if (cacheVertexData)
-			fullVertexData.flip();
-		if (cacheNormalData)
-			fullNormalData.flip();
-		if (cacheUvData)
-			fullUvData.flip();
-
-		sceneContext.modelPusherResults[0] = faceCount;
-		sceneContext.modelPusherResults[1] = texturedFaceCount;
+		return results;
 	}
 
-	private void getNormalDataForFace(SceneContext sceneContext, Model model, @NonNull ModelOverride modelOverride, int face) {
+	private void getNormalDataForFace(SceneContext sceneContext, Model model, int face) {
 		assert SceneUploader.packTerrainData(false, 0, WaterType.NONE, 0) == 0;
-		if (modelOverride.flatNormals || !plugin.configPreserveVanillaNormals && model.getFaceColors3()[face] == -1) {
+		if (!plugin.configPreserveVanillaNormals && model.getFaceColors3()[face] == -1) {
 			Arrays.fill(sceneContext.modelFaceNormals, 0);
 			return;
 		}
@@ -418,12 +414,6 @@ public class ModelPusher {
 		final int[] xVertexNormals = model.getVertexNormalsX();
 		final int[] yVertexNormals = model.getVertexNormalsY();
 		final int[] zVertexNormals = model.getVertexNormalsZ();
-
-		if (xVertexNormals == null || yVertexNormals == null || zVertexNormals == null) {
-			Arrays.fill(sceneContext.modelFaceNormals, 0);
-			return;
-		}
-
 		final int triA = model.getFaceIndices1()[face];
 		final int triB = model.getFaceIndices2()[face];
 		final int triC = model.getFaceIndices3()[face];
@@ -687,5 +677,10 @@ public class ModelPusher {
 		data[10] = Float.floatToIntBits(zVertices[triC]);
 		data[11] = color3;
 		return data;
+	}
+
+	public static class Results {
+		public int faceCount;
+		public boolean skipUvs, skipNormals;
 	}
 }

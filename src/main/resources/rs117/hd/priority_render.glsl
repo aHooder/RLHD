@@ -338,6 +338,7 @@ void sort_and_insert(uint localId, const ModelInfo minfo, int thisPriority, int 
 
     if (localId < size) {
         int outOffset = minfo.idx;
+        int normalOffset = minfo.normalOffset;
         int uvOffset = minfo.uvOffset;
         int flags = minfo.flags;
         vec3 pos = vec3(minfo.x, minfo.y >> 16, minfo.z);
@@ -367,10 +368,14 @@ void sort_and_insert(uint localId, const ModelInfo minfo, int thisPriority, int 
         VertexData thisrvB = vb[offset + localId * 3 + 1];
         VertexData thisrvC = vb[offset + localId * 3 + 2];
 
-        // Grab vertex normals from the correct buffer
-        vec4 normA = normal[offset + localId * 3    ];
-        vec4 normB = normal[offset + localId * 3 + 1];
-        vec4 normC = normal[offset + localId * 3 + 2];
+        vec4 normA, normB, normC;
+        if (normalOffset < 0) {
+            normA = normB = normC = vec4(0);
+        } else {
+            normA = normal[normalOffset + localId * 3    ];
+            normB = normal[normalOffset + localId * 3 + 1];
+            normC = normal[normalOffset + localId * 3 + 2];
+        }
 
         applyWindDisplacement(windSample, vertexFlags, height, pos,
             thisrvA.pos, thisrvB.pos, thisrvC.pos,

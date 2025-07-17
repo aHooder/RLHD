@@ -52,6 +52,7 @@ import static net.runelite.api.Constants.*;
 import static net.runelite.api.Constants.SCENE_SIZE;
 import static net.runelite.api.Perspective.*;
 import static rs117.hd.HdPlugin.NORMAL_SIZE;
+import static rs117.hd.HdPlugin.RENDERABLE_INFO_SIZE;
 import static rs117.hd.HdPlugin.SCALAR_BYTES;
 import static rs117.hd.HdPlugin.UV_SIZE;
 import static rs117.hd.HdPlugin.VERTEX_SIZE;
@@ -299,9 +300,10 @@ public class SceneUploader {
 
 						if (vertexCount > 0) {
 							sceneContext.staticUnorderedModelBuffer
-								.ensureCapacity(8)
+								.ensureCapacity(RENDERABLE_INFO_SIZE)
 								.getBuffer()
 								.put(vertexOffset)
+								.put(vertexOffset) // TODO
 								.put(uvOffset)
 								.put(vertexCount / 3)
 								.put(sceneContext.staticVertexCount)
@@ -339,17 +341,21 @@ public class SceneUploader {
 		}
 
 		int vertexOffset = sceneContext.getVertexOffset();
+		int normalOffset = sceneContext.getNormalOffset();
 		int uvOffset = sceneContext.getUvOffset();
 
 		if (modelOverride.hide) {
 			vertexOffset = -1;
 		} else {
-			modelPusher.pushModel(sceneContext, tile, uuid, model, modelOverride, orientation, false);
-			if (sceneContext.modelPusherResults[1] == 0)
+			var results = modelPusher.pushModel(sceneContext, tile, uuid, model, modelOverride, orientation, false);
+			if (results.skipNormals)
+				normalOffset = -1;
+			if (results.skipUvs)
 				uvOffset = -1;
 		}
 
 		model.setBufferOffset(vertexOffset);
+		// TODO: associate normal offset with the model somehow. For now we ensure vertexOffset == normalOffset
 		model.setUvBufferOffset(uvOffset);
 		model.setSceneId(sceneId);
 		++sceneContext.uniqueModels;
@@ -387,9 +393,10 @@ public class SceneUploader {
 
 				// Draw the tile at the start of each frame
 				sceneContext.staticUnorderedModelBuffer
-					.ensureCapacity(8)
+					.ensureCapacity(RENDERABLE_INFO_SIZE)
 					.getBuffer()
 					.put(vertexOffset)
+					.put(vertexOffset) // TODO
 					.put(uvOffset)
 					.put(vertexCount / 3)
 					.put(sceneContext.staticVertexCount)

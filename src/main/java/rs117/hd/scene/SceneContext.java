@@ -13,6 +13,7 @@ import javax.annotation.Nullable;
 import net.runelite.api.*;
 import net.runelite.api.coords.*;
 import rs117.hd.data.materials.Material;
+import rs117.hd.model.ModelPusher;
 import rs117.hd.scene.areas.AABB;
 import rs117.hd.scene.areas.Area;
 import rs117.hd.scene.environments.Environment;
@@ -25,6 +26,7 @@ import rs117.hd.utils.buffer.GpuIntBuffer;
 import static net.runelite.api.Constants.*;
 import static net.runelite.api.Constants.SCENE_SIZE;
 import static net.runelite.api.Perspective.*;
+import static rs117.hd.HdPlugin.NORMAL_SIZE;
 import static rs117.hd.HdPlugin.UV_SIZE;
 import static rs117.hd.HdPlugin.VERTEX_SIZE;
 
@@ -88,7 +90,7 @@ public class SceneContext {
 	// model pusher arrays, to avoid simultaneous usage from different threads
 	public final int[] modelFaceVertices = new int[12];
 	public final float[] modelFaceNormals = new float[12];
-	public final int[] modelPusherResults = new int[2];
+	public final ModelPusher.Results modelPusherResults = new ModelPusher.Results();
 
 	public SceneContext(Client client, Scene scene, int expandedMapLoadingChunks, boolean reuseBuffers, @Nullable SceneContext previous) {
 		this.client = client;
@@ -139,6 +141,10 @@ public class SceneContext {
 
 	public int getVertexOffset() {
 		return stagingBufferVertices.position() / VERTEX_SIZE;
+	}
+
+	public int getNormalOffset() {
+		return stagingBufferNormals.position() / NORMAL_SIZE;
 	}
 
 	public int getUvOffset() {

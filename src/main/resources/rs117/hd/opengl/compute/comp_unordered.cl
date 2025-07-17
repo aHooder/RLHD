@@ -43,8 +43,9 @@ void passthroughModel(
   struct ModelInfo minfo = ol[groupId];
 
   int offset = minfo.offset;
-  int outOffset = minfo.idx;
+  int normalOffset = minfo.normalOffset;
   int uvOffset = minfo.uvOffset;
+  int outOffset = minfo.idx;
 
   if (localId >= (size_t) minfo.size) {
     return;
@@ -80,11 +81,15 @@ void passthroughModel(
   }
   
   float4 normA, normB, normC;
-  
-  normA = normal[offset + ssboOffset * 3    ];
-  normB = normal[offset + ssboOffset * 3 + 1];
-  normC = normal[offset + ssboOffset * 3 + 2];
-  
+
+  if (normalOffset < 0) {
+    normA = normB = normC = (float4)(0.0, 0.0, 0.0, 0.0);
+  } else {
+    normA = normal[offset + ssboOffset * 3    ];
+    normB = normal[offset + ssboOffset * 3 + 1];
+    normC = normal[offset + ssboOffset * 3 + 2];
+  }
+
   normalout[outOffset + myOffset * 3]     = normA;
   normalout[outOffset + myOffset * 3 + 1] = normB;
   normalout[outOffset + myOffset * 3 + 2] = normC;

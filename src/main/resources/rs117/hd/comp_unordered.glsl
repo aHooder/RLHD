@@ -35,9 +35,10 @@ void main() {
     const ModelInfo minfo = ol[groupId];
 
     int offset = minfo.offset;
+    int normalOffset = minfo.normalOffset;
+    int uvOffset = minfo.uvOffset;
     int size = minfo.size;
     int outOffset = minfo.idx;
-    int uvOffset = minfo.uvOffset;
     int flags = minfo.flags;
     vec3 pos = vec3(minfo.x, minfo.y >> 16, minfo.z);
 
@@ -75,11 +76,13 @@ void main() {
     }
 
     vec4 normA, normB, normC;
-
-    // Grab triangle normals from the correct buffer
-    normA = normal[offset + ssboOffset * 3    ];
-    normB = normal[offset + ssboOffset * 3 + 1];
-    normC = normal[offset + ssboOffset * 3 + 2];
+    if (normalOffset < 0) {
+        normA = normB = normC = vec4(0);
+    } else {
+        normA = normal[normalOffset + ssboOffset * 3    ];
+        normB = normal[normalOffset + ssboOffset * 3 + 1];
+        normC = normal[normalOffset + ssboOffset * 3 + 2];
+    }
 
     normalout[outOffset + myOffset * 3]     = normA;
     normalout[outOffset + myOffset * 3 + 1] = normB;
