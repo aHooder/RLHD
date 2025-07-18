@@ -20,7 +20,6 @@ import rs117.hd.scene.environments.Environment;
 import rs117.hd.scene.lights.Light;
 import rs117.hd.scene.lights.TileObjectImpostorTracker;
 import rs117.hd.utils.HDUtils;
-import rs117.hd.utils.buffer.GpuFloatBuffer;
 import rs117.hd.utils.buffer.GpuIntBuffer;
 
 import static net.runelite.api.Constants.*;
@@ -52,8 +51,8 @@ public class SceneContext {
 	public int staticVertexCount = 0;
 	public GpuIntBuffer staticUnorderedModelBuffer;
 	public GpuIntBuffer stagingBufferVertices;
-	public GpuFloatBuffer stagingBufferUvs;
-	public GpuFloatBuffer stagingBufferNormals;
+	public GpuIntBuffer stagingBufferUvs;
+	public GpuIntBuffer stagingBufferNormals;
 
 	public int staticGapFillerTilesOffset;
 	public int staticGapFillerTilesVertexCount;
@@ -101,8 +100,8 @@ public class SceneContext {
 		if (previous == null) {
 			staticUnorderedModelBuffer = new GpuIntBuffer();
 			stagingBufferVertices = new GpuIntBuffer();
-			stagingBufferUvs = new GpuFloatBuffer();
-			stagingBufferNormals = new GpuFloatBuffer();
+			stagingBufferUvs = new GpuIntBuffer();
+			stagingBufferNormals = new GpuIntBuffer();
 		} else if (reuseBuffers) {
 			// Avoid reallocating buffers whenever possible
 			staticUnorderedModelBuffer = previous.staticUnorderedModelBuffer.clear();
@@ -116,8 +115,8 @@ public class SceneContext {
 		} else {
 			staticUnorderedModelBuffer = new GpuIntBuffer(previous.staticUnorderedModelBuffer.capacity());
 			stagingBufferVertices = new GpuIntBuffer(previous.stagingBufferVertices.capacity());
-			stagingBufferUvs = new GpuFloatBuffer(previous.stagingBufferUvs.capacity());
-			stagingBufferNormals = new GpuFloatBuffer(previous.stagingBufferNormals.capacity());
+			stagingBufferUvs = new GpuIntBuffer(previous.stagingBufferUvs.capacity());
+			stagingBufferNormals = new GpuIntBuffer(previous.stagingBufferNormals.capacity());
 		}
 	}
 

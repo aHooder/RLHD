@@ -34,8 +34,7 @@ public class GpuIntBuffer
 {
 	private IntBuffer buffer;
 
-	public GpuIntBuffer()
-	{
+	public GpuIntBuffer() {
 		this(65536);
 	}
 
@@ -73,7 +72,7 @@ public class GpuIntBuffer
 			.put(w);
 	}
 
-	public void put(int[] ints) {
+	public void put(int... ints) {
 		buffer.put(ints);
 	}
 
@@ -81,8 +80,12 @@ public class GpuIntBuffer
 		this.buffer.put(buffer);
 	}
 
-	public int position()
-	{
+	public void put(float... floats) {
+		for (float f : floats)
+			buffer.put(Float.floatToIntBits(f));
+	}
+
+	public int position() {
 		return buffer.position();
 	}
 
@@ -121,5 +124,4 @@ public class GpuIntBuffer
 
 		return this;
 	}
-
 }
