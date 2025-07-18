@@ -39,9 +39,8 @@
 #define HILLSKEW_TILE_SNAPPING_BLEND 0.1
 
 struct ModelInfo {
-    int offset;   // offset into vertex buffer
-    int normalOffset; // offset into normal buffer
-    int uvOffset; // offset into uv buffer
+    uint offset;   // offset into vertex buffer
+    int unused;
     int size;     // length in faces
     int idx;      // write idx in target buffer
     int flags;    // hillskew, plane, orientation
@@ -74,22 +73,22 @@ layout(std430, binding = 1) readonly buffer StagingBufferVertices {
     VertexData vb[];
 };
 
-layout(std430, binding = 2) readonly buffer StagingBufferUvs {
+layout(std430, binding = 1) readonly buffer StagingBufferUvs {
     UVData uv[];
 };
 
-layout(std430, binding = 3) readonly buffer StagingBufferNormals {
+layout(std430, binding = 1) readonly buffer StagingBufferNormals {
     vec4 normal[];
 };
 
-layout(std430, binding = 4) writeonly buffer RenderBufferVertices {
+layout(std430, binding = 2) writeonly buffer RenderBufferVertices {
     VertexData vout[];
 };
 
-layout(std430, binding = 5) writeonly buffer RenderBufferUvs {
+layout(std430, binding = 3) writeonly buffer RenderBufferUvs {
     UVData uvout[];
 };
 
-layout(std430, binding = 6) writeonly buffer RenderBufferNormals {
+layout(std430, binding = 4) writeonly buffer RenderBufferNormals {
     vec4 normalout[];
 };

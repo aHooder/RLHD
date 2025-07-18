@@ -89,6 +89,10 @@ public class GpuIntBuffer
 		return buffer.position();
 	}
 
+	public void position(int position) {
+		buffer.position(position);
+	}
+
 	public void advance(int steps) {
 		buffer.position(buffer.position() + steps);
 	}
@@ -104,6 +108,10 @@ public class GpuIntBuffer
 
 	public int capacity() {
 		return buffer.capacity();
+	}
+
+	public long currentAddress() {
+		return MemoryUtil.memAddress(buffer);
 	}
 
 	public GpuIntBuffer ensureCapacity(int size) {

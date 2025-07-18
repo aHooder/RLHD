@@ -85,7 +85,7 @@ int count_prio_offset(int priority) {
 
 void add_face_prio_distance(const uint localId, const ModelInfo minfo, out int prio, out int dis) {
     if (localId < minfo.size) {
-        int offset = minfo.offset;
+        uint offset = minfo.offset & 0x3FFFFFFF;
         int flags = minfo.flags;
 
         int orientation = flags & 0x7ff;
@@ -333,18 +333,21 @@ void applyWindDisplacement(const ObjectWindSample windSample, int vertexFlags, f
 }
 
 void sort_and_insert(uint localId, const ModelInfo minfo, int thisPriority, int thisDistance, ObjectWindSample windSample) {
-    int offset = minfo.offset;
     int size = minfo.size;
 
     if (localId < size) {
         int outOffset = minfo.idx;
-        int normalOffset = minfo.normalOffset;
-        int uvOffset = minfo.uvOffset;
+        uint offset = minfo.offset & 0x3FFFFFFF;
+        uint offsetFlags = minfo.offset >> 30 & 3;
+        bool skipNormals = (offsetFlags & 1u) != 0;
+        bool skipUvs = (offsetFlags & 2u) != 0;
+        uint normalOffset = offset + size * 3;
+        uint uvOffset = offset + size * 3 * (2 - offsetFlags);
         int flags = minfo.flags;
         vec3 pos = vec3(minfo.x, minfo.y >> 16, minfo.z);
         float height = minfo.y & 0xffff;
         int orientation = flags & 0x7ff;
-        int vertexFlags = uvOffset >= 0 ? uv[uvOffset + localId * 3].materialFlags : 0;
+        int vertexFlags = skipUvs ? 0 : uv[uvOffset + localId * 3].materialFlags;
 
         // we only have to order faces against others of the same priority
         const int priorityOffset = count_prio_offset(thisPriority);
@@ -369,7 +372,7 @@ void sort_and_insert(uint localId, const ModelInfo minfo, int thisPriority, int 
         VertexData thisrvC = vb[offset + localId * 3 + 2];
 
         vec4 normA, normB, normC;
-        if (normalOffset < 0) {
+        if (skipNormals) {
             normA = normB = normC = vec4(0);
         } else {
             normA = normal[normalOffset + localId * 3    ];
@@ -430,11 +433,10 @@ void sort_and_insert(uint localId, const ModelInfo minfo, int thisPriority, int 
         vout[outOffset + myOffset * 3 + 1] = thisrvB;
         vout[outOffset + myOffset * 3 + 2] = thisrvC;
 
-        UVData uvA = UVData(vec3(0.0), 0);
-        UVData uvB = UVData(vec3(0.0), 0);
-        UVData uvC = UVData(vec3(0.0), 0);
-
-        if (uvOffset >= 0) {
+        UVData uvA, uvB, uvC;
+        if (skipUvs) {
+            uvA = uvB = uvC = UVData(vec3(0.0), 0);
+        } else {
             uvA = uv[uvOffset + localId * 3];
             uvB = uv[uvOffset + localId * 3 + 1];
             uvC = uv[uvOffset + localId * 3 + 2];

@@ -4099,19 +4099,10 @@
     "groundMaterial": "OVERWORLD_ROCKY"
   },
   {
-    "name": "PEST_CONTROL_LANDER_WATER_FIX_1",
+    "name": "PEST_CONTROL_LANDER_WATER_FIX",
     "area": "PEST_CONTROL_LANDER_WATER_FIX",
     "overlayIds": [
-      161
-    ],
-    "waterType": "WATER",
-    "blended": false
-  },
-  {
-    "name": "PEST_CONTROL_LANDER_WATER_FIX_2",
-    "area": "PEST_CONTROL_LANDER_WATER_FIX",
-    "overlayIds": [
-      42
+      42, 161
     ],
     "waterType": "WATER",
     "blended": false

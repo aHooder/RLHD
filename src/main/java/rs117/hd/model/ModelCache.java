@@ -257,9 +257,9 @@ public class ModelCache {
 		return buffer;
 	}
 
-	public Buffer getBuffer(long hash, int capacity) {
+	public Buffer getBuffer(long hash, long byteCapacity) {
 		Buffer buffer = cache.get(hash);
-		if (buffer == null || buffer.byteCapacity != capacity * 4L)
+		if (buffer == null || buffer.byteCapacity != byteCapacity)
 			return null;
 		return buffer;
 	}

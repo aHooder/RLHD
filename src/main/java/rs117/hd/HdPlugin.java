@@ -73,6 +73,7 @@ import net.runelite.client.ui.DrawManager;
 import net.runelite.client.util.LinkBrowser;
 import net.runelite.client.util.OSType;
 import net.runelite.rlawt.AWTContext;
+import org.apache.commons.lang3.NotImplementedException;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.*;
 import org.lwjgl.system.Callback;
@@ -177,9 +178,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	public static final int GROUND_MIN_Y = 350; // how far below the ground models extend
 	public static final int MAX_FOG_DEPTH = 100;
 	public static final int SCALAR_BYTES = 4;
-	public static final int VERTEX_SIZE = 4; // 4 ints per vertex
-	public static final int UV_SIZE = 4; // 4 floats per vertex
-	public static final int NORMAL_SIZE = 4; // 4 floats per vertex
+	public static final int VERTEX_SIZE = 4; // 4 ints/floats per vertex
 
 	public static final float ORTHOGRAPHIC_ZOOM = .0002f;
 	public static final float WIND_DISPLACEMENT_NOISE_RESOLUTION = 0.04f;
@@ -188,7 +187,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 	private static final float COLOR_FILTER_FADE_DURATION = 500;
 
-	public static final int RENDERABLE_INFO_SIZE = 9;
+	public static final int RENDERABLE_INFO_SIZE = 8;
 	private static final int[] renderableInfo = new int[RENDERABLE_INFO_SIZE];
 
 	private static final int[] RENDERBUFFER_FORMATS_SRGB = {
@@ -349,10 +348,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 	private final SharedGLBuffer hStagingBufferVertices = new SharedGLBuffer(
 		"Staging Vertices", GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, CL_MEM_READ_ONLY);
-	private final SharedGLBuffer hStagingBufferUvs = new SharedGLBuffer(
-		"Staging UVs", GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, CL_MEM_READ_ONLY);
-	private final SharedGLBuffer hStagingBufferNormals = new SharedGLBuffer(
-		"Staging Normals", GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, CL_MEM_READ_ONLY);
 	private final SharedGLBuffer hRenderBufferVertices = new SharedGLBuffer(
 		"Render Vertices", GL_ARRAY_BUFFER, GL_STREAM_COPY, CL_MEM_WRITE_ONLY);
 	private final SharedGLBuffer hRenderBufferUvs = new SharedGLBuffer(
@@ -385,8 +380,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	private SceneContext nextSceneContext;
 
 	private int dynamicOffsetVertices;
-	private int dynamicOffsetNormals;
-	private int dynamicOffsetUvs;
 	private int renderBufferOffset;
 
 	private int lastCanvasWidth;
@@ -1145,8 +1138,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 	private void initBuffers() {
 		hStagingBufferVertices.initialize();
-		hStagingBufferUvs.initialize();
-		hStagingBufferNormals.initialize();
 
 		hRenderBufferVertices.initialize();
 		hRenderBufferUvs.initialize();
@@ -1162,8 +1153,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 	private void destroyBuffers() {
 		hStagingBufferVertices.destroy();
-		hStagingBufferUvs.destroy();
-		hStagingBufferNormals.destroy();
 
 		hRenderBufferVertices.destroy();
 		hRenderBufferUvs.destroy();
@@ -1447,7 +1436,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				// after this that don't involve a scene draw, like during LOADING/HOPPING/CONNECTION_LOST, we can
 				// still redraw the previous frame's scene to emulate the client behavior of not painting over the
 				// viewport buffer.
-				renderBufferOffset = sceneContext.staticVertexCount;
+				renderBufferOffset = sceneContext.staticRenderOffset;
 
 				// TODO: this could be done only once during scene swap, but is a bit of a pain to do
 				// Push unordered models that should always be drawn at the start of each frame.
@@ -1564,29 +1553,13 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		if (!redrawPreviousFrame) {
 			// Geometry buffers
 			sceneContext.stagingBufferVertices.flip();
-			sceneContext.stagingBufferUvs.flip();
-			sceneContext.stagingBufferNormals.flip();
 			updateBuffer(
 				hStagingBufferVertices,
 				GL_ARRAY_BUFFER,
 				dynamicOffsetVertices * VERTEX_SIZE,
 				sceneContext.stagingBufferVertices.getBuffer()
 			);
-			updateBuffer(
-				hStagingBufferUvs,
-				GL_ARRAY_BUFFER,
-				dynamicOffsetUvs * UV_SIZE,
-				sceneContext.stagingBufferUvs.getBuffer()
-			);
-			updateBuffer(
-				hStagingBufferNormals,
-				GL_ARRAY_BUFFER,
-				dynamicOffsetNormals * NORMAL_SIZE,
-				sceneContext.stagingBufferNormals.getBuffer()
-			);
 			sceneContext.stagingBufferVertices.clear();
-			sceneContext.stagingBufferUvs.clear();
-			sceneContext.stagingBufferNormals.clear();
 
 			// Model buffers
 			modelPassthroughBuffer.flip();
@@ -1621,24 +1594,24 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			// However, no issues have been observed from not calling it, and so will leave disabled for now.
 			// glFinish();
 
-			clManager.compute(
-				uboCompute.glBuffer,
-				numPassthroughModels, numModelsToSort,
-				hModelPassthroughBuffer, hModelSortingBuffers,
-				hStagingBufferVertices, hStagingBufferUvs, hStagingBufferNormals,
-				hRenderBufferVertices, hRenderBufferUvs, hRenderBufferNormals
-			);
+			// TODO
+			throw new NotImplementedException("OpenCL implementation delayed");
+//			clManager.compute(
+//				uboCompute.glBuffer,
+//				numPassthroughModels, numModelsToSort,
+//				hModelPassthroughBuffer, hModelSortingBuffers,
+//				hStagingBufferVertices,
+//				hRenderBufferVertices, hRenderBufferUvs, hRenderBufferNormals
+//			);
 		} else {
 			// Compute is split into a passthrough shader for unsorted models,
 			// and multiple sizes of sorting shaders to better utilize the GPU
 
 			// Bind shared buffers
 			glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, 1, hStagingBufferVertices.id);
-			glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, 2, hStagingBufferUvs.id);
-			glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, 3, hStagingBufferNormals.id);
-			glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, 4, hRenderBufferVertices.id);
-			glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, 5, hRenderBufferUvs.id);
-			glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, 6, hRenderBufferNormals.id);
+			glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, 2, hRenderBufferVertices.id);
+			glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, 3, hRenderBufferUvs.id);
+			glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, 4, hRenderBufferNormals.id);
 
 			// unordered
 			glUseProgram(glModelPassthroughComputeProgram);
@@ -1670,22 +1643,40 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		if (redrawPreviousFrame || paint.getBufferLen() <= 0)
 			return;
 
-		int vertexCount = paint.getBufferLen();
+		int vertexOffset = paint.getBufferOffset();
+		int vertexCount = paint.getBufferLen() & 0xFFFF;
+		int underwaterVertexCount = paint.getBufferLen() >>> 16;
+
+		if (underwaterVertexCount > 0) {
+			// draw underwater terrain tile before surface tile
+			++numPassthroughModels;
+			modelPassthroughBuffer
+				.ensureCapacity(RENDERABLE_INFO_SIZE)
+				.getBuffer()
+				.put(vertexOffset) // Vertex, normal & UV
+				.put(0) // Unused
+				.put(underwaterVertexCount / 3)
+				.put(renderBufferOffset)
+				.put(0)
+				.put(tileX * LOCAL_TILE_SIZE)
+				.put(0)
+				.put(tileY * LOCAL_TILE_SIZE);
+			renderBufferOffset += underwaterVertexCount;
+			vertexOffset += underwaterVertexCount * 3;
+		}
 
 		++numPassthroughModels;
 		modelPassthroughBuffer
 			.ensureCapacity(RENDERABLE_INFO_SIZE)
 			.getBuffer()
-			.put(paint.getBufferOffset())
-			.put(paint.getBufferOffset()) // TODO
-			.put(paint.getUvBufferOffset())
+			.put(vertexOffset)
+			.put(0) // Unused
 			.put(vertexCount / 3)
 			.put(renderBufferOffset)
 			.put(0)
 			.put(tileX * LOCAL_TILE_SIZE)
 			.put(0)
 			.put(tileY * LOCAL_TILE_SIZE);
-
 		renderBufferOffset += vertexCount;
 	}
 
@@ -1713,49 +1704,38 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		final int localY = 0;
 		final int localZ = tileY * LOCAL_TILE_SIZE;
 
-		GpuIntBuffer b = modelPassthroughBuffer;
-		b.ensureCapacity(RENDERABLE_INFO_SIZE * 2);
-		IntBuffer buffer = b.getBuffer();
+		IntBuffer buffer = modelPassthroughBuffer
+			.ensureCapacity(RENDERABLE_INFO_SIZE * 2)
+			.getBuffer();
 
-		int bufferLength = model.getBufferLen();
+		int vertexOffset = model.getBufferOffset();
+		int vertexCount = model.getBufferLen() & 0xFFFF;
+		int underwaterVertexCount = model.getBufferLen() >>> 16;
 
-		// we packed a boolean into the buffer length of tiles so we can tell
-		// which tiles have procedurally-generated underwater terrain.
-		// unpack the boolean:
-		boolean underwaterTerrain = (bufferLength & 1) == 1;
-		// restore the bufferLength variable:
-		bufferLength = bufferLength >> 1;
-
-		if (underwaterTerrain) {
+		if (underwaterVertexCount > 0) {
 			// draw underwater terrain tile before surface tile
-
-			// buffer length includes the generated underwater terrain, so it must be halved
-			bufferLength /= 2;
-
 			++numPassthroughModels;
-
-			buffer.put(model.getBufferOffset() + bufferLength);
-			buffer.put(model.getBufferOffset() + bufferLength); // TODO
-			buffer.put(model.getUvBufferOffset() + bufferLength);
-			buffer.put(bufferLength / 3);
-			buffer.put(renderBufferOffset);
-			buffer.put(0);
-			buffer.put(localX).put(localY).put(localZ);
-
-			renderBufferOffset += bufferLength;
+			buffer
+				.put(vertexOffset) // Vertex, normal & UV
+				.put(0) // Unused
+				.put(underwaterVertexCount / 3)
+				.put(renderBufferOffset)
+				.put(0)
+				.put(localX).put(localY).put(localZ);
+			renderBufferOffset += underwaterVertexCount;
+			vertexOffset += underwaterVertexCount * 3;
 		}
 
 		++numPassthroughModels;
+		buffer
+			.put(vertexOffset)
+			.put(0) // Unused
+			.put(vertexCount / 3)
+			.put(renderBufferOffset)
+			.put(0)
+			.put(localX).put(localY).put(localZ);
 
-		buffer.put(model.getBufferOffset());
-		buffer.put(model.getBufferOffset()); // TODO
-		buffer.put(model.getUvBufferOffset());
-		buffer.put(bufferLength / 3);
-		buffer.put(renderBufferOffset);
-		buffer.put(0);
-		buffer.put(localX).put(localY).put(localZ);
-
-		renderBufferOffset += bufferLength;
+		renderBufferOffset += vertexCount;
 	}
 
 	private void prepareInterfaceTexture(int canvasWidth, int canvasHeight) {
@@ -2167,8 +2147,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				glDepthMask(false);
 				glDrawArrays(
 					GL_TRIANGLES,
-					sceneContext.staticVertexCount,
-					renderBufferOffset - sceneContext.staticVertexCount
+					sceneContext.staticRenderOffset,
+					renderBufferOffset - sceneContext.staticRenderOffset
 				);
 			} else {
 				// Draw everything without depth testing
@@ -2444,30 +2424,14 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		sceneContext.staticUnorderedModelBuffer.flip();
 
 		dynamicOffsetVertices = sceneContext.getVertexOffset();
-		dynamicOffsetNormals = sceneContext.getNormalOffset();
-		dynamicOffsetUvs = sceneContext.getUvOffset();
 
 		sceneContext.stagingBufferVertices.flip();
-		sceneContext.stagingBufferUvs.flip();
-		sceneContext.stagingBufferNormals.flip();
 		updateBuffer(
 			hStagingBufferVertices,
 			GL_ARRAY_BUFFER,
 			sceneContext.stagingBufferVertices.getBuffer()
 		);
-		updateBuffer(
-			hStagingBufferUvs,
-			GL_ARRAY_BUFFER,
-			sceneContext.stagingBufferUvs.getBuffer()
-		);
-		updateBuffer(
-			hStagingBufferNormals,
-			GL_ARRAY_BUFFER,
-			sceneContext.stagingBufferNormals.getBuffer()
-		);
 		sceneContext.stagingBufferVertices.clear();
-		sceneContext.stagingBufferUvs.clear();
-		sceneContext.stagingBufferNormals.clear();
 
 		if (sceneContext.intersects(areaManager.getArea("PLAYER_OWNED_HOUSE"))) {
 			if (!isInHouse) {
@@ -2995,11 +2959,11 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		if (enableDetailedTimers)
 			frameTimer.begin(Timer.DRAW_RENDERABLE);
 
-		renderableInfo[4] = renderBufferOffset;
-		renderableInfo[5] = orientation;
-		renderableInfo[6] = x;
-		renderableInfo[7] = y << 16 | height & 0xFFFF; // Pack Y into the upper bits to easily preserve the sign
-		renderableInfo[8] = z;
+		renderableInfo[3] = renderBufferOffset;
+		renderableInfo[4] = orientation;
+		renderableInfo[5] = x;
+		renderableInfo[6] = y << 16 | height & 0xFFFF; // Pack Y into the upper bits to easily preserve the sign
+		renderableInfo[7] = z;
 
 		int plane = ModelHash.getPlane(hash);
 		int faceCount;
@@ -3009,14 +2973,11 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 			faceCount = Math.min(MAX_FACE_COUNT, offsetModel.getFaceCount());
 			int vertexOffset = offsetModel.getBufferOffset();
-			int uvOffset = offsetModel.getUvBufferOffset();
 			boolean hillskew = offsetModel != model;
 
 			renderableInfo[0] = vertexOffset;
-			renderableInfo[1] = vertexOffset; // TODO: Associate normalOffset with Model instances
-			renderableInfo[2] = uvOffset;
-			renderableInfo[3] = faceCount;
-			renderableInfo[5] |= (hillskew ? 1 : 0) << 26 | plane << 24;
+			renderableInfo[2] = faceCount;
+			renderableInfo[4] |= (hillskew ? 1 : 0) << 26 | plane << 24;
 		} else {
 			// Temporary model (animated or otherwise not a static Model already in the scene buffer)
 			if (enableDetailedTimers)
@@ -3038,9 +2999,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			if (modelOffsets != null && modelOffsets.faceCount == model.getFaceCount()) {
 				faceCount = modelOffsets.faceCount;
 				renderableInfo[0] = modelOffsets.vertexOffset;
-				renderableInfo[1] = modelOffsets.normalOffset;
-				renderableInfo[2] = modelOffsets.uvOffset;
-				renderableInfo[3] = modelOffsets.faceCount;
+				renderableInfo[2] = modelOffsets.faceCount;
 			} else {
 				if (enableDetailedTimers)
 					frameTimer.begin(Timer.MODEL_PUSHING);
@@ -3050,10 +3009,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				ModelOverride modelOverride = modelOverrideManager.getOverride(uuid, worldPos);
 				if (modelOverride.hide)
 					return;
-
-				int vertexOffset = dynamicOffsetVertices + sceneContext.getVertexOffset();
-				int normalOffset = dynamicOffsetNormals + sceneContext.getNormalOffset();
-				int uvOffset = dynamicOffsetUvs + sceneContext.getUvOffset();
 
 				int preOrientation = 0;
 				if (ModelHash.getType(hash) == ModelHash.TYPE_OBJECT) {
@@ -3073,25 +3028,20 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 					}
 				}
 
+				int vertexOffset = dynamicOffsetVertices + sceneContext.getVertexOffset();
 				var results = modelPusher.pushModel(sceneContext, null, uuid, model, modelOverride, preOrientation, true);
-
 				faceCount = results.faceCount;
-				if (results.skipNormals)
-					normalOffset = -1;
-				if (results.skipUvs)
-					uvOffset = -1;
+				vertexOffset = results.packOffset(vertexOffset);
 
 				if (enableDetailedTimers)
 					frameTimer.end(Timer.MODEL_PUSHING);
 
 				renderableInfo[0] = vertexOffset;
-				renderableInfo[1] = normalOffset;
-				renderableInfo[2] = uvOffset;
-				renderableInfo[3] = faceCount;
+				renderableInfo[2] = faceCount;
 
 				// add this temporary model to the map for batching purposes
 				if (configModelBatching)
-					frameModelInfoMap.put(batchHash, new ModelOffsets(faceCount, vertexOffset, normalOffset, uvOffset));
+					frameModelInfoMap.put(batchHash, new ModelOffsets(faceCount, vertexOffset));
 			}
 		}
 

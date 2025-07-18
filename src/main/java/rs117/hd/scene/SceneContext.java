@@ -25,8 +25,6 @@ import rs117.hd.utils.buffer.GpuIntBuffer;
 import static net.runelite.api.Constants.*;
 import static net.runelite.api.Constants.SCENE_SIZE;
 import static net.runelite.api.Perspective.*;
-import static rs117.hd.HdPlugin.NORMAL_SIZE;
-import static rs117.hd.HdPlugin.UV_SIZE;
 import static rs117.hd.HdPlugin.VERTEX_SIZE;
 
 public class SceneContext {
@@ -48,11 +46,9 @@ public class SceneContext {
 	public final ArrayList<Environment> environments = new ArrayList<>();
 	public byte[][] filledTiles = new byte[EXTENDED_SCENE_SIZE][EXTENDED_SCENE_SIZE];
 
-	public int staticVertexCount = 0;
+	public int staticRenderOffset = 0;
 	public GpuIntBuffer staticUnorderedModelBuffer;
 	public GpuIntBuffer stagingBufferVertices;
-	public GpuIntBuffer stagingBufferUvs;
-	public GpuIntBuffer stagingBufferNormals;
 
 	public int staticGapFillerTilesOffset;
 	public int staticGapFillerTilesVertexCount;
@@ -100,23 +96,15 @@ public class SceneContext {
 		if (previous == null) {
 			staticUnorderedModelBuffer = new GpuIntBuffer();
 			stagingBufferVertices = new GpuIntBuffer();
-			stagingBufferUvs = new GpuIntBuffer();
-			stagingBufferNormals = new GpuIntBuffer();
 		} else if (reuseBuffers) {
 			// Avoid reallocating buffers whenever possible
 			staticUnorderedModelBuffer = previous.staticUnorderedModelBuffer.clear();
 			stagingBufferVertices = previous.stagingBufferVertices.clear();
-			stagingBufferUvs = previous.stagingBufferUvs.clear();
-			stagingBufferNormals = previous.stagingBufferNormals.clear();
 			previous.staticUnorderedModelBuffer = null;
 			previous.stagingBufferVertices = null;
-			previous.stagingBufferUvs = null;
-			previous.stagingBufferNormals = null;
 		} else {
 			staticUnorderedModelBuffer = new GpuIntBuffer(previous.staticUnorderedModelBuffer.capacity());
 			stagingBufferVertices = new GpuIntBuffer(previous.stagingBufferVertices.capacity());
-			stagingBufferUvs = new GpuIntBuffer(previous.stagingBufferUvs.capacity());
-			stagingBufferNormals = new GpuIntBuffer(previous.stagingBufferNormals.capacity());
 		}
 	}
 
@@ -128,26 +116,10 @@ public class SceneContext {
 		if (stagingBufferVertices != null)
 			stagingBufferVertices.destroy();
 		stagingBufferVertices = null;
-
-		if (stagingBufferUvs != null)
-			stagingBufferUvs.destroy();
-		stagingBufferUvs = null;
-
-		if (stagingBufferNormals != null)
-			stagingBufferNormals.destroy();
-		stagingBufferNormals = null;
 	}
 
 	public int getVertexOffset() {
 		return stagingBufferVertices.position() / VERTEX_SIZE;
-	}
-
-	public int getNormalOffset() {
-		return stagingBufferNormals.position() / NORMAL_SIZE;
-	}
-
-	public int getUvOffset() {
-		return stagingBufferUvs.position() / UV_SIZE;
 	}
 
 	/**

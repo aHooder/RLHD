@@ -34,17 +34,19 @@ void main() {
     uint localId = gl_LocalInvocationID.x;
     const ModelInfo minfo = ol[groupId];
 
-    int offset = minfo.offset;
-    int normalOffset = minfo.normalOffset;
-    int uvOffset = minfo.uvOffset;
     int size = minfo.size;
+    if (localId >= size)
+        return;
+
+    uint offset = minfo.offset & 0x3FFFFFFF;
+    uint offsetFlags = minfo.offset >> 30 & 3;
+    bool skipNormals = (offsetFlags & 1u) != 0;
+    bool skipUvs = (offsetFlags & 2u) != 0;
+    uint normalOffset = offset + size * 3;
+    uint uvOffset = offset + size * 3 * (2 - offsetFlags);
     int outOffset = minfo.idx;
     int flags = minfo.flags;
     vec3 pos = vec3(minfo.x, minfo.y >> 16, minfo.z);
-
-    if (localId >= size) {
-        return;
-    }
 
     uint ssboOffset = localId;
     VertexData thisA, thisB, thisC;
@@ -65,7 +67,7 @@ void main() {
     vout[outOffset + myOffset * 3 + 1] = thisB;
     vout[outOffset + myOffset * 3 + 2] = thisC;
 
-    if (uvOffset < 0) {
+    if (skipUvs) {
         uvout[outOffset + myOffset * 3]     = UVData(vec3(0.0), 0);
         uvout[outOffset + myOffset * 3 + 1] = UVData(vec3(0.0), 0);
         uvout[outOffset + myOffset * 3 + 2] = UVData(vec3(0.0), 0);
@@ -76,7 +78,7 @@ void main() {
     }
 
     vec4 normA, normB, normC;
-    if (normalOffset < 0) {
+    if (skipNormals) {
         normA = normB = normC = vec4(0);
     } else {
         normA = normal[normalOffset + ssboOffset * 3    ];
