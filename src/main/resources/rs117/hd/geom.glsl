@@ -83,17 +83,15 @@ void main() {
     mat2x3 TB = triToWorld * uvToTri; // Preserve scale in order for displacement to interact properly with shadow mapping
     T = TB[0];
     B = TB[1];
-    vec3 N = normalize(cross(triToWorld[0], triToWorld[1]));
 
     for (int i = 0; i < 3; i++) {
         // Flat normals must be applied separately per vertex
-        vec3 normal = gNormal[i].xyz;
         OUT.position = gPosition[i];
         OUT.uv = vUv[i].xy;
         #if FLAT_SHADING
-        OUT.normal = N;
+            OUT.normal = cross(triToWorld[0], triToWorld[1]);
         #else
-        OUT.normal = length(normal) == 0 ? N : normalize(normal);
+            OUT.normal = gNormal[i].xyz;
         #endif
         OUT.texBlend = vec3(0);
         OUT.texBlend[i] = 1;
