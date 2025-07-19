@@ -233,9 +233,7 @@ vec3 applyWindDisplacement(const ObjectWindSample windSample, int vertexFlags, f
     if (windDisplacementMode <= WIND_DISPLACEMENT_DISABLED)
         return displacement;
 
-    vec3 strength = vec3(0);
-    for (int i = 0; i < 3; i++)
-        strength[i] = saturate(abs(vertex.y) / height);
+    float strength = saturate(abs(vertex.y) / height);
 
     #if WIND_DISPLACEMENT
     if (windDisplacementMode >= WIND_DISPLACEMENT_VERTEX) {
@@ -250,27 +248,23 @@ vec3 applyWindDisplacement(const ObjectWindSample windSample, int vertexFlags, f
             const float minDist = 50;
             const float blendDist = 10.0;
 
-            vec3 distBlend;
-            vec3 heightFade;
-            for (int i = 0; i < 3; i++) {
-                distBlend[i] = saturate(((abs(vertex.x) + abs(vertex.z)) - minDist) / blendDist);
-                heightFade[i] = saturate((strength[i] - 0.5) / 0.2);
-                strength[i] *= mix(0.0, mix(distBlend[i], 1.0, heightFade[i]), step(0.3, strength[i]));
-            }
+            float distBlend = saturate(((abs(vertex.x) + abs(vertex.z)) - minDist) / blendDist);
+            float heightFade = saturate((strength - 0.5) / 0.2);
+            strength *= mix(0.0, mix(distBlend, 1.0, heightFade), step(0.3, strength));
         } else {
             if (windDisplacementMode == WIND_DISPLACEMENT_VERTEX_JIGGLE) {
-                vec3 vertSkew[3];
+                vec3 vertSkew;
                 for (int i = 0; i < 3; i++) {
-                    vertSkew[i] = safe_normalize(cross(normal, vec3(0, 1, 0)));
-                    displacement = ((windNoise[i] * (windSample.heightBasedStrength * strength[i]) * 0.5) * vertSkew[i]);
+                    vertSkew = safe_normalize(cross(normal, vec3(0, 1, 0)));
+                    displacement = ((windNoise[i] * (windSample.heightBasedStrength * strength) * 0.5) * vertSkew);
 
-                    vertSkew[i] = safe_normalize(cross(normal, vec3(1, 0, 0)));
-                    displacement += (((1.0 - windNoise[i]) * (windSample.heightBasedStrength * strength[i]) * 0.5) * vertSkew[i]);
+                    vertSkew = safe_normalize(cross(normal, vec3(1, 0, 0)));
+                    displacement += (((1.0 - windNoise[i]) * (windSample.heightBasedStrength * strength) * 0.5) * vertSkew);
                 }
             } else {
                 for (int i = 0; i < 3; i++) {
-                    displacement = ((windNoise[i] * (windSample.heightBasedStrength * strength[i] * VertexDisplacementMod)) * windSample.direction);
-                    strength[i] = saturate(strength[i] - VertexDisplacementMod);
+                    displacement = ((windNoise[i] * (windSample.heightBasedStrength * strength * VertexDisplacementMod)) * windSample.direction);
+                    strength = saturate(strength - VertexDisplacementMod);
                 }
             }
         }
@@ -279,14 +273,11 @@ vec3 applyWindDisplacement(const ObjectWindSample windSample, int vertexFlags, f
 
     #if CHARACTER_DISPLACEMENT
     if (windDisplacementMode == WIND_DISPLACEMENT_OBJECT) {
-        vec2 worldVerts[3];
-        for (int i = 0; i < 3; i++)
-            worldVerts[i] = (worldPos + vertex).xz;
+        vec2 worldVert = worldPos.xz + vertex.xz;
 
         float fractAccum = 0.0;
-        for (int j = 0; j < characterPositionCount; j++) {
-            for (int i = 0; i < 3; i++)
-                displacement += applyCharacterDisplacement(characterPositions[j], worldVerts[i], height, strength[i], fractAccum);
+        for (int i = 0; i < characterPositionCount; i++) {
+            displacement += applyCharacterDisplacement(characterPositions[i], worldVert, height, strength, fractAccum);
             if (fractAccum >= 2.0)
                 break;
         }
@@ -296,8 +287,7 @@ vec3 applyWindDisplacement(const ObjectWindSample windSample, int vertexFlags, f
     #if WIND_DISPLACEMENT
     if (windDisplacementMode != WIND_DISPLACEMENT_VERTEX_JIGGLE) {
         // Object Displacement
-        for (int i = 0; i < 3; i++)
-            displacement += windSample.displacement * strength[i];
+        displacement += windSample.displacement * strength;
     }
     #endif
 
