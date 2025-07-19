@@ -50,10 +50,13 @@ float distance(vec3 vertex) {
 }
 
 /*
- * Calculate the distance to a face
+ * Calculate the distance to a face, which is for some reason negative
  */
-int face_distance(vec3 vA, vec3 vB, vec3 vC) {
-  return int(distance((vA + vB + vC) / 3));
+uint face_distance(vec3 vA, vec3 vB, vec3 vC) {
+  vec3 v = (vA + vB + vC) / 3;
+  float l = v.x * sin(cameraYaw) - v.z * cos(cameraYaw);
+  float dist = l * cos(cameraPitch) - v.y * sin(cameraPitch);
+  return uint(max(0, dist));
 }
 
 /*

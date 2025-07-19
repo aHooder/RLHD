@@ -31,7 +31,7 @@ layout(binding = 3) uniform isampler3D tileHeightMap;
 // model global min10 and face distance averages. This allows positioning faces
 // with priorities 10/11 into the correct 'slots' resulting in 18 possible
 // adjusted priorities
-int priority_map(int p, int distance, int _min10, int avg1, int avg2, int avg3) {
+uint priority_map(uint p, uint distance, uint avg1, uint avg2, uint avg3) {
     // (10, 11)  0  1  2  (10, 11)  3  4  (10, 11)  5  6  7  8  9  (10, 11)
     //   0   1   2  3  4    5   6   7  8    9  10  11 12 13 14 15   16  17
     switch (p) {
@@ -56,11 +56,11 @@ int priority_map(int p, int distance, int _min10, int avg1, int avg2, int avg3) 
             return 16;
         }
         case 11:
-        if (distance > avg1 && _min10 > avg1) {
+        if (distance > avg1 && min10 > avg1) {
             return 1;
-        } else if (distance > avg2 && (_min10 > avg1 || _min10 > avg2)) {
+        } else if (distance > avg2 && (min10 > avg1 || min10 > avg2)) {
             return 6;
-        } else if (distance > avg3 && (_min10 > avg1 || _min10 > avg2 || _min10 > avg3)) {
+        } else if (distance > avg3 && (min10 > avg1 || min10 > avg2 || min10 > avg3)) {
             return 10;
         } else {
             return 17;
@@ -73,22 +73,22 @@ int priority_map(int p, int distance, int _min10, int avg1, int avg2, int avg3) 
 
 // calculate the number of faces with a lower adjusted priority than
 // the given adjusted priority
-int count_prio_offset(int priority) {
+uint count_prio_offset(uint priority) {
     // this shouldn't ever be outside of (0, 17) because it is the return value from priority_map
-    priority = clamp(priority, 0, 17);
-    int total = 0;
+    priority = min(priority, 17u);
+    uint total = 0;
     for (int i = 0; i < priority; i++)
         total += totalMappedNum[i];
     return total;
 }
 
-void add_face_prio_distance(const uint localId, const ModelInfo minfo, const vec3 modelPos, out int prio, out int dis) {
+void add_face_prio_distance(const uint localId, const ModelInfo minfo, const vec3 modelPos, out uint prio, out uint dis) {
     if (localId < minfo.size) {
         uint offset = minfo.offset & 0x3FFFFFFF;
         int orientation = minfo.flags & 0x7ff;
 
         vec3 vertices[3];
-        int ahsl;
+        uint ahsl;
         for (int i = 0; i < 3; i++) {
             VertexData data = vb[offset + localId * 3 + i];
             ahsl = data.ahsl;
@@ -97,7 +97,7 @@ void add_face_prio_distance(const uint localId, const ModelInfo minfo, const vec
         }
 
         // calculate distance to face
-        prio = ahsl >> 16 & 0xF; // all vertices on the face have the same priority
+        prio = ahsl >> 16u & 0xFu; // all vertices on the face have the same priority
         dis = face_distance(vertices[0], vertices[1], vertices[2]);
 
         // if the face is not culled, it is calculated into priority distance averages
@@ -113,12 +113,12 @@ void add_face_prio_distance(const uint localId, const ModelInfo minfo, const vec
     }
 }
 
-void map_face_priority(const uint localId, const ModelInfo minfo, int thisPriority, int thisDistance, out int prio, out int prioIdx) {
+void map_face_priority(const uint localId, const ModelInfo minfo, uint thisPriority, uint thisDistance, out uint prio, out uint prioIdx) {
     // Compute average distances for 0/2, 3/4, and 6/8
     if (localId < minfo.size) {
-        int avg1 = 0;
-        int avg2 = 0;
-        int avg3 = 0;
+        uint avg1 = 0;
+        uint avg2 = 0;
+        uint avg3 = 0;
 
         if (totalNum[1] > 0 || totalNum[2] > 0) {
             avg1 = (totalDistance[1] + totalDistance[2]) / (totalNum[1] + totalNum[2]);
@@ -132,7 +132,7 @@ void map_face_priority(const uint localId, const ModelInfo minfo, int thisPriori
             avg3 = (totalDistance[6] + totalDistance[8]) / (totalNum[6] + totalNum[8]);
         }
 
-        prio = priority_map(thisPriority, thisDistance, min10, avg1, avg2, avg3);
+        prio = priority_map(thisPriority, thisDistance, avg1, avg2, avg3);
         prioIdx = atomicAdd(totalMappedNum[prio], 1);
     } else {
         prio = 0;
@@ -140,14 +140,14 @@ void map_face_priority(const uint localId, const ModelInfo minfo, int thisPriori
     }
 }
 
-void insert_face(const uint localId, const ModelInfo minfo, int adjPrio, int distance, int prioIdx) {
+void insert_face(const uint localId, const ModelInfo minfo, uint adjPrio, uint distance, uint prioIdx) {
     if (localId < minfo.size) {
         // calculate base offset into renderPris based on number of faces with a lower priority
-        int baseOff = count_prio_offset(adjPrio);
+        uint baseOff = count_prio_offset(adjPrio);
         // the furthest faces draw first, and have the highest priority.
         // if two faces have the same distance, the one with the
         // lower id draws first.
-        renderPris[baseOff + prioIdx] = distance << 16 | int(~localId & 0xffffu);
+        renderPris[baseOff + prioIdx] = distance << 16u | ~localId & 0xffffu;
     }
 }
 
@@ -189,11 +189,11 @@ void undoVanillaShading(inout OutData outData) {
     // the minimum amount by which each color will be lightened
     const int BASE_LIGHTEN = 10;
 
-    int hsl = outData.vertex.ahsl;
+    uint hsl = outData.vertex.ahsl;
     vec3 unrotatedNormal = outData.normal.xyz;
 
-    int saturation = hsl >> 7 & 0x7;
-    int lightness = hsl & 0x7F;
+    uint saturation = hsl >> 7u & 0x7u;
+    uint lightness = hsl & 0x7Fu;
     float vanillaLightDotNormals = dot(LIGHT_DIR_MODEL, unrotatedNormal);
     if (vanillaLightDotNormals > 0) {
         vanillaLightDotNormals /= length(unrotatedNormal);
@@ -207,7 +207,7 @@ void undoVanillaShading(inout OutData outData) {
     maxLightness = int(127 - 72 * pow(saturation / 7., .05));
     #endif
     lightness = min(lightness, maxLightness);
-    hsl &= ~0x7F;
+    hsl &= ~0x7Fu;
     hsl |= lightness;
 
     outData.vertex.ahsl = hsl;
@@ -310,105 +310,104 @@ vec3 applyWindDisplacement(const ObjectWindSample windSample, int vertexFlags, f
     return displacement;
 }
 
-void sort_and_insert(uint localId, const ModelInfo minfo, int thisPriority, int thisDistance, const ObjectWindSample windSample) {
-    int size = minfo.size;
+void sort_and_insert(uint localId, const ModelInfo minfo, uint thisPriority, uint thisDistance, const ObjectWindSample windSample) {
+    if (localId >= minfo.size)
+        return;
 
-    if (localId < size) {
-        uint offset = minfo.offset & 0x3FFFFFFF;
-        uint offsetFlags = minfo.offset >> 30 & 3;
-        bool skipNormals = (offsetFlags & 1u) != 0;
-        bool skipUvs = (offsetFlags & 2u) != 0;
-        uint normalOffset = offset + size * 3;
-        uint uvOffset = offset + size * 3 * (2 - offsetFlags);
-        uint outOffset = minfo.idx;
-        int flags = minfo.flags;
-        vec3 pos = vec3(minfo.x, minfo.y >> 16, minfo.z);
-        float height = minfo.y & 0xffff;
-        int orientation = flags & 0x7ff;
-        int vertexFlags = skipUvs ? 0 : uv[uvOffset + localId * 3].materialFlags;
+    uint offset = minfo.offset & 0x3FFFFFFF;
+    uint offsetFlags = minfo.offset >> 30 & 3;
+    bool skipNormals = (offsetFlags & 1u) != 0;
+    bool skipUvs = (offsetFlags & 2u) != 0;
+    uint normalOffset = offset + minfo.size * 3;
+    uint uvOffset = offset + minfo.size * 3 * (2 - offsetFlags);
+    uint outOffset = minfo.idx;
+    int flags = minfo.flags;
+    vec3 pos = vec3(minfo.x, minfo.y >> 16, minfo.z);
+    float height = minfo.y & 0xffff;
+    int orientation = flags & 0x7ff;
+    int vertexFlags = skipUvs ? 0 : uv[uvOffset + localId * 3].materialFlags;
 
-        // we only have to order faces against others of the same priority
-        const int priorityOffset = count_prio_offset(thisPriority);
-        const int numOfPriority = totalMappedNum[thisPriority];
-        const int start = priorityOffset; // index of first face with this priority
-        const int end = priorityOffset + numOfPriority; // index of last face with this priority
-        const int renderPriority = thisDistance << 16 | int(~localId & 0xffffu);
-        int myOffset = priorityOffset;
+    // we only have to order faces against others of the same priority
+    const uint priorityOffset = count_prio_offset(thisPriority);
+    const uint numOfPriority = totalMappedNum[thisPriority];
+    const uint start = priorityOffset; // index of first face with this priority
+    const uint end = priorityOffset + numOfPriority; // index of last face with this priority
+    const uint renderPriority = thisDistance << 16u | ~localId & 0xffffu;
+    uint myOffset = priorityOffset;
 
-        // calculate position this face will be in
-        for (int i = start; i < end; ++i)
-            if (renderPriority < renderPris[i])
-                ++myOffset;
+    // calculate position this face will be in
+    for (uint i = start; i < end; ++i)
+        if (renderPriority > renderPris[i])
+            ++myOffset;
 
-        vec4 flatNormal = vec4(0);
+    vec4 flatNormal = vec4(0);
+
+    #if UNDO_VANILLA_SHADING
+        if ((vb[offset + localId * 3].ahsl >> 20 & 1) == 0)
+            skipNormals = true;
+    #endif
+
+    // Compute flat normal if necessary, and rotate it back to match unrotated normals
+    if (skipNormals) {
+        vec3 vertices[3];
+        for (int i = 0; i < 3; i++)
+            vertices[i] = vb[offset + localId * 3 + i].pos;
+        flatNormal = vec4(cross(vertices[0] - vertices[1], vertices[0] - vertices[2]), 0);
+    }
+
+    for (int i = 0; i < 3; i++) {
+        OutData outData = OutData(
+            vb[offset + localId * 3 + i],
+            flatNormal,
+            UVData(vec3(0), 0)
+        );
+
+        // rotate for model orientation
+        outData.vertex.pos = rotate(outData.vertex.pos, orientation);
+
+        // Apply displacement after orientation
+        vec3 displacement = applyWindDisplacement(windSample, vertexFlags, height, pos, outData.vertex.pos, outData.normal.xyz);
+        outData.vertex.pos += displacement;
+
+        // Shift to world space
+        outData.vertex.pos += pos;
+
+        if (!skipNormals)
+            outData.normal = normal[normalOffset + localId * 3 + i];
 
         #if UNDO_VANILLA_SHADING
-            if ((int(vb[offset + localId * 3].ahsl) >> 20 & 1) == 0)
-                skipNormals = true;
+            undoVanillaShading(outData);
         #endif
 
-        // Compute flat normal if necessary, and rotate it back to match unrotated normals
-        if (skipNormals) {
-            vec3 vertices[3];
-            for (int i = 0; i < 3; i++)
-                vertices[i] = vb[offset + localId * 3 + i].pos;
-            flatNormal = vec4(cross(vertices[0] - vertices[1], vertices[0] - vertices[2]), 0);
-        }
+        outData.normal = rotate(outData.normal, orientation);
 
-        for (int i = 0; i < 3; i++) {
-            OutData outData = OutData(
-                vb[offset + localId * 3 + i],
-                flatNormal,
-                UVData(vec3(0), 0)
-            );
+        // apply hillskew
+        int plane = flags >> 24 & 3;
+        int hillskewFlags = flags >> 26 & 1;
+        if ((vertexFlags >> MATERIAL_FLAG_TERRAIN_VERTEX_SNAPPING & 1) == 1)
+            hillskewFlags |= HILLSKEW_TILE_SNAPPING;
+        if (hillskewFlags != HILLSKEW_NONE)
+            hillskew_vertex(outData.vertex.pos, hillskewFlags, pos.y, height, plane);
 
-            // rotate for model orientation
-            outData.vertex.pos = rotate(outData.vertex.pos, orientation);
+        if (!skipUvs) {
+            outData.uv = uv[uvOffset + localId * 3 + i];
 
-            // Apply displacement after orientation
-            vec3 displacement = applyWindDisplacement(windSample, vertexFlags, height, pos, outData.vertex.pos, outData.normal.xyz);
-            outData.vertex.pos += displacement;
+            if ((vertexFlags >> MATERIAL_FLAG_VANILLA_UVS & 1) == 1) {
+                // Rotate the texture triangles to match model orientation
+                outData.uv.uvw = rotate(outData.uv.uvw, orientation);
 
-            // Shift to world space
-            outData.vertex.pos += pos;
+                // Apply displacement after orientation
+                outData.uv.uvw += displacement;
 
-            if (!skipNormals)
-                outData.normal = normal[normalOffset + localId * 3 + i];
+                // Shift texture triangles to world space
+                outData.uv.uvw += pos;
 
-            #if UNDO_VANILLA_SHADING
-                undoVanillaShading(outData);
-            #endif
-
-            outData.normal = rotate(outData.normal, orientation);
-
-            // apply hillskew
-            int plane = flags >> 24 & 3;
-            int hillskewFlags = flags >> 26 & 1;
-            if ((vertexFlags >> MATERIAL_FLAG_TERRAIN_VERTEX_SNAPPING & 1) == 1)
-                hillskewFlags |= HILLSKEW_TILE_SNAPPING;
-            if (hillskewFlags != HILLSKEW_NONE)
-                hillskew_vertex(outData.vertex.pos, hillskewFlags, pos.y, height, plane);
-
-            if (!skipUvs) {
-                outData.uv = uv[uvOffset + localId * 3 + i];
-
-                if ((vertexFlags >> MATERIAL_FLAG_VANILLA_UVS & 1) == 1) {
-                    // Rotate the texture triangles to match model orientation
-                    outData.uv.uvw = rotate(outData.uv.uvw, orientation);
-
-                    // Apply displacement after orientation
-                    outData.uv.uvw += displacement;
-
-                    // Shift texture triangles to world space
-                    outData.uv.uvw += pos;
-
-                    // For vanilla UVs, the first 3 components are an integer position vector
-                    if (hillskewFlags != HILLSKEW_NONE)
-                        hillskew_vertex(outData.uv.uvw, hillskewFlags, pos.y, height, plane);
-                }
+                // For vanilla UVs, the first 3 components are an integer position vector
+                if (hillskewFlags != HILLSKEW_NONE)
+                    hillskew_vertex(outData.uv.uvw, hillskewFlags, pos.y, height, plane);
             }
-
-            renderBuffer[outOffset + myOffset * 3 + i] = outData;
         }
+
+        renderBuffer[outOffset + myOffset * 3 + i] = outData;
     }
 }

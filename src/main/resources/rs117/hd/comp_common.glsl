@@ -57,7 +57,7 @@ struct ObjectWindSample {
 
 struct VertexData {
     vec3 pos;
-    int ahsl;
+    uint ahsl;
 };
 
 struct UVData {

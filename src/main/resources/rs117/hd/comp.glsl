@@ -28,13 +28,13 @@
 #include THREAD_COUNT
 #include FACES_PER_THREAD
 
-shared int totalNum[12]; // number of faces with a given priority
-shared int totalDistance[12]; // sum of distances to faces of a given priority
+shared uint totalNum[12]; // number of faces with a given priority
+shared uint totalDistance[12]; // sum of distances to faces of a given priority
 
-shared int totalMappedNum[18]; // number of faces with a given adjusted priority
+shared uint totalMappedNum[18]; // number of faces with a given adjusted priority
 
-shared int min10; // minimum distance to a face of priority 10
-shared int renderPris[THREAD_COUNT * FACES_PER_THREAD]; // priority for face draw order
+shared uint min10; // minimum distance to a face of priority 10
+shared uint renderPris[THREAD_COUNT * FACES_PER_THREAD]; // priority for face draw order
 
 #include uniforms/compute.glsl
 
@@ -80,15 +80,15 @@ void main() {
     // Ensure all invocations have their shared variables initialized
     barrier();
 
-    int prio[FACES_PER_THREAD];
-    int dis[FACES_PER_THREAD];
+    uint prio[FACES_PER_THREAD];
+    uint dis[FACES_PER_THREAD];
     for (int i = 0; i < FACES_PER_THREAD; i++)
         add_face_prio_distance(localId + i, minfo, modelPos, prio[i], dis[i]);
 
     barrier();
 
-    int prioAdj[FACES_PER_THREAD];
-    int idx[FACES_PER_THREAD];
+    uint prioAdj[FACES_PER_THREAD];
+    uint idx[FACES_PER_THREAD];
     for (int i = 0; i < FACES_PER_THREAD; i++)
         map_face_priority(localId + i, minfo, prio[i], dis[i], prioAdj[i], idx[i]);
 
