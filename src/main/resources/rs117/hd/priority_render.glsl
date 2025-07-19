@@ -178,7 +178,7 @@ void hillskew_vertex(inout vec3 v, int hillskewMode, float modelPosY, float mode
     }
 }
 
-void undoVanillaShading(inout OutData outData) {
+void undoVanillaShading(inout uint ahsl, const vec3 unrotatedNormal) {
     const vec3 LIGHT_DIR_MODEL = vec3(0.57735026, 0.57735026, 0.57735026);
     // subtracts the X lowest lightness levels from the formula.
     // helps keep darker colors appropriately dark
@@ -189,14 +189,10 @@ void undoVanillaShading(inout OutData outData) {
     // the minimum amount by which each color will be lightened
     const int BASE_LIGHTEN = 10;
 
-    uint hsl = outData.vertex.ahsl;
-    vec3 unrotatedNormal = outData.normal.xyz;
-
-    uint saturation = hsl >> 7u & 0x7u;
-    uint lightness = hsl & 0x7Fu;
+    uint saturation = ahsl >> 7u & 0x7u;
+    uint lightness = ahsl & 0x7Fu;
     float vanillaLightDotNormals = dot(LIGHT_DIR_MODEL, unrotatedNormal);
     if (vanillaLightDotNormals > 0) {
-        vanillaLightDotNormals /= length(unrotatedNormal);
         float lighten = max(0, lightness - IGNORE_LOW_LIGHTNESS);
         lightness += int((lighten * LIGHTNESS_MULTIPLIER + BASE_LIGHTEN - lightness) * vanillaLightDotNormals);
     }
@@ -207,10 +203,8 @@ void undoVanillaShading(inout OutData outData) {
     maxLightness = int(127 - 72 * pow(saturation / 7., .05));
     #endif
     lightness = min(lightness, maxLightness);
-    hsl &= ~0x7Fu;
-    hsl |= lightness;
-
-    outData.vertex.ahsl = hsl;
+    ahsl &= ~0x7Fu;
+    ahsl |= lightness;
 }
 
 vec3 applyCharacterDisplacement(vec3 characterPos, vec2 vertPos, float height, float strength, inout float offsetAccum) {
@@ -325,7 +319,6 @@ void sort_and_insert(uint localId, const ModelInfo minfo, uint thisPriority, uin
     vec3 pos = vec3(minfo.x, minfo.y >> 16, minfo.z);
     float height = minfo.y & 0xffff;
     int orientation = flags & 0x7ff;
-    int vertexFlags = skipUvs ? 0 : uv[uvOffset + localId * 3].materialFlags;
 
     // we only have to order faces against others of the same priority
     const uint priorityOffset = count_prio_offset(thisPriority);
@@ -352,8 +345,10 @@ void sort_and_insert(uint localId, const ModelInfo minfo, uint thisPriority, uin
         vec3 vertices[3];
         for (int i = 0; i < 3; i++)
             vertices[i] = vb[offset + localId * 3 + i].pos;
-        flatNormal = vec4(cross(vertices[0] - vertices[1], vertices[0] - vertices[2]), 0);
+        flatNormal = vec4(normalize(cross(vertices[0] - vertices[1], vertices[0] - vertices[2])), 0);
     }
+
+    int vertexFlags = skipUvs ? 0 : uv[uvOffset + localId * 3].materialFlags;
 
     for (int i = 0; i < 3; i++) {
         OutData outData = OutData(
@@ -375,10 +370,6 @@ void sort_and_insert(uint localId, const ModelInfo minfo, uint thisPriority, uin
         if (!skipNormals)
             outData.normal = normal[normalOffset + localId * 3 + i];
 
-        #if UNDO_VANILLA_SHADING
-            undoVanillaShading(outData);
-        #endif
-
         outData.normal = rotate(outData.normal, orientation);
 
         // apply hillskew
@@ -391,6 +382,16 @@ void sort_and_insert(uint localId, const ModelInfo minfo, uint thisPriority, uin
 
         if (!skipUvs) {
             outData.uv = uv[uvOffset + localId * 3 + i];
+            if (!skipNormals) {
+                outData.normal = normal[normalOffset + localId * 3 + i];
+                outData.normal.xyz = normalize(outData.normal.xyz);
+            }
+
+            #if UNDO_VANILLA_SHADING
+                undoVanillaShading(outData.vertex.ahsl, outData.normal.xyz);
+            #endif
+
+            outData.normal = rotate(outData.normal, orientation);
 
             if ((vertexFlags >> MATERIAL_FLAG_VANILLA_UVS & 1) == 1) {
                 // Rotate the texture triangles to match model orientation
@@ -402,7 +403,7 @@ void sort_and_insert(uint localId, const ModelInfo minfo, uint thisPriority, uin
                 // Shift texture triangles to world space
                 outData.uv.uvw += pos;
 
-                // For vanilla UVs, the first 3 components are an integer position vector
+                // For vanilla UVs, the first 3 components represent a position vector
                 if (hillskewFlags != HILLSKEW_NONE)
                     hillskew_vertex(outData.uv.uvw, hillskewFlags, pos.y, height, plane);
             }
