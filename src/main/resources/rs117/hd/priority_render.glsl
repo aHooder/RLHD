@@ -362,13 +362,14 @@ void sort_and_insert(uint localId, const ModelInfo minfo, int thisPriority, int 
                 UVData(vec3(0), 0)
             );
 
-            vec3 displacement = applyWindDisplacement(windSample, vertexFlags, height, pos, outData.vertex.pos, outData.normal.xyz);
-            // Apply any displacement
-            outData.vertex.pos += displacement;
-
             // rotate for model orientation
             outData.vertex.pos = rotate(outData.vertex.pos, orientation);
 
+            // Apply displacement after orientation
+            vec3 displacement = applyWindDisplacement(windSample, vertexFlags, height, pos, outData.vertex.pos, outData.normal.xyz);
+            outData.vertex.pos += displacement;
+
+            // Shift to world space
             outData.vertex.pos += pos;
 
             if (!skipNormals)
@@ -392,10 +393,11 @@ void sort_and_insert(uint localId, const ModelInfo minfo, int thisPriority, int 
                 outData.uv = uv[uvOffset + localId * 3 + i];
 
                 if ((vertexFlags >> MATERIAL_FLAG_VANILLA_UVS & 1) == 1) {
-                    outData.uv.uvw += displacement;
-
                     // Rotate the texture triangles to match model orientation
                     outData.uv.uvw = rotate(outData.uv.uvw, orientation);
+
+                    // Apply displacement after orientation
+                    outData.uv.uvw += displacement;
 
                     // Shift texture triangles to world space
                     outData.uv.uvw += pos;
