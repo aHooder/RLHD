@@ -347,13 +347,9 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	private int texTileHeightMap;
 
 	private final SharedGLBuffer hStagingBufferVertices = new SharedGLBuffer(
-		"Staging Vertices", GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, CL_MEM_READ_ONLY);
+		"Staging Vertex Data", GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, CL_MEM_READ_ONLY);
 	private final SharedGLBuffer hRenderBufferVertices = new SharedGLBuffer(
-		"Render Vertices", GL_ARRAY_BUFFER, GL_STREAM_COPY, CL_MEM_WRITE_ONLY);
-	private final SharedGLBuffer hRenderBufferUvs = new SharedGLBuffer(
-		"Render UVs", GL_ARRAY_BUFFER, GL_STREAM_COPY, CL_MEM_WRITE_ONLY);
-	private final SharedGLBuffer hRenderBufferNormals = new SharedGLBuffer(
-		"Render Normals", GL_ARRAY_BUFFER, GL_STREAM_COPY, CL_MEM_WRITE_ONLY);
+		"Render Vertex Data", GL_ARRAY_BUFFER, GL_STREAM_COPY, CL_MEM_WRITE_ONLY);
 
 	private int numPassthroughModels;
 	private GpuIntBuffer modelPassthroughBuffer;
@@ -1098,28 +1094,37 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		glEnableVertexAttribArray(1);
 	}
 
-	private void updateSceneVao(GLBuffer vertexBuffer, GLBuffer uvBuffer, GLBuffer normalBuffer) {
+	private void updateSceneVao(GLBuffer vertexBuffer) {
 		glBindVertexArray(vaoSceneHandle);
 
+		final int vertexBytes = VERTEX_SIZE * SCALAR_BYTES;
+		final int vec3 = SCALAR_BYTES * 3;
+		final int stride = vertexBytes * 3; // Vertex, normal & UV interleaved
+
+		// Vertex vec3
 		glEnableVertexAttribArray(0);
 		glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer.id);
-		glVertexAttribPointer(0, 3, GL_FLOAT, false, 16, 0);
+		glVertexAttribPointer(0, 3, GL_FLOAT, false, stride, 0);
 
+		// Vertex ahsl
 		glEnableVertexAttribArray(1);
 		glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer.id);
-		glVertexAttribIPointer(1, 1, GL_INT, 16, 12);
+		glVertexAttribIPointer(1, 1, GL_INT, stride, vec3);
 
-		glEnableVertexAttribArray(2);
-		glBindBuffer(GL_ARRAY_BUFFER, uvBuffer.id);
-		glVertexAttribPointer(2, 3, GL_FLOAT, false, 16, 0);
-
-		glEnableVertexAttribArray(3);
-		glBindBuffer(GL_ARRAY_BUFFER, uvBuffer.id);
-		glVertexAttribIPointer(3, 1, GL_INT, 16, 12);
-
+		// Normal vec3 + float terrain data
 		glEnableVertexAttribArray(4);
-		glBindBuffer(GL_ARRAY_BUFFER, normalBuffer.id);
-		glVertexAttribPointer(4, 4, GL_FLOAT, false, 0, 0);
+		glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer.id);
+		glVertexAttribPointer(4, 4, GL_FLOAT, false, stride, vertexBytes);
+
+		// UV vec3
+		glEnableVertexAttribArray(2);
+		glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer.id);
+		glVertexAttribPointer(2, 3, GL_FLOAT, false, stride, vertexBytes * 2);
+
+		// UV material data
+		glEnableVertexAttribArray(3);
+		glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer.id);
+		glVertexAttribIPointer(3, 1, GL_INT, stride, vertexBytes * 2 + vec3);
 	}
 
 	private void destroyVaos() {
@@ -1138,11 +1143,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 	private void initBuffers() {
 		hStagingBufferVertices.initialize();
-
 		hRenderBufferVertices.initialize();
-		hRenderBufferUvs.initialize();
-		hRenderBufferNormals.initialize();
-
 		hModelPassthroughBuffer.initialize();
 
 		uboCompute.initialize(UNIFORM_BLOCK_COMPUTE);
@@ -1153,11 +1154,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 	private void destroyBuffers() {
 		hStagingBufferVertices.destroy();
-
 		hRenderBufferVertices.destroy();
-		hRenderBufferUvs.destroy();
-		hRenderBufferNormals.destroy();
-
 		hModelPassthroughBuffer.destroy();
 
 		uboCompute.destroy();
@@ -1573,14 +1570,9 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				buffer.clear();
 			}
 
-			// Output buffers
-			// each vertex is an ivec4, which is 16 bytes
-			hRenderBufferVertices.ensureCapacity(renderBufferOffset * 16L);
-			// each vertex is an ivec4, which is 16 bytes
-			hRenderBufferUvs.ensureCapacity(renderBufferOffset * 16L);
-			// each vertex is an ivec4, which is 16 bytes
-			hRenderBufferNormals.ensureCapacity(renderBufferOffset * 16L);
-			updateSceneVao(hRenderBufferVertices, hRenderBufferUvs, hRenderBufferNormals);
+			// Output buffer, each vertex is 3 (vertex, normal & UV) * 16 bytes
+			hRenderBufferVertices.ensureCapacity(3L * renderBufferOffset * VERTEX_SIZE * SCALAR_BYTES);
+			updateSceneVao(hRenderBufferVertices);
 		}
 
 		frameTimer.end(Timer.UPLOAD_GEOMETRY);
@@ -1610,8 +1602,6 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			// Bind shared buffers
 			glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, 1, hStagingBufferVertices.id);
 			glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, 2, hRenderBufferVertices.id);
-			glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, 3, hRenderBufferUvs.id);
-			glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, 4, hRenderBufferNormals.id);
 
 			// unordered
 			glUseProgram(glModelPassthroughComputeProgram);

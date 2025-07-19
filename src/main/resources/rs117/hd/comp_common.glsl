@@ -85,10 +85,10 @@ layout(std430, binding = 2) writeonly buffer RenderBufferVertices {
     VertexData vout[];
 };
 
-layout(std430, binding = 3) writeonly buffer RenderBufferUvs {
+layout(std430, binding = 2) writeonly buffer RenderBufferUvs {
     UVData uvout[];
 };
 
-layout(std430, binding = 4) writeonly buffer RenderBufferNormals {
+layout(std430, binding = 2) writeonly buffer RenderBufferNormals {
     vec4 normalout[];
 };

@@ -336,13 +336,16 @@ void sort_and_insert(uint localId, const ModelInfo minfo, int thisPriority, int 
     int size = minfo.size;
 
     if (localId < size) {
-        int outOffset = minfo.idx;
         uint offset = minfo.offset & 0x3FFFFFFF;
         uint offsetFlags = minfo.offset >> 30 & 3;
         bool skipNormals = (offsetFlags & 1u) != 0;
         bool skipUvs = (offsetFlags & 2u) != 0;
         uint normalOffset = offset + size * 3;
         uint uvOffset = offset + size * 3 * (2 - offsetFlags);
+        uint outStride = 3;
+        uint outOffset = minfo.idx * outStride;
+        uint outNormalOffset = outOffset + 1;
+        uint outUvOffset = outOffset + 2;
         int flags = minfo.flags;
         vec3 pos = vec3(minfo.x, minfo.y >> 16, minfo.z);
         float height = minfo.y & 0xffff;
@@ -386,9 +389,9 @@ void sort_and_insert(uint localId, const ModelInfo minfo, int thisPriority, int 
             displacementA, displacementB, displacementC);
 
         // Rotate normals to match model orientation
-        normalout[outOffset + myOffset * 3]     = rotate(normA, orientation);
-        normalout[outOffset + myOffset * 3 + 1] = rotate(normB, orientation);
-        normalout[outOffset + myOffset * 3 + 2] = rotate(normC, orientation);
+        normalout[outNormalOffset + (myOffset * 3) * outStride]     = rotate(normA, orientation);
+        normalout[outNormalOffset + (myOffset * 3 + 1) * outStride] = rotate(normB, orientation);
+        normalout[outNormalOffset + (myOffset * 3 + 2) * outStride] = rotate(normC, orientation);
 
         // Apply any displacement
         thisrvA.pos += displacementA;
@@ -429,9 +432,9 @@ void sort_and_insert(uint localId, const ModelInfo minfo, int thisPriority, int 
         }
 
         // position vertices in scene and write to out buffer
-        vout[outOffset + myOffset * 3]     = thisrvA;
-        vout[outOffset + myOffset * 3 + 1] = thisrvB;
-        vout[outOffset + myOffset * 3 + 2] = thisrvC;
+        vout[outOffset + (myOffset * 3) * outStride]     = thisrvA;
+        vout[outOffset + (myOffset * 3 + 1) * outStride] = thisrvB;
+        vout[outOffset + (myOffset * 3 + 2) * outStride] = thisrvC;
 
         UVData uvA, uvB, uvC;
         if (skipUvs) {
@@ -465,8 +468,8 @@ void sort_and_insert(uint localId, const ModelInfo minfo, int thisPriority, int 
             }
         }
 
-        uvout[outOffset + myOffset * 3]     = uvA;
-        uvout[outOffset + myOffset * 3 + 1] = uvB;
-        uvout[outOffset + myOffset * 3 + 2] = uvC;
+        uvout[outUvOffset + (myOffset * 3) * outStride]     = uvA;
+        uvout[outUvOffset + (myOffset * 3 + 1) * outStride] = uvB;
+        uvout[outUvOffset + (myOffset * 3 + 2) * outStride] = uvC;
     }
 }
