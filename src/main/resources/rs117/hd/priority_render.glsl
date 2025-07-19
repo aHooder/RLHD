@@ -240,66 +240,51 @@ vec3 applyCharacterDisplacement(vec3 characterPos, vec2 vertPos, float height, f
 }
 
 void applyWindDisplacement(const ObjectWindSample windSample, int vertexFlags, float height, vec3 worldPos,
-    in vec3 vertA, in vec3 vertB, in vec3 vertC,
-    in vec3 normA, in vec3 normB, in vec3 normC,
-    inout vec3 displacementA, inout vec3 displacementB, inout vec3 displacementC
+    in OutData vertices[3], inout vec3 displacements[3]
 ) {
     int windDisplacementMode = (vertexFlags >> MATERIAL_FLAG_WIND_SWAYING) & 0x7;
     if (windDisplacementMode <= WIND_DISPLACEMENT_DISABLED)
         return;
 
-    float strengthA = saturate(abs(vertA.y) / height);
-    float strengthB = saturate(abs(vertB.y) / height);
-    float strengthC = saturate(abs(vertC.y) / height);
+    vec3 strength = vec3(0);
+    for (int i = 0; i < 3; i++)
+        strength[i] = saturate(abs(vertices[i].vertex.pos.y) / height);
 
     #if WIND_DISPLACEMENT
     if (windDisplacementMode >= WIND_DISPLACEMENT_VERTEX) {
         const float VertexSnapping = 150.0; // Snap so vertices which are almost overlapping will obtain the same noise value
         const float VertexDisplacementMod = 0.2; // Avoid over stretching which can cause issues in ComputeUVs
-        float windNoiseA = mix(-0.5, 0.5, noise((snap(vertA, VertexSnapping).xz + vec2(windOffset)) * WIND_DISPLACEMENT_NOISE_RESOLUTION));
-        float windNoiseB = mix(-0.5, 0.5, noise((snap(vertB, VertexSnapping).xz + vec2(windOffset)) * WIND_DISPLACEMENT_NOISE_RESOLUTION));
-        float windNoiseC = mix(-0.5, 0.5, noise((snap(vertC, VertexSnapping).xz + vec2(windOffset)) * WIND_DISPLACEMENT_NOISE_RESOLUTION));
+        vec3 windNoise;
+        for (int i = 0; i < 3; i++)
+            windNoise[i] = mix(-0.5, 0.5,
+                noise((snap(vertices[i].vertex.pos, VertexSnapping).xz + vec2(windOffset)) * WIND_DISPLACEMENT_NOISE_RESOLUTION));
 
         if (windDisplacementMode == WIND_DISPLACEMENT_VERTEX_WITH_HEMISPHERE_BLEND) {
             const float minDist = 50;
             const float blendDist = 10.0;
 
-            float distBlendA = saturate(((abs(vertA.x) + abs(vertA.z)) - minDist) / blendDist);
-            float distBlendB = saturate(((abs(vertB.x) + abs(vertB.z)) - minDist) / blendDist);
-            float distBlendC = saturate(((abs(vertC.x) + abs(vertC.z)) - minDist) / blendDist);
-
-            float heightFadeA = saturate((strengthA - 0.5) / 0.2);
-            float heightFadeB = saturate((strengthB - 0.5) / 0.2);
-            float heightFadeC = saturate((strengthC - 0.5) / 0.2);
-
-            strengthA *= mix(0.0, mix(distBlendA, 1.0, heightFadeA), step(0.3, strengthA));
-            strengthB *= mix(0.0, mix(distBlendB, 1.0, heightFadeB), step(0.3, strengthB));
-            strengthC *= mix(0.0, mix(distBlendC, 1.0, heightFadeC), step(0.3, strengthC));
+            vec3 distBlend;
+            vec3 heightFade;
+            for (int i = 0; i < 3; i++) {
+                distBlend[i] = saturate(((abs(vertices[i].vertex.pos.x) + abs(vertices[i].vertex.pos.z)) - minDist) / blendDist);
+                heightFade[i] = saturate((strength[i] - 0.5) / 0.2);
+                strength[i] *= mix(0.0, mix(distBlend[i], 1.0, heightFade[i]), step(0.3, strength[i]));
+            }
         } else {
             if (windDisplacementMode == WIND_DISPLACEMENT_VERTEX_JIGGLE) {
-                vec3 vertASkew = safe_normalize(cross(normA.xyz, vec3(0, 1, 0)));
-                vec3 vertBSkew = safe_normalize(cross(normB.xyz, vec3(0, 1, 0)));
-                vec3 vertCSkew = safe_normalize(cross(normC.xyz, vec3(0, 1, 0)));
+                vec3 vertSkew[3];
+                for (int i = 0; i < 3; i++) {
+                    vertSkew[i] = safe_normalize(cross(vertices[i].normal.xyz, vec3(0, 1, 0)));
+                    displacements[i] = ((windNoise[i] * (windSample.heightBasedStrength * strength[i]) * 0.5) * vertSkew[i]);
 
-                displacementA = ((windNoiseA * (windSample.heightBasedStrength * strengthA) * 0.5) * vertASkew);
-                displacementB = ((windNoiseB * (windSample.heightBasedStrength * strengthB) * 0.5) * vertBSkew);
-                displacementC = ((windNoiseC * (windSample.heightBasedStrength * strengthC) * 0.5) * vertCSkew);
-
-                vertASkew = safe_normalize(cross(normA.xyz, vec3(1, 0, 0)));
-                vertBSkew = safe_normalize(cross(normB.xyz, vec3(1, 0, 0)));
-                vertCSkew = safe_normalize(cross(normC.xyz, vec3(1, 0, 0)));
-
-                displacementA += (((1.0 - windNoiseA) * (windSample.heightBasedStrength * strengthA) * 0.5) * vertASkew);
-                displacementB += (((1.0 - windNoiseB) * (windSample.heightBasedStrength * strengthB) * 0.5) * vertBSkew);
-                displacementC += (((1.0 - windNoiseC) * (windSample.heightBasedStrength * strengthC) * 0.5) * vertCSkew);
+                    vertSkew[i] = safe_normalize(cross(vertices[i].normal.xyz, vec3(1, 0, 0)));
+                    displacements[i] += (((1.0 - windNoise[i]) * (windSample.heightBasedStrength * strength[i]) * 0.5) * vertSkew[i]);
+                }
             } else {
-                displacementA = ((windNoiseA * (windSample.heightBasedStrength * strengthA * VertexDisplacementMod)) * windSample.direction);
-                displacementB = ((windNoiseB * (windSample.heightBasedStrength * strengthB * VertexDisplacementMod)) * windSample.direction);
-                displacementC = ((windNoiseC * (windSample.heightBasedStrength * strengthC * VertexDisplacementMod)) * windSample.direction);
-
-                strengthA = saturate(strengthA - VertexDisplacementMod);
-                strengthB = saturate(strengthB - VertexDisplacementMod);
-                strengthC = saturate(strengthC - VertexDisplacementMod);
+                for (int i = 0; i < 3; i++) {
+                    displacements[i] = ((windNoise[i] * (windSample.heightBasedStrength * strength[i] * VertexDisplacementMod)) * windSample.direction);
+                    strength[i] = saturate(strength[i] - VertexDisplacementMod);
+                }
             }
         }
     }
@@ -307,15 +292,14 @@ void applyWindDisplacement(const ObjectWindSample windSample, int vertexFlags, f
 
     #if CHARACTER_DISPLACEMENT
     if (windDisplacementMode == WIND_DISPLACEMENT_OBJECT) {
-        vec2 worldVertA = (worldPos + vertA).xz;
-        vec2 worldVertB = (worldPos + vertB).xz;
-        vec2 worldVertC = (worldPos + vertC).xz;
+        vec2 worldVerts[3];
+        for (int i = 0; i < 3; i++)
+            worldVerts[i] = (worldPos + vertices[i].vertex.pos).xz;
 
         float fractAccum = 0.0;
-        for (int i = 0; i < characterPositionCount; i++) {
-            displacementA += applyCharacterDisplacement(characterPositions[i], worldVertA, height, strengthA, fractAccum);
-            displacementB += applyCharacterDisplacement(characterPositions[i], worldVertB, height, strengthB, fractAccum);
-            displacementC += applyCharacterDisplacement(characterPositions[i], worldVertC, height, strengthC, fractAccum);
+        for (int j = 0; j < characterPositionCount; j++) {
+            for (int i = 0; i < 3; i++)
+                displacements[i] += applyCharacterDisplacement(characterPositions[j], worldVerts[i], height, strength[i], fractAccum);
             if (fractAccum >= 2.0)
                 break;
         }
@@ -325,9 +309,8 @@ void applyWindDisplacement(const ObjectWindSample windSample, int vertexFlags, f
     #if WIND_DISPLACEMENT
     if (windDisplacementMode != WIND_DISPLACEMENT_VERTEX_JIGGLE) {
         // Object Displacement
-        displacementA += windSample.displacement * strengthA;
-        displacementB += windSample.displacement * strengthB;
-        displacementC += windSample.displacement * strengthC;
+        for (int i = 0; i < 3; i++)
+            displacements[i] += windSample.displacement * strength[i];
     }
     #endif
 }
@@ -364,45 +347,44 @@ void sort_and_insert(uint localId, const ModelInfo minfo, int thisPriority, int 
 
         OutData outData[3];
         for (int i = 0; i < 3; i++)
-            outData[i] = OutData(VertexData(vec3(0), 0), vec4(0), UVData(vec3(0), 0));
-
-        // Grab triangle vertices from the correct buffer
-        for (int i = 0; i < 3; i++)
-            outData[i].vertex = vb[offset + localId * 3 + i];
+            outData[i] = OutData(vb[offset + localId * 3 + i], vec4(0), UVData(vec3(0), 0));
 
         if (!skipNormals)
             for (int i = 0; i < 3; i++)
                 outData[i].normal = normal[normalOffset + localId * 3 + i];
 
         vec3 displacement[3] = vec3[3](vec3(0), vec3(0), vec3(0));
-        applyWindDisplacement(windSample, vertexFlags, height, pos,
-            outData[0].vertex.pos, outData[1].vertex.pos, outData[2].vertex.pos,
-            outData[0].normal.xyz, outData[1].normal.xyz, outData[2].normal.xyz,
-            displacement[0], displacement[1], displacement[2]);
+        applyWindDisplacement(windSample, vertexFlags, height, pos, outData, displacement);
 
         for (int i = 0; i < 3; i++) {
             // Apply any displacement
             outData[i].vertex.pos += displacement[i];
             // rotate for model orientation
             outData[i].vertex.pos = rotate(outData[i].vertex.pos, orientation);
-
-            outData[i].normal = rotate(outData[i].normal, orientation);
         }
 
         #if UNDO_VANILLA_SHADING
         if ((int(outData[0].vertex.ahsl) >> 20 & 1) == 0) {
-            if (length(outData[0].normal) == 0) {
+            vec3 normals[3];
+            if (length(outData[0].normal.xyz) == 0) {
                 // Compute flat normal if necessary, and rotate it back to match unrotated normals
-                vec4 N = vec4(cross(outData[0].vertex.pos - outData[1].vertex.pos, outData[0].vertex.pos - outData[2].vertex.pos), 0);
-                outData[0].normal = outData[1].normal = outData[2].normal = rotate(N, -orientation);
+                vec3 N = cross(outData[0].vertex.pos - outData[1].vertex.pos, outData[0].vertex.pos - outData[2].vertex.pos);
+                for (int i = 0; i < 3; i++)
+                    normals[i] = N;
+            } else {
+                for (int i = 0; i < 3; i++)
+                    normals[i] = outData[i].normal.xyz;
             }
+
             for (int i = 0; i < 3; i++)
-                undoVanillaShading(outData[i].vertex.ahsl, outData[i].normal.xyz);
+                undoVanillaShading(outData[i].vertex.ahsl, normals[i]);
         }
         #endif
 
-        for (int i = 0; i < 3; i++)
+        for (int i = 0; i < 3; i++) {
             outData[i].vertex.pos += pos;
+            outData[i].normal = rotate(outData[i].normal, orientation);
+        }
 
         // apply hillskew
         int plane = flags >> 24 & 3;
