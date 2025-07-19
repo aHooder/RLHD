@@ -80,11 +80,11 @@ layout(std430, binding = 1) readonly buffer StagingBufferVertices {
 };
 
 layout(std430, binding = 1) readonly buffer StagingBufferUvs {
-    UVData uv[];
+    UVData uvb[];
 };
 
 layout(std430, binding = 1) readonly buffer StagingBufferNormals {
-    vec4 normal[];
+    vec4 normalb[];
 };
 
 layout(std430, binding = 2) writeonly buffer RenderBuffer {

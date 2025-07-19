@@ -348,29 +348,20 @@ void sort_and_insert(uint localId, const ModelInfo minfo, uint thisPriority, uin
         flatNormal = vec4(normalize(cross(vertices[0] - vertices[1], vertices[0] - vertices[2])), 0);
     }
 
-    int vertexFlags = skipUvs ? 0 : uv[uvOffset + localId * 3].materialFlags;
-
     for (int i = 0; i < 3; i++) {
-        OutData outData = OutData(
-            vb[offset + localId * 3 + i],
-            flatNormal,
-            UVData(vec3(0), 0)
-        );
+        VertexData vertex = vb[offset + localId * 3 + i];
+        vec4 normal = flatNormal;
 
         // rotate for model orientation
-        outData.vertex.pos = rotate(outData.vertex.pos, orientation);
+        vertex.pos = rotate(vertex.pos, orientation);
 
         // Apply displacement after orientation
-        vec3 displacement = applyWindDisplacement(windSample, vertexFlags, height, pos, outData.vertex.pos, outData.normal.xyz);
-        outData.vertex.pos += displacement;
+        int vertexFlags = skipUvs ? 0 : uvb[uvOffset + localId * 3].materialFlags;
+        vec3 displacement = applyWindDisplacement(windSample, vertexFlags, height, pos, vertex.pos, normal.xyz);
+        vertex.pos += displacement;
 
         // Shift to world space
-        outData.vertex.pos += pos;
-
-        if (!skipNormals)
-            outData.normal = normal[normalOffset + localId * 3 + i];
-
-        outData.normal = rotate(outData.normal, orientation);
+        vertex.pos += pos;
 
         // apply hillskew
         int plane = flags >> 24 & 3;
@@ -378,37 +369,41 @@ void sort_and_insert(uint localId, const ModelInfo minfo, uint thisPriority, uin
         if ((vertexFlags >> MATERIAL_FLAG_TERRAIN_VERTEX_SNAPPING & 1) == 1)
             hillskewFlags |= HILLSKEW_TILE_SNAPPING;
         if (hillskewFlags != HILLSKEW_NONE)
-            hillskew_vertex(outData.vertex.pos, hillskewFlags, pos.y, height, plane);
+            hillskew_vertex(vertex.pos, hillskewFlags, pos.y, height, plane);
 
+        if (!skipNormals) {
+            normal = normalb[normalOffset + localId * 3 + i];
+            normal.xyz = normalize(normal.xyz);
+        }
+
+        #if UNDO_VANILLA_SHADING
+            undoVanillaShading(vertex.ahsl, normal.xyz);
+        #endif
+
+        renderBuffer[outOffset + myOffset * 3 + i].vertex = vertex;
+
+        normal = rotate(normal, orientation);
+        renderBuffer[outOffset + myOffset * 3 + i].normal = normal;
+
+        UVData uv = UVData(vec3(0), 0);
         if (!skipUvs) {
-            outData.uv = uv[uvOffset + localId * 3 + i];
-            if (!skipNormals) {
-                outData.normal = normal[normalOffset + localId * 3 + i];
-                outData.normal.xyz = normalize(outData.normal.xyz);
-            }
-
-            #if UNDO_VANILLA_SHADING
-                undoVanillaShading(outData.vertex.ahsl, outData.normal.xyz);
-            #endif
-
-            outData.normal = rotate(outData.normal, orientation);
+            uv = uvb[uvOffset + localId * 3 + i];
 
             if ((vertexFlags >> MATERIAL_FLAG_VANILLA_UVS & 1) == 1) {
                 // Rotate the texture triangles to match model orientation
-                outData.uv.uvw = rotate(outData.uv.uvw, orientation);
+                uv.uvw = rotate(uv.uvw, orientation);
 
                 // Apply displacement after orientation
-                outData.uv.uvw += displacement;
+                uv.uvw += displacement;
 
                 // Shift texture triangles to world space
-                outData.uv.uvw += pos;
+                uv.uvw += pos;
 
                 // For vanilla UVs, the first 3 components represent a position vector
                 if (hillskewFlags != HILLSKEW_NONE)
-                    hillskew_vertex(outData.uv.uvw, hillskewFlags, pos.y, height, plane);
+                    hillskew_vertex(uv.uvw, hillskewFlags, pos.y, height, plane);
             }
         }
-
-        renderBuffer[outOffset + myOffset * 3 + i] = outData;
+        renderBuffer[outOffset + myOffset * 3 + i].uv = uv;
     }
 }

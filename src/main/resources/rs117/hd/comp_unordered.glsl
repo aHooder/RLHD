@@ -56,10 +56,10 @@ void main() {
         outData.vertex.pos += pos;
 
         if (!skipNormals)
-            outData.normal = normal[normalOffset + localId * 3 + i];
+            outData.normal = normalb[normalOffset + localId * 3 + i];
 
         if (!skipUvs)
-            outData.uv = uv[uvOffset + localId * 3 + i];
+            outData.uv = uvb[uvOffset + localId * 3 + i];
 
         renderBuffer[outOffset + localId * 3 + i] = outData;
     }
