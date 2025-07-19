@@ -44,51 +44,23 @@ void main() {
     bool skipUvs = (offsetFlags & 2u) != 0;
     uint normalOffset = offset + size * 3;
     uint uvOffset = offset + size * 3 * (2 - offsetFlags);
-    uint outStride = 3;
-    uint outOffset = minfo.idx * outStride;
-    uint outNormalOffset = outOffset + 1;
-    uint outUvOffset = outOffset + 2;
+    uint outOffset = minfo.idx;
     int flags = minfo.flags;
     vec3 pos = vec3(minfo.x, minfo.y >> 16, minfo.z);
 
-    VertexData thisA, thisB, thisC;
+    for (int i = 0; i < 3; i++) {
+        OutData outData = OutData(VertexData(vec3(0), 0), vec4(0), UVData(vec3(0), 0));
 
-    // Grab triangle vertices from the correct buffer
-    thisA = vb[offset + localId * 3    ];
-    thisB = vb[offset + localId * 3 + 1];
-    thisC = vb[offset + localId * 3 + 2];
+        // Grab triangle vertices from the correct buffer
+        outData.vertex = vb[offset + localId * 3 + i];
+        outData.vertex.pos += pos;
 
-    thisA.pos += pos;
-    thisB.pos += pos;
-    thisC.pos += pos;
+        if (!skipNormals)
+            outData.normal = normal[normalOffset + localId * 3 + i];
 
-    // position vertices in scene and write to out buffer
-    vout[outOffset + (localId * 3) * outStride]     = thisA;
-    vout[outOffset + (localId * 3 + 1) * outStride] = thisB;
-    vout[outOffset + (localId * 3 + 2) * outStride] = thisC;
+        if (!skipUvs)
+            outData.uv = uv[uvOffset + localId * 3 + i];
 
-    UVData uvA, uvB, uvC;
-    if (skipUvs) {
-        uvA = uvB = uvC = UVData(vec3(0.0), 0);
-    } else {
-        uvA = uv[uvOffset + localId * 3];
-        uvB = uv[uvOffset + localId * 3 + 1];
-        uvC = uv[uvOffset + localId * 3 + 2];
+        renderBuffer[outOffset + localId * 3 + i] = outData;
     }
-    uvout[outUvOffset + (localId * 3) * outStride]     = uvA;
-    uvout[outUvOffset + (localId * 3 + 1) * outStride] = uvB;
-    uvout[outUvOffset + (localId * 3 + 2) * outStride] = uvC;
-
-    vec4 normA, normB, normC;
-    if (skipNormals) {
-        normA = normB = normC = vec4(0);
-    } else {
-        normA = normal[normalOffset + localId * 3    ];
-        normB = normal[normalOffset + localId * 3 + 1];
-        normC = normal[normalOffset + localId * 3 + 2];
-    }
-
-    normalout[outNormalOffset + (localId * 3) * outStride]     = normA;
-    normalout[outNormalOffset + (localId * 3 + 1) * outStride] = normB;
-    normalout[outNormalOffset + (localId * 3 + 2) * outStride] = normC;
 }

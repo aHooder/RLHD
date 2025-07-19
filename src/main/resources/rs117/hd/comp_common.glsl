@@ -65,6 +65,12 @@ struct UVData {
     int materialFlags;
 };
 
+struct OutData {
+    VertexData vertex;
+    vec4 normal;
+    UVData uv;
+};
+
 layout(std430, binding = 0) readonly buffer ModelInfoBuffer {
     ModelInfo ol[];
 };
@@ -81,14 +87,6 @@ layout(std430, binding = 1) readonly buffer StagingBufferNormals {
     vec4 normal[];
 };
 
-layout(std430, binding = 2) writeonly buffer RenderBufferVertices {
-    VertexData vout[];
-};
-
-layout(std430, binding = 2) writeonly buffer RenderBufferUvs {
-    UVData uvout[];
-};
-
-layout(std430, binding = 2) writeonly buffer RenderBufferNormals {
-    vec4 normalout[];
+layout(std430, binding = 2) writeonly buffer RenderBuffer {
+    OutData renderBuffer[];
 };

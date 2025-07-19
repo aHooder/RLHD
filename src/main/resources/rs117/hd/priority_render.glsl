@@ -342,10 +342,7 @@ void sort_and_insert(uint localId, const ModelInfo minfo, int thisPriority, int 
         bool skipUvs = (offsetFlags & 2u) != 0;
         uint normalOffset = offset + size * 3;
         uint uvOffset = offset + size * 3 * (2 - offsetFlags);
-        uint outStride = 3;
-        uint outOffset = minfo.idx * outStride;
-        uint outNormalOffset = outOffset + 1;
-        uint outUvOffset = outOffset + 2;
+        uint outOffset = minfo.idx;
         int flags = minfo.flags;
         vec3 pos = vec3(minfo.x, minfo.y >> 16, minfo.z);
         float height = minfo.y & 0xffff;
@@ -365,111 +362,80 @@ void sort_and_insert(uint localId, const ModelInfo minfo, int thisPriority, int 
             if (renderPriority < renderPris[i])
                 ++myOffset;
 
-        vec3 displacementA = vec3(0);
-        vec3 displacementB = vec3(0);
-        vec3 displacementC = vec3(0);
+        OutData outData[3];
+        for (int i = 0; i < 3; i++)
+            outData[i] = OutData(VertexData(vec3(0), 0), vec4(0), UVData(vec3(0), 0));
 
         // Grab triangle vertices from the correct buffer
-        VertexData thisrvA = vb[offset + localId * 3];
-        VertexData thisrvB = vb[offset + localId * 3 + 1];
-        VertexData thisrvC = vb[offset + localId * 3 + 2];
+        for (int i = 0; i < 3; i++)
+            outData[i].vertex = vb[offset + localId * 3 + i];
 
-        vec4 normA, normB, normC;
-        if (skipNormals) {
-            normA = normB = normC = vec4(0);
-        } else {
-            normA = normal[normalOffset + localId * 3    ];
-            normB = normal[normalOffset + localId * 3 + 1];
-            normC = normal[normalOffset + localId * 3 + 2];
+        if (!skipNormals)
+            for (int i = 0; i < 3; i++)
+                outData[i].normal = normal[normalOffset + localId * 3 + i];
+
+        vec3 displacement[3] = vec3[3](vec3(0), vec3(0), vec3(0));
+        applyWindDisplacement(windSample, vertexFlags, height, pos,
+            outData[0].vertex.pos, outData[1].vertex.pos, outData[2].vertex.pos,
+            outData[0].normal.xyz, outData[1].normal.xyz, outData[2].normal.xyz,
+            displacement[0], displacement[1], displacement[2]);
+
+        for (int i = 0; i < 3; i++) {
+            // Apply any displacement
+            outData[i].vertex.pos += displacement[i];
+            // rotate for model orientation
+            outData[i].vertex.pos = rotate(outData[i].vertex.pos, orientation);
+
+            outData[i].normal = rotate(outData[i].normal, orientation);
         }
 
-        applyWindDisplacement(windSample, vertexFlags, height, pos,
-            thisrvA.pos, thisrvB.pos, thisrvC.pos,
-            normA.xyz, normB.xyz, normC.xyz,
-            displacementA, displacementB, displacementC);
-
-        // Rotate normals to match model orientation
-        normalout[outNormalOffset + (myOffset * 3) * outStride]     = rotate(normA, orientation);
-        normalout[outNormalOffset + (myOffset * 3 + 1) * outStride] = rotate(normB, orientation);
-        normalout[outNormalOffset + (myOffset * 3 + 2) * outStride] = rotate(normC, orientation);
-
-        // Apply any displacement
-        thisrvA.pos += displacementA;
-        thisrvB.pos += displacementB;
-        thisrvC.pos += displacementC;
-
-        // rotate for model orientation
-        thisrvA.pos = rotate(thisrvA.pos, orientation);
-        thisrvB.pos = rotate(thisrvB.pos, orientation);
-        thisrvC.pos = rotate(thisrvC.pos, orientation);
-
         #if UNDO_VANILLA_SHADING
-        if ((int(thisrvA.ahsl) >> 20 & 1) == 0) {
-            if (length(normA) == 0) {
+        if ((int(outData[0].vertex.ahsl) >> 20 & 1) == 0) {
+            if (length(outData[0].normal) == 0) {
                 // Compute flat normal if necessary, and rotate it back to match unrotated normals
-                vec4 N = vec4(cross(thisrvA.pos - thisrvB.pos, thisrvA.pos - thisrvC.pos), 0);
-                normA = normB = normC = rotate(N, -orientation);
+                vec4 N = vec4(cross(outData[0].vertex.pos - outData[1].vertex.pos, outData[0].vertex.pos - outData[2].vertex.pos), 0);
+                outData[0].normal = outData[1].normal = outData[2].normal = rotate(N, -orientation);
             }
-            undoVanillaShading(thisrvA.ahsl, normA.xyz);
-            undoVanillaShading(thisrvB.ahsl, normB.xyz);
-            undoVanillaShading(thisrvC.ahsl, normC.xyz);
+            for (int i = 0; i < 3; i++)
+                undoVanillaShading(outData[i].vertex.ahsl, outData[i].normal.xyz);
         }
         #endif
 
-        thisrvA.pos += pos;
-        thisrvB.pos += pos;
-        thisrvC.pos += pos;
+        for (int i = 0; i < 3; i++)
+            outData[i].vertex.pos += pos;
 
         // apply hillskew
         int plane = flags >> 24 & 3;
         int hillskewFlags = flags >> 26 & 1;
         if ((vertexFlags >> MATERIAL_FLAG_TERRAIN_VERTEX_SNAPPING & 1) == 1)
             hillskewFlags |= HILLSKEW_TILE_SNAPPING;
-        if (hillskewFlags != HILLSKEW_NONE) {
-            hillskew_vertex(thisrvA.pos, hillskewFlags, pos.y, height, plane);
-            hillskew_vertex(thisrvB.pos, hillskewFlags, pos.y, height, plane);
-            hillskew_vertex(thisrvC.pos, hillskewFlags, pos.y, height, plane);
-        }
+        if (hillskewFlags != HILLSKEW_NONE)
+            for (int i = 0; i < 3; i++)
+                hillskew_vertex(outData[i].vertex.pos, hillskewFlags, pos.y, height, plane);
 
-        // position vertices in scene and write to out buffer
-        vout[outOffset + (myOffset * 3) * outStride]     = thisrvA;
-        vout[outOffset + (myOffset * 3 + 1) * outStride] = thisrvB;
-        vout[outOffset + (myOffset * 3 + 2) * outStride] = thisrvC;
-
-        UVData uvA, uvB, uvC;
-        if (skipUvs) {
-            uvA = uvB = uvC = UVData(vec3(0.0), 0);
-        } else {
-            uvA = uv[uvOffset + localId * 3];
-            uvB = uv[uvOffset + localId * 3 + 1];
-            uvC = uv[uvOffset + localId * 3 + 2];
+        if (!skipUvs) {
+            for (int i = 0; i < 3; i++)
+                outData[i].uv = uv[uvOffset + localId * 3 + i];
 
             if ((vertexFlags >> MATERIAL_FLAG_VANILLA_UVS & 1) == 1) {
-                uvA.uvw += displacementA;
-                uvB.uvw += displacementB;
-                uvC.uvw += displacementC;
+                for (int i = 0; i < 3; i++) {
+                    outData[i].uv.uvw += displacement[i];
 
-                // Rotate the texture triangles to match model orientation
-                uvA.uvw = rotate(uvA.uvw, orientation);
-                uvB.uvw = rotate(uvB.uvw, orientation);
-                uvC.uvw = rotate(uvC.uvw, orientation);
+                    // Rotate the texture triangles to match model orientation
+                    outData[i].uv.uvw = rotate(outData[i].uv.uvw, orientation);
 
-                // Shift texture triangles to world space
-                uvA.uvw += pos;
-                uvB.uvw += pos;
-                uvC.uvw += pos;
+                    // Shift texture triangles to world space
+                    outData[i].uv.uvw += pos;
 
-                // For vanilla UVs, the first 3 components are an integer position vector
-                if (hillskewFlags != HILLSKEW_NONE) {
-                    hillskew_vertex(uvA.uvw, hillskewFlags, pos.y, height, plane);
-                    hillskew_vertex(uvB.uvw, hillskewFlags, pos.y, height, plane);
-                    hillskew_vertex(uvC.uvw, hillskewFlags, pos.y, height, plane);
+                    // For vanilla UVs, the first 3 components are an integer position vector
+                    if (hillskewFlags != HILLSKEW_NONE)
+                        hillskew_vertex(outData[i].uv.uvw, hillskewFlags, pos.y, height, plane);
                 }
+
             }
         }
 
-        uvout[outUvOffset + (myOffset * 3) * outStride]     = uvA;
-        uvout[outUvOffset + (myOffset * 3 + 1) * outStride] = uvB;
-        uvout[outUvOffset + (myOffset * 3 + 2) * outStride] = uvC;
+        for (int i = 0; i < 3; i++)
+            renderBuffer[outOffset + myOffset * 3 + i] = outData[i];
     }
 }
