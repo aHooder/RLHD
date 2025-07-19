@@ -46,9 +46,10 @@ layout(local_size_x = THREAD_COUNT) in;
 #include priority_render.glsl
 
 void main() {
-    uint groupId = gl_WorkGroupID.x;
-    uint localId = gl_LocalInvocationID.x * FACES_PER_THREAD;
+    const uint groupId = gl_WorkGroupID.x;
+    const uint localId = gl_LocalInvocationID.x * FACES_PER_THREAD;
     const ModelInfo minfo = ol[groupId];
+    const vec3 modelPos = vec3(minfo.x, minfo.y >> 16, minfo.z);
 
     if (localId == 0) {
         min10 = 6000;
@@ -64,15 +65,14 @@ void main() {
     ObjectWindSample windSample;
     #if WIND_DISPLACEMENT
     {
-        float modelNoise = noise((vec2(minfo.x, minfo.z) + vec2(windOffset)) * WIND_DISPLACEMENT_NOISE_RESOLUTION);
-        float angle = modelNoise * (PI / 2.0);
+        float modelNoise = noise((modelPos.xz + windOffset) * WIND_DISPLACEMENT_NOISE_RESOLUTION);
+        float angle = modelNoise * HALF_PI;
         float c = cos(angle);
         float s = sin(angle);
-        float y = minfo.y >> 16;
         float height = minfo.y & 0xffff;
 
         windSample.direction = normalize(vec3(windDirectionX * c + windDirectionZ * s, 0.0, -windDirectionX * s + windDirectionZ * c));
-        windSample.heightBasedStrength = saturate((abs(y) + height) / windCeiling) * windStrength;
+        windSample.heightBasedStrength = saturate((abs(modelPos.y) + height) / windCeiling) * windStrength;
         windSample.displacement = windSample.direction.xyz * (windSample.heightBasedStrength * modelNoise);
     }
     #endif
@@ -82,16 +82,15 @@ void main() {
 
     int prio[FACES_PER_THREAD];
     int dis[FACES_PER_THREAD];
-
     for (int i = 0; i < FACES_PER_THREAD; i++)
-        add_face_prio_distance(localId + i, minfo, prio[i], dis[i]);
+        add_face_prio_distance(localId + i, minfo, modelPos, prio[i], dis[i]);
 
     barrier();
 
     int prioAdj[FACES_PER_THREAD];
     int idx[FACES_PER_THREAD];
     for (int i = 0; i < FACES_PER_THREAD; i++)
-        idx[i] = map_face_priority(localId + i, minfo, prio[i], dis[i], prioAdj[i]);
+        map_face_priority(localId + i, minfo, prio[i], dis[i], prioAdj[i], idx[i]);
 
     barrier();
 

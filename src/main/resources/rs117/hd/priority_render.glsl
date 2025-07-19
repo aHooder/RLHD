@@ -77,36 +77,31 @@ int count_prio_offset(int priority) {
     // this shouldn't ever be outside of (0, 17) because it is the return value from priority_map
     priority = clamp(priority, 0, 17);
     int total = 0;
-    for (int i = 0; i < priority; i++) {
+    for (int i = 0; i < priority; i++)
         total += totalMappedNum[i];
-    }
     return total;
 }
 
-void add_face_prio_distance(const uint localId, const ModelInfo minfo, out int prio, out int dis) {
+void add_face_prio_distance(const uint localId, const ModelInfo minfo, const vec3 modelPos, out int prio, out int dis) {
     if (localId < minfo.size) {
         uint offset = minfo.offset & 0x3FFFFFFF;
-        int flags = minfo.flags;
+        int orientation = minfo.flags & 0x7ff;
 
-        int orientation = flags & 0x7ff;
-
-        // Grab triangle vertices from the correct buffer
-        VertexData thisA = vb[offset + localId * 3];
-        VertexData thisB = vb[offset + localId * 3 + 1];
-        VertexData thisC = vb[offset + localId * 3 + 2];
-
-        // rotate for model orientation
-        thisA.pos = rotate(thisA.pos, orientation);
-        thisB.pos = rotate(thisB.pos, orientation);
-        thisC.pos = rotate(thisC.pos, orientation);
+        vec3 vertices[3];
+        int ahsl;
+        for (int i = 0; i < 3; i++) {
+            VertexData data = vb[offset + localId * 3 + i];
+            ahsl = data.ahsl;
+            // rotate for model orientation
+            vertices[i] = rotate(data.pos, orientation);
+        }
 
         // calculate distance to face
-        prio = (thisA.ahsl >> 16) & 0xF;// all vertices on the face have the same priority
-        dis = face_distance(thisA.pos, thisB.pos, thisC.pos);
+        prio = ahsl >> 16 & 0xF; // all vertices on the face have the same priority
+        dis = face_distance(vertices[0], vertices[1], vertices[2]);
 
         // if the face is not culled, it is calculated into priority distance averages
-        vec3 modelPos = vec3(minfo.x, minfo.y >> 16, minfo.z);
-        if (face_visible(thisA.pos, thisB.pos, thisC.pos, modelPos)) {
+        if (face_visible(vertices[0], vertices[1], vertices[2], modelPos)) {
             atomicAdd(totalNum[prio], 1);
             atomicAdd(totalDistance[prio], dis);
 
@@ -118,12 +113,9 @@ void add_face_prio_distance(const uint localId, const ModelInfo minfo, out int p
     }
 }
 
-int map_face_priority(uint localId, const ModelInfo minfo, int thisPriority, int thisDistance, out int prio) {
-    int size = minfo.size;
-
+void map_face_priority(const uint localId, const ModelInfo minfo, int thisPriority, int thisDistance, out int prio, out int prioIdx) {
     // Compute average distances for 0/2, 3/4, and 6/8
-
-    if (localId < size) {
+    if (localId < minfo.size) {
         int avg1 = 0;
         int avg2 = 0;
         int avg3 = 0;
@@ -140,21 +132,16 @@ int map_face_priority(uint localId, const ModelInfo minfo, int thisPriority, int
             avg3 = (totalDistance[6] + totalDistance[8]) / (totalNum[6] + totalNum[8]);
         }
 
-        int adjPrio = priority_map(thisPriority, thisDistance, min10, avg1, avg2, avg3);
-        int prioIdx = atomicAdd(totalMappedNum[adjPrio], 1);
-
-        prio = adjPrio;
-        return prioIdx;
+        prio = priority_map(thisPriority, thisDistance, min10, avg1, avg2, avg3);
+        prioIdx = atomicAdd(totalMappedNum[prio], 1);
+    } else {
+        prio = 0;
+        prioIdx = 0;
     }
-
-    prio = 0;
-    return 0;
 }
 
-void insert_face(uint localId, const ModelInfo minfo, int adjPrio, int distance, int prioIdx) {
-    int size = minfo.size;
-
-    if (localId < size) {
+void insert_face(const uint localId, const ModelInfo minfo, int adjPrio, int distance, int prioIdx) {
+    if (localId < minfo.size) {
         // calculate base offset into renderPris based on number of faces with a lower priority
         int baseOff = count_prio_offset(adjPrio);
         // the furthest faces draw first, and have the highest priority.
@@ -191,7 +178,7 @@ void hillskew_vertex(inout vec3 v, int hillskewMode, float modelPosY, float mode
     }
 }
 
-void undoVanillaShading(inout int hsl, vec3 unrotatedNormal) {
+void undoVanillaShading(inout OutData outData) {
     const vec3 LIGHT_DIR_MODEL = vec3(0.57735026, 0.57735026, 0.57735026);
     // subtracts the X lowest lightness levels from the formula.
     // helps keep darker colors appropriately dark
@@ -201,6 +188,9 @@ void undoVanillaShading(inout int hsl, vec3 unrotatedNormal) {
     const float LIGHTNESS_MULTIPLIER = 3.f;
     // the minimum amount by which each color will be lightened
     const int BASE_LIGHTEN = 10;
+
+    int hsl = outData.vertex.ahsl;
+    vec3 unrotatedNormal = outData.normal.xyz;
 
     int saturation = hsl >> 7 & 0x7;
     int lightness = hsl & 0x7F;
@@ -219,6 +209,8 @@ void undoVanillaShading(inout int hsl, vec3 unrotatedNormal) {
     lightness = min(lightness, maxLightness);
     hsl &= ~0x7F;
     hsl |= lightness;
+
+    outData.vertex.ahsl = hsl;
 }
 
 vec3 applyCharacterDisplacement(vec3 characterPos, vec2 vertPos, float height, float strength, inout float offsetAccum) {
@@ -239,16 +231,17 @@ vec3 applyCharacterDisplacement(vec3 characterPos, vec2 vertPos, float height, f
     return mix(horizontalDisplacement, verticalDisplacement, offsetFrac);
 }
 
-void applyWindDisplacement(const ObjectWindSample windSample, int vertexFlags, float height, vec3 worldPos,
-    in OutData vertices[3], inout vec3 displacements[3]
+vec3 applyWindDisplacement(const ObjectWindSample windSample, int vertexFlags, float height, vec3 worldPos,
+    in vec3 vertex, in vec3 normal
 ) {
+    vec3 displacement = vec3(0);
     int windDisplacementMode = (vertexFlags >> MATERIAL_FLAG_WIND_SWAYING) & 0x7;
     if (windDisplacementMode <= WIND_DISPLACEMENT_DISABLED)
-        return;
+        return displacement;
 
     vec3 strength = vec3(0);
     for (int i = 0; i < 3; i++)
-        strength[i] = saturate(abs(vertices[i].vertex.pos.y) / height);
+        strength[i] = saturate(abs(vertex.y) / height);
 
     #if WIND_DISPLACEMENT
     if (windDisplacementMode >= WIND_DISPLACEMENT_VERTEX) {
@@ -257,7 +250,7 @@ void applyWindDisplacement(const ObjectWindSample windSample, int vertexFlags, f
         vec3 windNoise;
         for (int i = 0; i < 3; i++)
             windNoise[i] = mix(-0.5, 0.5,
-                noise((snap(vertices[i].vertex.pos, VertexSnapping).xz + vec2(windOffset)) * WIND_DISPLACEMENT_NOISE_RESOLUTION));
+                noise((snap(vertex, VertexSnapping).xz + vec2(windOffset)) * WIND_DISPLACEMENT_NOISE_RESOLUTION));
 
         if (windDisplacementMode == WIND_DISPLACEMENT_VERTEX_WITH_HEMISPHERE_BLEND) {
             const float minDist = 50;
@@ -266,7 +259,7 @@ void applyWindDisplacement(const ObjectWindSample windSample, int vertexFlags, f
             vec3 distBlend;
             vec3 heightFade;
             for (int i = 0; i < 3; i++) {
-                distBlend[i] = saturate(((abs(vertices[i].vertex.pos.x) + abs(vertices[i].vertex.pos.z)) - minDist) / blendDist);
+                distBlend[i] = saturate(((abs(vertex.x) + abs(vertex.z)) - minDist) / blendDist);
                 heightFade[i] = saturate((strength[i] - 0.5) / 0.2);
                 strength[i] *= mix(0.0, mix(distBlend[i], 1.0, heightFade[i]), step(0.3, strength[i]));
             }
@@ -274,15 +267,15 @@ void applyWindDisplacement(const ObjectWindSample windSample, int vertexFlags, f
             if (windDisplacementMode == WIND_DISPLACEMENT_VERTEX_JIGGLE) {
                 vec3 vertSkew[3];
                 for (int i = 0; i < 3; i++) {
-                    vertSkew[i] = safe_normalize(cross(vertices[i].normal.xyz, vec3(0, 1, 0)));
-                    displacements[i] = ((windNoise[i] * (windSample.heightBasedStrength * strength[i]) * 0.5) * vertSkew[i]);
+                    vertSkew[i] = safe_normalize(cross(normal, vec3(0, 1, 0)));
+                    displacement = ((windNoise[i] * (windSample.heightBasedStrength * strength[i]) * 0.5) * vertSkew[i]);
 
-                    vertSkew[i] = safe_normalize(cross(vertices[i].normal.xyz, vec3(1, 0, 0)));
-                    displacements[i] += (((1.0 - windNoise[i]) * (windSample.heightBasedStrength * strength[i]) * 0.5) * vertSkew[i]);
+                    vertSkew[i] = safe_normalize(cross(normal, vec3(1, 0, 0)));
+                    displacement += (((1.0 - windNoise[i]) * (windSample.heightBasedStrength * strength[i]) * 0.5) * vertSkew[i]);
                 }
             } else {
                 for (int i = 0; i < 3; i++) {
-                    displacements[i] = ((windNoise[i] * (windSample.heightBasedStrength * strength[i] * VertexDisplacementMod)) * windSample.direction);
+                    displacement = ((windNoise[i] * (windSample.heightBasedStrength * strength[i] * VertexDisplacementMod)) * windSample.direction);
                     strength[i] = saturate(strength[i] - VertexDisplacementMod);
                 }
             }
@@ -294,12 +287,12 @@ void applyWindDisplacement(const ObjectWindSample windSample, int vertexFlags, f
     if (windDisplacementMode == WIND_DISPLACEMENT_OBJECT) {
         vec2 worldVerts[3];
         for (int i = 0; i < 3; i++)
-            worldVerts[i] = (worldPos + vertices[i].vertex.pos).xz;
+            worldVerts[i] = (worldPos + vertex).xz;
 
         float fractAccum = 0.0;
         for (int j = 0; j < characterPositionCount; j++) {
             for (int i = 0; i < 3; i++)
-                displacements[i] += applyCharacterDisplacement(characterPositions[j], worldVerts[i], height, strength[i], fractAccum);
+                displacement += applyCharacterDisplacement(characterPositions[j], worldVerts[i], height, strength[i], fractAccum);
             if (fractAccum >= 2.0)
                 break;
         }
@@ -310,12 +303,14 @@ void applyWindDisplacement(const ObjectWindSample windSample, int vertexFlags, f
     if (windDisplacementMode != WIND_DISPLACEMENT_VERTEX_JIGGLE) {
         // Object Displacement
         for (int i = 0; i < 3; i++)
-            displacements[i] += windSample.displacement * strength[i];
+            displacement += windSample.displacement * strength[i];
     }
     #endif
+
+    return displacement;
 }
 
-void sort_and_insert(uint localId, const ModelInfo minfo, int thisPriority, int thisDistance, ObjectWindSample windSample) {
+void sort_and_insert(uint localId, const ModelInfo minfo, int thisPriority, int thisDistance, const ObjectWindSample windSample) {
     int size = minfo.size;
 
     if (localId < size) {
@@ -345,79 +340,73 @@ void sort_and_insert(uint localId, const ModelInfo minfo, int thisPriority, int 
             if (renderPriority < renderPris[i])
                 ++myOffset;
 
-        OutData outData[3];
-        for (int i = 0; i < 3; i++)
-            outData[i] = OutData(vb[offset + localId * 3 + i], vec4(0), UVData(vec3(0), 0));
-
-        if (!skipNormals)
-            for (int i = 0; i < 3; i++)
-                outData[i].normal = normal[normalOffset + localId * 3 + i];
-
-        vec3 displacement[3] = vec3[3](vec3(0), vec3(0), vec3(0));
-        applyWindDisplacement(windSample, vertexFlags, height, pos, outData, displacement);
-
-        for (int i = 0; i < 3; i++) {
-            // Apply any displacement
-            outData[i].vertex.pos += displacement[i];
-            // rotate for model orientation
-            outData[i].vertex.pos = rotate(outData[i].vertex.pos, orientation);
-        }
+        vec4 flatNormal = vec4(0);
 
         #if UNDO_VANILLA_SHADING
-        if ((int(outData[0].vertex.ahsl) >> 20 & 1) == 0) {
-            vec3 normals[3];
-            if (length(outData[0].normal.xyz) == 0) {
-                // Compute flat normal if necessary, and rotate it back to match unrotated normals
-                vec3 N = cross(outData[0].vertex.pos - outData[1].vertex.pos, outData[0].vertex.pos - outData[2].vertex.pos);
-                for (int i = 0; i < 3; i++)
-                    normals[i] = N;
-            } else {
-                for (int i = 0; i < 3; i++)
-                    normals[i] = outData[i].normal.xyz;
-            }
-
-            for (int i = 0; i < 3; i++)
-                undoVanillaShading(outData[i].vertex.ahsl, normals[i]);
-        }
+            if ((int(vb[offset + localId * 3].ahsl) >> 20 & 1) == 0)
+                skipNormals = true;
         #endif
 
-        for (int i = 0; i < 3; i++) {
-            outData[i].vertex.pos += pos;
-            outData[i].normal = rotate(outData[i].normal, orientation);
+        // Compute flat normal if necessary, and rotate it back to match unrotated normals
+        if (skipNormals) {
+            vec3 vertices[3];
+            for (int i = 0; i < 3; i++)
+                vertices[i] = vb[offset + localId * 3 + i].pos;
+            flatNormal = vec4(cross(vertices[0] - vertices[1], vertices[0] - vertices[2]), 0);
         }
 
-        // apply hillskew
-        int plane = flags >> 24 & 3;
-        int hillskewFlags = flags >> 26 & 1;
-        if ((vertexFlags >> MATERIAL_FLAG_TERRAIN_VERTEX_SNAPPING & 1) == 1)
-            hillskewFlags |= HILLSKEW_TILE_SNAPPING;
-        if (hillskewFlags != HILLSKEW_NONE)
-            for (int i = 0; i < 3; i++)
-                hillskew_vertex(outData[i].vertex.pos, hillskewFlags, pos.y, height, plane);
+        for (int i = 0; i < 3; i++) {
+            OutData outData = OutData(
+                vb[offset + localId * 3 + i],
+                flatNormal,
+                UVData(vec3(0), 0)
+            );
 
-        if (!skipUvs) {
-            for (int i = 0; i < 3; i++)
-                outData[i].uv = uv[uvOffset + localId * 3 + i];
+            vec3 displacement = applyWindDisplacement(windSample, vertexFlags, height, pos, outData.vertex.pos, outData.normal.xyz);
+            // Apply any displacement
+            outData.vertex.pos += displacement;
 
-            if ((vertexFlags >> MATERIAL_FLAG_VANILLA_UVS & 1) == 1) {
-                for (int i = 0; i < 3; i++) {
-                    outData[i].uv.uvw += displacement[i];
+            // rotate for model orientation
+            outData.vertex.pos = rotate(outData.vertex.pos, orientation);
+
+            outData.vertex.pos += pos;
+
+            if (!skipNormals)
+                outData.normal = normal[normalOffset + localId * 3 + i];
+
+            #if UNDO_VANILLA_SHADING
+                undoVanillaShading(outData);
+            #endif
+
+            outData.normal = rotate(outData.normal, orientation);
+
+            // apply hillskew
+            int plane = flags >> 24 & 3;
+            int hillskewFlags = flags >> 26 & 1;
+            if ((vertexFlags >> MATERIAL_FLAG_TERRAIN_VERTEX_SNAPPING & 1) == 1)
+                hillskewFlags |= HILLSKEW_TILE_SNAPPING;
+            if (hillskewFlags != HILLSKEW_NONE)
+                hillskew_vertex(outData.vertex.pos, hillskewFlags, pos.y, height, plane);
+
+            if (!skipUvs) {
+                outData.uv = uv[uvOffset + localId * 3 + i];
+
+                if ((vertexFlags >> MATERIAL_FLAG_VANILLA_UVS & 1) == 1) {
+                    outData.uv.uvw += displacement;
 
                     // Rotate the texture triangles to match model orientation
-                    outData[i].uv.uvw = rotate(outData[i].uv.uvw, orientation);
+                    outData.uv.uvw = rotate(outData.uv.uvw, orientation);
 
                     // Shift texture triangles to world space
-                    outData[i].uv.uvw += pos;
+                    outData.uv.uvw += pos;
 
                     // For vanilla UVs, the first 3 components are an integer position vector
                     if (hillskewFlags != HILLSKEW_NONE)
-                        hillskew_vertex(outData[i].uv.uvw, hillskewFlags, pos.y, height, plane);
+                        hillskew_vertex(outData.uv.uvw, hillskewFlags, pos.y, height, plane);
                 }
-
             }
-        }
 
-        for (int i = 0; i < 3; i++)
-            renderBuffer[outOffset + myOffset * 3 + i] = outData[i];
+            renderBuffer[outOffset + myOffset * 3 + i] = outData;
+        }
     }
 }

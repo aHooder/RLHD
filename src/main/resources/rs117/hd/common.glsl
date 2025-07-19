@@ -53,11 +53,7 @@ float distance(vec3 vertex) {
  * Calculate the distance to a face
  */
 int face_distance(vec3 vA, vec3 vB, vec3 vC) {
-  float dvA = distance(vA);
-  float dvB = distance(vB);
-  float dvC = distance(vC);
-  float faceDistance = (dvA + dvB + dvC) / 3;
-  return int(faceDistance);
+  return int(distance((vA + vB + vC) / 3));
 }
 
 /*
@@ -86,12 +82,12 @@ vec3 toScreen(vec3 vertex) {
 /*
  * Test if a face is visible (not backward facing)
  */
-bool face_visible(vec3 vA, vec3 vB, vec3 vC, vec3 position) {
+bool face_visible(vec3 vA, vec3 vB, vec3 vC, const vec3 modelPos) {
   // Move model to scene location, and account for camera offset
-  vec3 cameraPos = vec3(cameraX, cameraY, cameraZ);
-  vA += position - cameraPos;
-  vB += position - cameraPos;
-  vC += position - cameraPos;
+  vec3 translation = modelPos - vec3(cameraX, cameraY, cameraZ);
+  vA += translation;
+  vB += translation;
+  vC += translation;
 
   vec3 sA = toScreen(vA);
   vec3 sB = toScreen(vB);
