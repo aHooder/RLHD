@@ -39,14 +39,14 @@
 #define HILLSKEW_TILE_SNAPPING_BLEND 0.1
 
 struct ModelInfo {
-    uint offset;   // offset into vertex buffer
-    int unused;
-    int size;     // length in faces
-    int idx;      // write idx in target buffer
-    int flags;    // hillskew, plane, orientation
-    int x;        // scene position x
-    int y;        // scene position y & model height
-    int z;        // scene position z
+    uint offset;   // offset into vertex buffer         //  2 bits left
+    int unused;                                         // 32 bits left
+    int size;     // length in faces                    // 19 bits left
+    int idx;      // write idx in target buffer         //  6 bits left
+    int flags;    // hillskew, plane, orientation       // 18 bits left
+    int x;        // scene position x                   // 16 bits left
+    int y;        // scene position y & model height    //  0 bits left
+    int z;        // scene position z                   // 16 bits left
 };
 
 struct ObjectWindSample {
