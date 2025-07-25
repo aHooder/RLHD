@@ -24,8 +24,8 @@
  */
 #pragma once
 
-#include utils/constants.glsl
-#include utils/color_utils.glsl
+#include <utils/constants.glsl>
+#include <utils/color_utils.glsl>
 
 vec3 sampleSky(vec3 dir, float roughness) {
     float azimuth = atan(dir.x, dir.z);
