@@ -1,10 +1,12 @@
 package rs117.hd.opengl.uniforms;
 
+import rs117.hd.utils.buffer.GLBuffer;
+
 import static org.lwjgl.opengl.GL33C.*;
 
-public class SkyUniforms extends UniformBuffer {
+public class SkyUniforms extends UniformBuffer<GLBuffer> {
 	public SkyUniforms() {
-		super("Sky", GL_DYNAMIC_DRAW);
+		super(GL_DYNAMIC_DRAW);
 	}
 
 	public Property inverseProjectionMatrix = addProperty(PropertyType.Mat4, "inverseProjectionMatrix");
