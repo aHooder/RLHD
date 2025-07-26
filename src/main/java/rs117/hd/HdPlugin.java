@@ -354,8 +354,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 	private int fboTiledLighting;
 	private int texTiledLighting;
-	private int tileCountX;
-	private int tileCountY;
+	private final int[] tiledLightingResolution = { 0, 0 };
 
 	private int texTileHeightMap;
 
@@ -1156,8 +1155,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		glActiveTexture(TEXTURE_UNIT_TILED_LIGHTING_MAP);
 
 		final int tileSize = 16;
-		tileCountX = Math.max(1, dpiViewport[2] / tileSize);
-		tileCountY = Math.max(1, dpiViewport[3] / tileSize);
+		tiledLightingResolution[0] = Math.max(1, dpiViewport[2] / tileSize);
+		tiledLightingResolution[1] = Math.max(1, dpiViewport[3] / tileSize);
 
 		fboTiledLighting = glGenFramebuffers();
 
@@ -1171,8 +1170,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			GL_TEXTURE_2D_ARRAY,
 			0,
 			GL_R16I,
-			tileCountX,
-			tileCountY,
+			tiledLightingResolution[0],
+			tiledLightingResolution[1],
 			MaxLightsPerTile.MAX_LIGHTS,
 			0,
 			GL_RED_INTEGER,
@@ -1182,8 +1181,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 		checkGLErrors();
 
-		uboGlobal.tileCountX.set(tileCountX);
-		uboGlobal.tileCountY.set(tileCountY);
+		uboGlobal.tiledLightingResolution.set(tiledLightingResolution);
 	}
 
 	private void destroyTiledLighting() {
@@ -1579,7 +1577,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			if (texTiledLighting != 0 && fboTiledLighting != 0) {
 				frameTimer.begin(Timer.TILED_LIGHTING_CULLING);
 
-				glViewport(0, 0, tileCountX, tileCountY);
+				glViewport(0, 0, tiledLightingResolution[0], tiledLightingResolution[1]);
 				glBindFramebuffer(GL_FRAMEBUFFER, fboTiledLighting);
 
 				glBindVertexArray(vaoQuad);
