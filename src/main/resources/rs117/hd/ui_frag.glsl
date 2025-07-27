@@ -25,10 +25,12 @@
 #version 330
 
 #include UI_SCALING_MODE
+#include HIDE_UI
 
 #define SAMPLING_MITCHELL 1
 #define SAMPLING_CATROM 2
 #define SAMPLING_XBR 3
+
 
 #include <uniforms/global.glsl>
 #include <uniforms/ui.glsl>
@@ -68,6 +70,10 @@ void main() {
 
     c = alphaBlend(c, alphaOverlay);
     c.rgb = colorBlindnessCompensation(c.rgb);
+
+        #if HIDE_UI
+        c = vec4(0);
+        #endif
 
     FragColor = c;
 }
