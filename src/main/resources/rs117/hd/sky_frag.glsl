@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, Hooder <ahooder@protonmail.com>
+ * Copyright (c) 2025, Hooder <ahooder@protonmail.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,45 +26,20 @@
 
 uniform sampler2D skyTexture;
 
-#include <uniforms/sky.glsl>
+#include <uniforms/global.glsl>
 
 #include <utils/sky.glsl>
 #include <utils/color_utils.glsl>
 #include <utils/color_blindness.glsl>
 
 in vec3 fRay;
-in vec2 fUv;
 
 out vec4 FragColor;
 
 void main() {
-//    vec2 uv = (fUv * 2 - 1) * vec2(1, -1);
-//    const float eps = .001;
-//    mat4 inverseProjectionMatrix = inverse(projectionMatrix);
-//    vec4 nearPos = inverseProjectionMatrix * vec4(uv, 0, 1);
-//    vec4 farPos = inverseProjectionMatrix * vec4(uv, 1 - eps, 1);
-//    nearPos.xyz /= nearPos.w;
-//    farPos.xyz /= farPos.w;
-//    vec3 ray = normalize(farPos.xyz - nearPos.xyz);
-
     vec3 ray = normalize(fRay);
-    vec3 c = ray;
-
-//    float azimuth = fract((atan(ray.x, ray.z) + TAU) / TAU);
-//    float altitude = acos(-ray.y) / PI;
-//    vec2 uv = vec2(azimuth, altitude);
-
-    float azimuth = atan(ray.x, ray.z);
-    float altitude = acos(-ray.y);
-    vec2 uv = vec2(azimuth, altitude) / PI;
-    uv.x = (uv.x + 1) / 2;
-
-    c = vec3(uv, 0);
-
-    c = sampleSky(ray);
-
+    vec3 c = sampleSky(ray);
     c = linearToSrgb(c);
-
     c = colorBlindnessCompensation(c.rgb);
     c = pow(c, vec3(gammaCorrection));
     FragColor = vec4(c, 1);

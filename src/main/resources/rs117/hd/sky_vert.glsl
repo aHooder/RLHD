@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, Hooder <ahooder@protonmail.com>
+ * Copyright (c) 2025, Hooder <ahooder@protonmail.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -27,21 +27,13 @@
 layout (location = 0) in vec3 vPos;
 layout (location = 1) in vec2 vUv;
 
-#include <uniforms/sky.glsl>
+#include <uniforms/global.glsl>
 
 out vec3 fRay;
-out vec2 fUv;
 
-void main()
-{
+void main() {
     gl_Position = vec4(vPos, 1.0);
-    vec2 uv = (vUv * 2 - 1) * vec2(1, -1);
-
     const float eps = 1e-10;
-    vec4 farPos = inverseProjectionMatrix * vec4(uv, eps, 1);
-    farPos.xyz /= farPos.w;
-    vec3 ray = normalize(farPos.xyz);
-
-    fRay = ray;
-    fUv = vUv;
+    vec4 farPos = invProjectionMatrix * vec4(2 * vUv - 1, eps, 1);
+    fRay = farPos.xyz / farPos.w;
 }
