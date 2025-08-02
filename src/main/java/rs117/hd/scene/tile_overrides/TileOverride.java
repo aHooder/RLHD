@@ -18,7 +18,7 @@ import rs117.hd.scene.AreaManager;
 import rs117.hd.scene.areas.Area;
 import rs117.hd.utils.Props;
 
-import static rs117.hd.utils.HDUtils.clamp;
+import static rs117.hd.utils.Vector.*;
 
 @Slf4j
 @NoArgsConstructor

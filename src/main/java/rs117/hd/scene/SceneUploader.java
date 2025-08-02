@@ -58,6 +58,8 @@ import static rs117.hd.scene.SceneContext.SCENE_OFFSET;
 import static rs117.hd.scene.tile_overrides.TileOverride.NONE;
 import static rs117.hd.scene.tile_overrides.TileOverride.OVERLAY_FLAG;
 import static rs117.hd.utils.HDUtils.HIDDEN_HSL;
+import static rs117.hd.utils.HDUtils.JAU_TO_RAD;
+import static rs117.hd.utils.Vector.*;
 
 @Slf4j
 @Singleton
@@ -739,9 +741,9 @@ public class SceneUploader {
 
 			float uvcos = -uvScale, uvsin = 0;
 			if (uvOrientation % 2048 != 0) {
-				float rad = -uvOrientation * (float) UNIT;
-				uvcos = (float) Math.cos(rad) * -uvScale;
-				uvsin = (float) Math.sin(rad) * -uvScale;
+				float rad = -uvOrientation * JAU_TO_RAD;
+				uvcos = cos(rad) * -uvScale;
+				uvsin = sin(rad) * -uvScale;
 			}
 			float uvx = worldPos[0];
 			float uvy = worldPos[1];
@@ -1085,9 +1087,9 @@ public class SceneUploader {
 
 			float uvcos = -uvScale, uvsin = 0;
 			if (uvOrientation % 2048 != 0) {
-				float rad = -uvOrientation * (float) UNIT;
-				uvcos = (float) Math.cos(rad) * -uvScale;
-				uvsin = (float) Math.sin(rad) * -uvScale;
+				float rad = -uvOrientation * JAU_TO_RAD;
+				uvcos = cos(rad) * -uvScale;
+				uvsin = sin(rad) * -uvScale;
 			}
 
 			sceneContext.stagingBufferUvs.ensureCapacity(12);

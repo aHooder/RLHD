@@ -137,6 +137,7 @@ import rs117.hd.utils.PopupUtils;
 import rs117.hd.utils.Props;
 import rs117.hd.utils.ResourcePath;
 import rs117.hd.utils.ShaderRecompile;
+import rs117.hd.utils.Vector;
 import rs117.hd.utils.buffer.GLBuffer;
 import rs117.hd.utils.buffer.GpuIntBuffer;
 import rs117.hd.utils.buffer.SharedGLBuffer;
@@ -150,9 +151,8 @@ import static rs117.hd.HdPluginConfig.*;
 import static rs117.hd.scene.SceneContext.SCENE_OFFSET;
 import static rs117.hd.utils.HDUtils.MAX_FLOAT_WITH_128TH_PRECISION;
 import static rs117.hd.utils.HDUtils.PI;
-import static rs117.hd.utils.HDUtils.clamp;
 import static rs117.hd.utils.ResourcePath.path;
-import static rs117.hd.utils.Vector.pow;
+import static rs117.hd.utils.Vector.*;
 
 @PluginDescriptor(
 	name = "117 HD",
@@ -360,13 +360,13 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	@Getter
 	@Nullable
 	private int[] uiResolution;
-	private final int[] scaledUiResolution = { 0, 0 };
+	private final int[] actualUiResolution = { 0, 0 }; // Includes stretched mode and DPI scaling
 	private int texUi;
 	private int pboUi;
 
 	@Nullable
 	private int[] sceneViewport;
-	private float[] sceneViewportScale;
+	private final float[] sceneViewportScale = { 1, 1 };
 	private int msaaSamples;
 
 	private int[] sceneResolution;
@@ -890,7 +890,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			.define("WIND_DISPLACEMENT", configWindDisplacement)
 			.define("WIND_DISPLACEMENT_NOISE_RESOLUTION", WIND_DISPLACEMENT_NOISE_RESOLUTION)
 			.define("CHARACTER_DISPLACEMENT", configCharacterDisplacement)
-			.define("MAX_CHARACTER_POSITION_COUNT", Math.max(1, UBOCompute.MAX_CHARACTER_POSITION_COUNT))
+			.define("MAX_CHARACTER_POSITION_COUNT", max(1, UBOCompute.MAX_CHARACTER_POSITION_COUNT))
 			.define("WIREFRAME", config.wireframe())
 			.addInclude(
 				"MATERIAL_CONSTANTS", () -> {
@@ -956,7 +956,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			for (int i = 0; i < numSortingBins; i++) {
 				int faceCount = modelSortingBinFaceCounts[i];
 				int threadCount = modelSortingBinThreadCounts[i];
-				int facesPerThread = (int) Math.ceil((float) faceCount / threadCount);
+				int facesPerThread = ceil((float) faceCount / threadCount);
 				var program = new ModelSortingComputeProgram(threadCount, facesPerThread);
 				modelSortingComputePrograms.add(program);
 				program.compile(includes);
@@ -1020,7 +1020,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			int facesPerThread = 1;
 			int threadCount;
 			while (true) {
-				threadCount = (int) Math.ceil((float) targetFaceCount / facesPerThread);
+				threadCount = ceil((float) targetFaceCount / facesPerThread);
 				if (threadCount <= maxThreadCount)
 					break;
 				++facesPerThread;
@@ -1239,8 +1239,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 		final int tileSize = 16;
 		int[] resolution = {
-			Math.max(1, Math.round((float) sceneResolution[0] / tileSize)),
-			Math.max(1, Math.round((float) sceneResolution[1] / tileSize))
+			max(1, Math.round((float) sceneResolution[0] / tileSize)),
+			max(1, Math.round((float) sceneResolution[1] / tileSize))
 		};
 		if (Arrays.equals(resolution, tiledLightingResolution))
 			return;
@@ -1306,10 +1306,10 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		if (viewport[2] == 0 || viewport[3] == 0)
 			return;
 
-		sceneViewportScale = getDpiScaling();
-		// UI stretching also affects the scene viewport
+		// UI stretching and DPI scaling also affects the scene viewport
+		Vector.divide(sceneViewportScale, vec(actualUiResolution), vec(uiResolution));
 		for (int i = 0; i < 2; i++)
-			sceneViewportScale[i] *= (float) scaledUiResolution[i] / uiResolution[i];
+			sceneViewportScale[i] = (float) actualUiResolution[i] / uiResolution[i];
 
 		if (sceneViewportScale[0] != 1 || sceneViewportScale[1] != 1) {
 			// Pad the viewport before scaling, so it always covers the game viewport in the UI
@@ -1331,8 +1331,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		int defaultFramebuffer = awtContext.getFramebuffer(false);
 		glBindFramebuffer(GL_FRAMEBUFFER, defaultFramebuffer);
 		final int forcedAASamples = glGetInteger(GL_SAMPLES);
-		msaaSamples = forcedAASamples != 0 ? forcedAASamples :
-			Math.min(config.antiAliasingMode().getSamples(), glGetInteger(GL_MAX_SAMPLES));
+		msaaSamples = forcedAASamples != 0 ? forcedAASamples : min(config.antiAliasingMode().getSamples(), glGetInteger(GL_MAX_SAMPLES));
 
 		// Since there's seemingly no reliable way to check if the default framebuffer will do sRGB conversions with GL_FRAMEBUFFER_SRGB
 		// enabled, we always replace the default framebuffer with an sRGB one. We could technically support rendering to the default
@@ -1352,8 +1351,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 		float resolutionScale = config.sceneResolutionScale() / 100f;
 		sceneResolution = new int[] {
-			Math.max(1, Math.round(sceneViewport[2] * resolutionScale)),
-			Math.max(1, Math.round(sceneViewport[3] * resolutionScale))
+			max(1, Math.round(sceneViewport[2] * resolutionScale)),
+			max(1, Math.round(sceneViewport[3] * resolutionScale))
 		};
 		uboGlobal.sceneResolution.set(sceneResolution);
 
@@ -1663,8 +1662,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				uboCompute.cameraY.set(cameraPosition[1]);
 				uboCompute.cameraZ.set(cameraPosition[2]);
 
-				uboCompute.windDirectionX.set((float) Math.cos(environmentManager.currentWindAngle));
-				uboCompute.windDirectionZ.set((float) Math.sin(environmentManager.currentWindAngle));
+				uboCompute.windDirectionX.set(cos(environmentManager.currentWindAngle));
+				uboCompute.windDirectionZ.set(sin(environmentManager.currentWindAngle));
 				uboCompute.windStrength.set(environmentManager.currentWindStrength);
 				uboCompute.windCeiling.set(environmentManager.currentWindCeiling);
 				uboCompute.windOffset.set(windOffset);
@@ -1960,8 +1959,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 
 	private void prepareInterfaceTexture() {
 		int[] resolution = {
-			Math.max(1, client.getCanvasWidth()),
-			Math.max(1, client.getCanvasHeight())
+			max(1, client.getCanvasWidth()),
+			max(1, client.getCanvasHeight())
 		};
 		boolean resize = !Arrays.equals(uiResolution, resolution);
 		if (resize) {
@@ -1976,15 +1975,14 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, uiResolution[0], uiResolution[1], 0, GL_BGRA, GL_UNSIGNED_BYTE, 0);
 		}
 
-		float[] dpiScaling = getDpiScaling();
 		if (client.isStretchedEnabled()) {
 			Dimension dim = client.getStretchedDimensions();
-			scaledUiResolution[0] = dim.width;
-			scaledUiResolution[1] = dim.height;
+			actualUiResolution[0] = dim.width;
+			actualUiResolution[1] = dim.height;
 		} else {
-			System.arraycopy(uiResolution, 0, scaledUiResolution, 0, 2);
+			System.arraycopy(uiResolution, 0, actualUiResolution, 0, 2);
 		}
-		applyScaling(dpiScaling, scaledUiResolution);
+		applyScaling(getDpiScaling(), actualUiResolution);
 
 		if (configAsyncUICopy) {
 			// Start copying the UI on a different thread, to be uploaded during the next frame
@@ -2042,7 +2040,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			}
 
 			// If system time changes between frames, clamp the delta to a more sensible value
-			if (Math.abs(deltaTime) > 10)
+			if (abs(deltaTime) > 10)
 				deltaTime = 1 / 60.f;
 			elapsedTime += deltaTime;
 			windOffset += deltaTime * environmentManager.currentWindSpeed;
@@ -2088,7 +2086,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 					fogDepth = environmentManager.currentFogDepth;
 					break;
 			}
-			fogDepth *= Math.min(getDrawDistance(), 90) / 10.f;
+			fogDepth *= min(getDrawDistance(), 90) / 10.f;
 			uboGlobal.useFog.set(fogDepth > 0 ? 1 : 0);
 			uboGlobal.fogDepth.set(fogDepth);
 			uboGlobal.fogColor.set(fogColor);
@@ -2181,11 +2179,11 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				final int camX = cameraFocalPoint[0];
 				final int camY = cameraFocalPoint[1];
 
-				final int drawDistanceSceneUnits = Math.min(config.shadowDistance().getValue(), getDrawDistance()) * LOCAL_TILE_SIZE / 2;
-				final int east = Math.min(camX + drawDistanceSceneUnits, LOCAL_TILE_SIZE * SCENE_SIZE);
-				final int west = Math.max(camX - drawDistanceSceneUnits, 0);
-				final int north = Math.min(camY + drawDistanceSceneUnits, LOCAL_TILE_SIZE * SCENE_SIZE);
-				final int south = Math.max(camY - drawDistanceSceneUnits, 0);
+				final int drawDistanceSceneUnits = min(config.shadowDistance().getValue(), getDrawDistance()) * LOCAL_TILE_SIZE / 2;
+				final int east = min(camX + drawDistanceSceneUnits, LOCAL_TILE_SIZE * SCENE_SIZE);
+				final int west = max(camX - drawDistanceSceneUnits, 0);
+				final int north = min(camY + drawDistanceSceneUnits, LOCAL_TILE_SIZE * SCENE_SIZE);
+				final int south = max(camY - drawDistanceSceneUnits, 0);
 				final int width = east - west;
 				final int height = north - south;
 				final int depthScale = 10000;
@@ -2194,7 +2192,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				final float maxScale = 0.7f;
 				final float minScale = 0.4f;
 				final float scaleMultiplier = 1.0f - (getDrawDistance() / (maxDrawDistance * maxScale));
-				float scale = HDUtils.lerp(maxScale, minScale, scaleMultiplier);
+				float scale = mix(maxScale, minScale, scaleMultiplier);
 				float[] lightProjectionMatrix = Mat4.identity();
 				Mat4.mul(lightProjectionMatrix, Mat4.scale(scale, scale, scale));
 				Mat4.mul(lightProjectionMatrix, Mat4.orthographic(width, height, depthScale));
@@ -2367,13 +2365,13 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		// Disable alpha writes, just in case the default FBO has an alpha channel
 		glColorMask(true, true, true, false);
 
-		glViewport(0, 0, scaledUiResolution[0], scaledUiResolution[1]);
+		glViewport(0, 0, actualUiResolution[0], actualUiResolution[1]);
 
 		tiledLightingOverlay.render();
 
 		uiProgram.use();
 		uboUI.sourceDimensions.set(uiResolution);
-		uboUI.targetDimensions.set(scaledUiResolution);
+		uboUI.targetDimensions.set(actualUiResolution);
 		uboUI.alphaOverlay.set(ColorUtils.srgba(overlayColor));
 		uboUI.upload();
 
@@ -2410,8 +2408,8 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		if (uiResolution == null)
 			return null;
 
-		int width = scaledUiResolution[0];
-		int height = scaledUiResolution[1];
+		int width = actualUiResolution[0];
+		int height = actualUiResolution[1];
 
 		ByteBuffer buffer = BufferUtils.createByteBuffer(width * height * 4);
 
@@ -2919,10 +2917,12 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 		int[][][] tileHeights = scene.getTileHeights();
 		int x = ((tileExX - SCENE_OFFSET) << Perspective.LOCAL_COORD_BITS) + 64;
 		int z = ((tileExY - SCENE_OFFSET) << Perspective.LOCAL_COORD_BITS) + 64;
-		int y = Math.max(
-			Math.max(tileHeights[plane][tileExX][tileExY], tileHeights[plane][tileExX][tileExY + 1]),
-			Math.max(tileHeights[plane][tileExX + 1][tileExY], tileHeights[plane][tileExX + 1][tileExY + 1])
-		) + GROUND_MIN_Y;
+		int y = GROUND_MIN_Y + max(
+			tileHeights[plane][tileExX][tileExY],
+			tileHeights[plane][tileExX][tileExY + 1],
+			tileHeights[plane][tileExX + 1][tileExY],
+			tileHeights[plane][tileExX + 1][tileExY + 1]
+		);
 
 		if (sceneContext.scene == scene) {
 			int depthLevel = sceneContext.underwaterDepthLevels[plane][tileExX][tileExY];
@@ -3105,7 +3105,7 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 			// The model is part of the static scene buffer
 			assert model == renderable;
 
-			faceCount = Math.min(MAX_FACE_COUNT, offsetModel.getFaceCount());
+			faceCount = min(MAX_FACE_COUNT, offsetModel.getFaceCount());
 			int vertexOffset = offsetModel.getBufferOffset();
 			int uvOffset = offsetModel.getUvBufferOffset();
 			boolean hillskew = offsetModel != model;

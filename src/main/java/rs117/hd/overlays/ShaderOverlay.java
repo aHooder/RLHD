@@ -53,7 +53,7 @@ import rs117.hd.opengl.shader.ShaderTemplate;
 import rs117.hd.utils.ShaderRecompile;
 
 import static org.lwjgl.opengl.GL33C.*;
-import static rs117.hd.utils.HDUtils.clamp;
+import static rs117.hd.utils.Vector.*;
 
 @Slf4j
 @Singleton

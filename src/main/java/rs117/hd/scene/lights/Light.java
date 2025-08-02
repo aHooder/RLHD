@@ -4,11 +4,13 @@ import net.runelite.api.*;
 import net.runelite.api.coords.*;
 import rs117.hd.utils.HDUtils;
 
+import static rs117.hd.utils.Vector.*;
+
 public class Light
 {
 	public static final float VISIBILITY_FADE = 0.1f;
 
-	public final float randomOffset = HDUtils.rand.nextFloat();
+	public final float randomOffset = HDUtils.RAND.nextFloat();
 	public final LightDefinition def;
 
 	public float radius;
@@ -117,7 +119,7 @@ public class Light
 	public float getTemporaryVisibilityFade() {
 		float fade = 1;
 		if (changedVisibilityAt != -1)
-			fade = HDUtils.clamp((elapsedTime - changedVisibilityAt) / Light.VISIBILITY_FADE, 0, 1);
+			fade = saturate((elapsedTime - changedVisibilityAt) / Light.VISIBILITY_FADE);
 		if (hiddenTemporarily)
 			fade = 1 - fade; // Fade out instead
 		return fade;

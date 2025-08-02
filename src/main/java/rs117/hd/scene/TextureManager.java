@@ -52,7 +52,6 @@ import rs117.hd.model.ModelPusher;
 import rs117.hd.opengl.shader.ShaderIncludes;
 import rs117.hd.opengl.uniforms.UBOMaterials;
 import rs117.hd.opengl.uniforms.UBOWaterTypes;
-import rs117.hd.utils.HDUtils;
 import rs117.hd.utils.Props;
 import rs117.hd.utils.ResourcePath;
 
@@ -61,6 +60,7 @@ import static rs117.hd.HdPlugin.TEXTURE_UNIT_GAME;
 import static rs117.hd.HdPlugin.TEXTURE_UNIT_UI;
 import static rs117.hd.utils.HDUtils.HALF_PI;
 import static rs117.hd.utils.ResourcePath.path;
+import static rs117.hd.utils.Vector.*;
 
 @Slf4j
 @Singleton
@@ -238,7 +238,7 @@ public class TextureManager {
 		glActiveTexture(TEXTURE_UNIT_GAME);
 		glBindTexture(GL_TEXTURE_2D_ARRAY, textureArray);
 
-		int mipLevels = 1 + (int) Math.floor(HDUtils.log2(textureSize));
+		int mipLevels = 1 + floor(log2(textureSize));
 		int format = GL_SRGB8_ALPHA8;
 		if (HdPlugin.GL_CAPS.glTexStorage3D != 0) {
 			ARBTextureStorage.glTexStorage3D(GL_TEXTURE_2D_ARRAY, mipLevels, format, textureSize, textureSize, textureLayers.size());

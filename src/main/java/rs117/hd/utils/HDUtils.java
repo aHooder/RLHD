@@ -46,7 +46,7 @@ public class HDUtils {
 	public static final long KiB = 1024;
 	public static final long MiB = KiB * KiB;
 	public static final long GiB = MiB * KiB;
-	public static final Random rand = new Random();
+	public static final Random RAND = new Random();
 
 	// The epsilon for floating point values used by jogl
 	public static final float EPSILON = 1.1920929E-7f;
@@ -56,6 +56,9 @@ public class HDUtils {
 	public static final float HALF_PI = PI / 2;
 	public static final float QUARTER_PI = PI / 2;
 
+	public static final float JAU_TO_RAD = TWO_PI / 2048;
+	public static final float RAD_TO_JAU = 1 / JAU_TO_RAD;
+
 	public static final float MAX_FLOAT_WITH_128TH_PRECISION = 1 << 16;
 
 	public static final int MAX_SNOW_LIGHTNESS = 70;
@@ -63,119 +66,6 @@ public class HDUtils {
 
 	// directional vectors approximately opposite of the directional light used by the client
 	private static final float[] LIGHT_DIR_TILE = new float[] { 0.70710678f, 0.70710678f, 0f };
-
-	public static float min(float... v) {
-		float min = v[0];
-		for (int i = 1; i < v.length; i++)
-			if (v[i] < min)
-				min = v[i];
-		return min;
-	}
-
-	public static float max(float... v) {
-		float max = v[0];
-		for (int i = 1; i < v.length; i++)
-			if (v[i] > max)
-				max = v[i];
-		return max;
-	}
-
-	public static float sum(float... v) {
-		float sum = 0;
-		for (float x : v)
-			sum += x;
-		return sum;
-	}
-
-	public static float avg(float... v) {
-		return sum(v) / v.length;
-	}
-
-	public static float lerp(float a, float b, float t) {
-		return a + (b - a) * t;
-	}
-
-	public static float[] lerp(float[] vecA, float[] vecB, float t) {
-		float[] out = new float[Math.min(vecA.length, vecB.length)];
-		for (int i = 0; i < out.length; i++)
-			out[i] = lerp(vecA[i], vecB[i], t);
-		return out;
-	}
-
-	static int[] lerp(int[] vecA, int[] vecB, float t) {
-		int[] out = new int[Math.min(vecA.length, vecB.length)];
-		for (int i = 0; i < out.length; i++)
-			out[i] = (int) lerp(vecA[i], vecB[i], t);
-		return out;
-	}
-
-	public static float hermite(float from, float to, float t) {
-		float t2 = t * t;
-		float t3 = t2 * t;
-		return
-			from * (1 - 3 * t2 + 2 * t3) +
-			to * (3 * t2 - 2 * t3);
-	}
-
-	public static float[] hermite(float[] from, float[] to, float t) {
-		float[] result = new float[from.length];
-		for (int i = 0; i < result.length; i++)
-			result[i] = hermite(from[i], to[i], t);
-		return result;
-	}
-
-	public static double fract(double x) {
-		return mod(x, 1);
-	}
-
-	public static float fract(float x) {
-		return mod(x, 1);
-	}
-
-	/**
-	 * Modulo that returns the answer with the same sign as the modulus.
-	 */
-	public static double mod(double x, double modulus) {
-		return (x - Math.floor(x / modulus) * modulus);
-	}
-
-	/**
-	 * Modulo that returns the answer with the same sign as the modulus.
-	 */
-	public static float mod(float x, float modulus) {
-		return (float) (x - Math.floor(x / modulus) * modulus);
-	}
-
-	/**
-	 * Modulo that returns the answer with the same sign as the modulus.
-	 */
-	public static int mod(int x, int modulus) {
-		return ((x % modulus) + modulus) % modulus;
-	}
-
-	public static float sign(float value) {
-		return value < 0 ? -1 : 1;
-	}
-
-	public static int sign(int value) {
-		return value < 0 ? -1 : 1;
-	}
-
-	public static float clamp(float value, float min, float max) {
-		return Math.min(Math.max(value, min), max);
-	}
-
-	public static int clamp(int value, int min, int max) {
-		return Math.min(Math.max(value, min), max);
-	}
-
-	public static long clamp(long value, long min, long max) {
-		return Math.min(Math.max(value, min), max);
-	}
-
-	public static double log2(double x) {
-		return Math.log(x) / Math.log(2);
-	}
 
 	public static int vertexHash(int[] vPos) {
 		// simple custom hashing function for vertex position data

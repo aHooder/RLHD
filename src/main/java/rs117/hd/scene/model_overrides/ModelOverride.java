@@ -23,7 +23,8 @@ import rs117.hd.utils.Vector;
 import static net.runelite.api.Perspective.*;
 import static rs117.hd.utils.ExpressionParser.asExpression;
 import static rs117.hd.utils.ExpressionParser.parseExpression;
-import static rs117.hd.utils.HDUtils.clamp;
+import static rs117.hd.utils.HDUtils.JAU_TO_RAD;
+import static rs117.hd.utils.Vector.*;
 
 @Slf4j
 @NoArgsConstructor
@@ -310,13 +311,13 @@ public class ModelOverride
 	}
 
 	public void computeModelUvw(float[] out, int i, float x, float y, float z, int orientation) {
-		double rad, cos, sin;
+		float rad, cos, sin;
 		float temp;
 		if (orientation % 2048 != 0) {
 			// Reverse baked vertex rotation
-			rad = orientation * UNIT;
-			cos = Math.cos(rad);
-			sin = Math.sin(rad);
+			rad = orientation * JAU_TO_RAD;
+			cos = cos(rad);
+			sin = sin(rad);
 			temp = (float) (x * sin + z * cos);
 			x = (float) (x * cos - z * sin);
 			z = temp;
@@ -329,9 +330,9 @@ public class ModelOverride
 		uvType.computeModelUvw(out, i, x, y, z);
 
 		if (uvOrientation % 2048 != 0) {
-			rad = uvOrientation * UNIT;
-			cos = Math.cos(rad);
-			sin = Math.sin(rad);
+			rad = uvOrientation * JAU_TO_RAD;
+			cos = cos(rad);
+			sin = sin(rad);
 			x = out[i] - .5f;
 			z = out[i + 1] - .5f;
 			temp = (float) (x * sin + z * cos);
@@ -436,7 +437,7 @@ public class ModelOverride
 		float temp;
 		if (modelOrientation % 2048 != 0) {
 			// Reverse baked vertex rotation
-			rad = modelOrientation * UNIT;
+			rad = modelOrientation * JAU_TO_RAD;
 			cos = Math.cos(rad);
 			sin = Math.sin(rad);
 
@@ -473,7 +474,7 @@ public class ModelOverride
 			}
 
 			if (uvOrientationX % 2048 != 0) {
-				rad = uvOrientationX * UNIT;
+				rad = uvOrientationX * JAU_TO_RAD;
 				cos = Math.cos(rad);
 				sin = Math.sin(rad);
 
@@ -497,7 +498,7 @@ public class ModelOverride
 			}
 
 			if (uvOrientationY % 2048 != 0) {
-				rad = uvOrientationY * UNIT;
+				rad = uvOrientationY * JAU_TO_RAD;
 				cos = Math.cos(rad);
 				sin = Math.sin(rad);
 
@@ -521,7 +522,7 @@ public class ModelOverride
 			}
 
 			if (uvOrientationZ % 2048 != 0) {
-				rad = uvOrientationZ * UNIT;
+				rad = uvOrientationZ * JAU_TO_RAD;
 				cos = Math.cos(rad);
 				sin = Math.sin(rad);
 

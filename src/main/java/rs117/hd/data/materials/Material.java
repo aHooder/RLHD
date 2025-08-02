@@ -37,6 +37,8 @@ import rs117.hd.HdPlugin;
 import rs117.hd.config.SeasonalTheme;
 import rs117.hd.utils.ColorUtils;
 
+import static rs117.hd.utils.Vector.*;
+
 public enum Material {
 	// - Each enum entry refers to a texture file by name, in lowercase. If a texture with the specified name is found,
 	//   it will be loaded and resized to fit the dimensions of the texture array.
@@ -1158,7 +1160,7 @@ public enum Material {
 
 		Builder setTextureScale(float... xyz) {
 			textureScale = Arrays.copyOf(textureScale, 3);
-			System.arraycopy(xyz, 0, textureScale, 0, Math.min(3, xyz.length));
+			System.arraycopy(xyz, 0, textureScale, 0, min(3, xyz.length));
 			return this;
 		}
 

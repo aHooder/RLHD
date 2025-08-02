@@ -31,7 +31,7 @@ import static rs117.hd.HdPlugin.VERTEX_SIZE;
 public class SceneContext {
 	public static final int SCENE_OFFSET = (EXTENDED_SCENE_SIZE - SCENE_SIZE) / 2;
 
-	public final int id = HDUtils.rand.nextInt() & SceneUploader.SCENE_ID_MASK;
+	public final int id = HDUtils.RAND.nextInt() & SceneUploader.SCENE_ID_MASK;
 	public final Client client;
 	public final Scene scene;
 	public final AABB sceneBounds;

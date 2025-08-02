@@ -40,8 +40,9 @@ import rs117.hd.utils.ColorUtils;
 import rs117.hd.utils.Mat4;
 import rs117.hd.utils.Vector;
 
-import static net.runelite.api.Perspective.*;
 import static rs117.hd.HdPlugin.NEAR_PLANE;
+import static rs117.hd.utils.HDUtils.JAU_TO_RAD;
+import static rs117.hd.utils.Vector.*;
 
 @Slf4j
 @Singleton
@@ -78,9 +79,9 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 	private boolean followMouse;
 
 	private Action action = Action.SELECT;
-	private final double[] rawMousePos = new double[2];
-	private final double[] rawMousePosPrev = new double[2];
-	private final double[] mouseDelta = new double[2];
+	private final float[] rawMousePos = new float[2];
+	private final float[] rawMousePosPrev = new float[2];
+	private final float[] mouseDelta = new float[2];
 	private final float[] cameraOrientation = new float[2];
 	private Alignment originalLightAlignment = Alignment.CUSTOM;
 	private final float[] originalLightPosition = new float[3];
@@ -153,13 +154,13 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 				}
 			}
 		} else if (!isAltHeld) {
-			double scalingFactor = isShiftHeld ? .1 : 1;
+			float scalingFactor = isShiftHeld ? .1f : 1f;
 			for (int j = 0; j < 2; j++)
 				mouseDelta[j] += (rawMousePos[j] - rawMousePosPrev[j]) * scalingFactor;
 		}
 		System.arraycopy(rawMousePos, 0, rawMousePosPrev, 0, 2);
 
-		var mousePoint = new java.awt.Point((int) Math.round(rawMousePos[0]), (int) Math.round(rawMousePos[1]));
+		var mousePoint = new java.awt.Point(Math.round(rawMousePos[0]), Math.round(rawMousePos[1]));
 		SwingUtilities.convertPointFromScreen(mousePoint, client.getCanvas());
 		int[] mousePos = { mousePoint.x, mousePoint.y };
 
@@ -260,9 +261,9 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 					float[] oldLightPos = new float[4];
 					float[] newLightPos = new float[4];
 
-					float radians = (float) (l.orientation * UNIT);
-					float sin = (float) Math.sin(radians);
-					float cos = (float) Math.cos(radians);
+					float radians = l.orientation * JAU_TO_RAD;
+					float sin = sin(radians);
+					float cos = cos(radians);
 
 					// Project the light's current position into screen space
 					System.arraycopy(l.origin, 0, oldLightPos, 0, 3);
@@ -413,7 +414,7 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 			if (mousePosCanvas != null) {
 				float d = Vector.length(mousePosCanvas.getX() - x, mousePosCanvas.getY() - y);
 				if (d <= outerHandleRingDiameter / 2f + hoverDistanceMargin ||
-					!hideRadiusRings && Math.abs(d - currentDiameter / 2f) < hoverDistanceMargin * 2)
+					!hideRadiusRings && abs(d - currentDiameter / 2f) < hoverDistanceMargin * 2)
 					hovers.add(l);
 			}
 
@@ -445,7 +446,7 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 			// Draw radius rings
 			if (!hideRadiusRings) {
 				drawRing(g, x, y, currentDiameter, radiusRingColor, thinnerLine);
-				if (l.def.type == LightType.PULSE && Math.abs(currentDiameter) > .001f) {
+				if (l.def.type == LightType.PULSE && abs(currentDiameter) > .001f) {
 					drawRing(g, x, y, minDiameter, rangeRingsColor, thinLongDashedLine);
 					drawRing(g, x, y, maxDiameter, rangeRingsColor, thinLongDashedLine);
 				}
@@ -630,8 +631,8 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 
 	private void drawRing(Graphics2D g, int centerX, int centerY, int diameter, Color strokeColor, Stroke stroke) {
 		// Round down to an odd number
-		diameter = (int) Math.ceil(diameter / 2.f) * 2 - 1;
-		int r = (int) Math.ceil(diameter / 2.f);
+		diameter = ceil(diameter / 2.f) * 2 - 1;
+		int r = ceil(diameter / 2.f);
 		g.setColor(strokeColor);
 		g.setStroke(stroke);
 		g.drawOval(centerX - r, centerY - r, diameter, diameter);
@@ -647,7 +648,7 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 	private void drawCircleOutline(
 		Graphics2D g, int centerX, int centerY, int diameter, Color strokeColor, Stroke stroke
 	) {
-		int r = (int) Math.ceil(diameter / 2.f);
+		int r = ceil(diameter / 2.f);
 		int s = diameter - 1;
 		g.setColor(strokeColor);
 		g.setStroke(stroke);

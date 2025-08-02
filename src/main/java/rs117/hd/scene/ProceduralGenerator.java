@@ -45,12 +45,9 @@ import static rs117.hd.scene.SceneContext.SCENE_OFFSET;
 import static rs117.hd.scene.tile_overrides.TileOverride.OVERLAY_FLAG;
 import static rs117.hd.utils.HDUtils.HIDDEN_HSL;
 import static rs117.hd.utils.HDUtils.calculateSurfaceNormals;
-import static rs117.hd.utils.HDUtils.clamp;
 import static rs117.hd.utils.HDUtils.dotLightDirectionTile;
-import static rs117.hd.utils.HDUtils.fract;
-import static rs117.hd.utils.HDUtils.lerp;
 import static rs117.hd.utils.HDUtils.vertexHash;
-import static rs117.hd.utils.Vector.add;
+import static rs117.hd.utils.Vector.*;
 
 @Slf4j
 @Singleton
@@ -271,29 +268,15 @@ public class ProceduralGenerator {
 			int lightenBase = 15;
 			int lightenAdd = 3;
 			float darkenMultiplier = 0.5f;
-			int darkenBase = 0;
-			int darkenAdd = 0;
 
 			float[] vNormals = sceneContext.vertexTerrainNormals.getOrDefault(vertexHashes[vertex], new float[] { 0, 0, 0 });
 
 			float dot = dotLightDirectionTile(vNormals[0], vNormals[1], vNormals[2]);
 			int lightness = color & 0x7F;
-			lightness = (int) lerp(
-				lightness,
-				(int) (
-					Math.max((lightness - lightenAdd), 0) * lightenMultiplier
-				) + lightenBase,
-				Math.max(dot, 0)
-			);
-			lightness = (int) (
-				1.25f * lerp(
-					lightness,
-					(int) (Math.max((lightness - darkenAdd), 0) * darkenMultiplier) + darkenBase,
-					Math.abs(Math.min(dot, 0))
-				)
-			);
+			lightness = (int) mix(lightness, (int) (max(lightness - lightenAdd, 0) * lightenMultiplier) + lightenBase, max(dot, 0));
+			lightness = (int) (1.25f * mix(lightness, (int) (lightness * darkenMultiplier), -min(dot, 0)));
 			final int maxBrightness = 55; // reduces overexposure
-			lightness = Math.min(lightness, maxBrightness);
+			lightness = min(lightness, maxBrightness);
 			color = color & ~0x7F | lightness;
 
 			boolean isOverlay = false;
@@ -672,13 +655,13 @@ public class ProceduralGenerator {
 
 									float lerpX = fract(vertices[vertex][0] / (float) LOCAL_TILE_SIZE);
 									float lerpY = fract(vertices[vertex][1] / (float) LOCAL_TILE_SIZE);
-									float northHeightOffset = lerp(
+									float northHeightOffset = mix(
 										underwaterDepths[z][x][y + 1],
 										underwaterDepths[z][x + 1][y + 1],
 										lerpX
 									);
-									float southHeightOffset = lerp(underwaterDepths[z][x][y], underwaterDepths[z][x + 1][y], lerpX);
-									int heightOffset = (int) lerp(southHeightOffset, northHeightOffset, lerpY);
+									float southHeightOffset = mix(underwaterDepths[z][x][y], underwaterDepths[z][x + 1][y], lerpX);
+									int heightOffset = (int) mix(southHeightOffset, northHeightOffset, lerpY);
 
 									if (!sceneContext.vertexIsLand.containsKey(vertexKeys[vertex])) {
 										sceneContext.vertexUnderwaterDepth.put(vertexKeys[vertex], heightOffset);
@@ -1029,25 +1012,25 @@ public class ProceduralGenerator {
 			// apply coloring to the rocky walls
 			if (color1L < 20) {
 				float pos = clamp((heightA - gradientTop) / (float) gradientBottom, 0.0f, 1.0f);
-				color1H = (int) lerp(gradientDarkColor[0], gradientBaseColor[0], pos);
-				color1S = (int) lerp(gradientDarkColor[1], gradientBaseColor[1], pos);
-				color1L = (int) lerp(gradientDarkColor[2], gradientBaseColor[2], pos);
+				color1H = (int) mix(gradientDarkColor[0], gradientBaseColor[0], pos);
+				color1S = (int) mix(gradientDarkColor[1], gradientBaseColor[1], pos);
+				color1L = (int) mix(gradientDarkColor[2], gradientBaseColor[2], pos);
 			}
 
 			if (color2L < 20)
 			{
 				float pos = clamp((heightB - gradientTop) / (float) gradientBottom, 0.0f, 1.0f);
-				color2H = (int) lerp(gradientDarkColor[0], gradientBaseColor[0], pos);
-				color2S = (int) lerp(gradientDarkColor[1], gradientBaseColor[1], pos);
-				color2L = (int) lerp(gradientDarkColor[2], gradientBaseColor[2], pos);
+				color2H = (int) mix(gradientDarkColor[0], gradientBaseColor[0], pos);
+				color2S = (int) mix(gradientDarkColor[1], gradientBaseColor[1], pos);
+				color2L = (int) mix(gradientDarkColor[2], gradientBaseColor[2], pos);
 			}
 
 			if (color3L < 20)
 			{
 				float pos = clamp((heightC - gradientTop) / (float) gradientBottom, 0.0f, 1.0f);
-				color3H = (int) lerp(gradientDarkColor[0], gradientBaseColor[0], pos);
-				color3S = (int) lerp(gradientDarkColor[1], gradientBaseColor[1], pos);
-				color3L = (int) lerp(gradientDarkColor[2], gradientBaseColor[2], pos);
+				color3H = (int) mix(gradientDarkColor[0], gradientBaseColor[0], pos);
+				color3S = (int) mix(gradientDarkColor[1], gradientBaseColor[1], pos);
+				color3L = (int) mix(gradientDarkColor[2], gradientBaseColor[2], pos);
 			}
 		}
 		else if (modelOverride.tzHaarRecolorType == TzHaarRecolorType.HUE_SHIFT)

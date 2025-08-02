@@ -135,7 +135,7 @@ public class ModelCache {
 
 			try {
 				// Try allocating in chunks of up to 1 GiB each
-				int numChunks = (int) Math.ceil((double) byteCapacity / GiB);
+				int numChunks = (int) ((byteCapacity + GiB - 1) / GiB);
 				allocations = new Allocation[numChunks];
 				for (int i = 0; i < numChunks; i++) {
 					allocations[i] = new Allocation(Math.min(byteCapacity - i * GiB, GiB));
