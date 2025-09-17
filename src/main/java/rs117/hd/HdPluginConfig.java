@@ -992,6 +992,22 @@ public interface HdPluginConfig extends Config
 	)
 	String experimentalSettings = "experimentalSettings";
 
+	String KEY_EXPERIMENTAL_RENDERER = "experimentalRenderer";
+	@ConfigItem(
+		keyName = KEY_EXPERIMENTAL_RENDERER,
+		name = "Renderer",
+		description = "",
+		section = experimentalSettings,
+		position = 0
+	)
+	default Renderer renderer() {
+		return Renderer.LEGACY;
+	}
+	enum Renderer {
+		LEGACY,
+		ZBUF
+	}
+
 	String KEY_FASTER_MODEL_HASHING = "experimentalFasterModelHashing";
 	@ConfigItem(
 		keyName = KEY_FASTER_MODEL_HASHING,

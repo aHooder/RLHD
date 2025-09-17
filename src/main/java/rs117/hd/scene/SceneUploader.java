@@ -37,6 +37,7 @@ import net.runelite.api.*;
 import rs117.hd.HdPlugin;
 import rs117.hd.HdPluginConfig;
 import rs117.hd.model.ModelPusher;
+import rs117.hd.renderer.LegacyRenderer;
 import rs117.hd.scene.areas.Area;
 import rs117.hd.scene.ground_materials.GroundMaterial;
 import rs117.hd.scene.materials.Material;
@@ -50,9 +51,6 @@ import rs117.hd.utils.ModelHash;
 import static net.runelite.api.Constants.*;
 import static net.runelite.api.Constants.SCENE_SIZE;
 import static net.runelite.api.Perspective.*;
-import static rs117.hd.HdPlugin.NORMAL_SIZE;
-import static rs117.hd.HdPlugin.UV_SIZE;
-import static rs117.hd.HdPlugin.VERTEX_SIZE;
 import static rs117.hd.scene.SceneContext.SCENE_OFFSET;
 import static rs117.hd.scene.tile_overrides.TileOverride.NONE;
 import static rs117.hd.scene.tile_overrides.TileOverride.OVERLAY_FLAG;
@@ -147,8 +145,8 @@ public class SceneUploader {
 			String.format(
 				"%.2f",
 				(
-					sceneContext.getVertexOffset() * 4L * (VERTEX_SIZE + NORMAL_SIZE) +
-					sceneContext.getUvOffset() * 4L * UV_SIZE
+					sceneContext.getVertexOffset() * 4L * (LegacyRenderer.VERTEX_SIZE + LegacyRenderer.NORMAL_SIZE) +
+					sceneContext.getUvOffset() * 4L * LegacyRenderer.UV_SIZE
 				) / 1e6
 			)
 		);

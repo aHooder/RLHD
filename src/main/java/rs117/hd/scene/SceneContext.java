@@ -11,6 +11,7 @@ import java.util.stream.Stream;
 import javax.annotation.Nullable;
 import net.runelite.api.*;
 import net.runelite.api.coords.*;
+import rs117.hd.renderer.LegacyRenderer;
 import rs117.hd.scene.areas.AABB;
 import rs117.hd.scene.areas.Area;
 import rs117.hd.scene.environments.Environment;
@@ -25,8 +26,6 @@ import rs117.hd.utils.buffer.GpuIntBuffer;
 import static net.runelite.api.Constants.*;
 import static net.runelite.api.Constants.SCENE_SIZE;
 import static net.runelite.api.Perspective.*;
-import static rs117.hd.HdPlugin.UV_SIZE;
-import static rs117.hd.HdPlugin.VERTEX_SIZE;
 import static rs117.hd.utils.MathUtils.*;
 
 public class SceneContext {
@@ -152,11 +151,11 @@ public class SceneContext {
 	}
 
 	public int getVertexOffset() {
-		return stagingBufferVertices.position() / VERTEX_SIZE;
+		return stagingBufferVertices.position() / LegacyRenderer.VERTEX_SIZE;
 	}
 
 	public int getUvOffset() {
-		return stagingBufferUvs.position() / UV_SIZE;
+		return stagingBufferUvs.position() / LegacyRenderer.UV_SIZE;
 	}
 
 	/**
