@@ -50,4 +50,6 @@ layout(std140) uniform UBOGlobal {
 
     float lightningBrightness;
     float elapsedTime;
+
+    float dirtNormalFactor;
 };

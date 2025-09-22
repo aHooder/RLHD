@@ -29,6 +29,7 @@ package rs117.hd;
 import com.google.gson.Gson;
 import com.google.inject.Provides;
 import java.awt.Canvas;
+import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.GraphicsConfiguration;
 import java.awt.Image;
@@ -72,6 +73,7 @@ import net.runelite.client.plugins.PluginManager;
 import net.runelite.client.plugins.entityhider.EntityHiderPlugin;
 import net.runelite.client.ui.ClientUI;
 import net.runelite.client.ui.DrawManager;
+import net.runelite.client.ui.components.colorpicker.ColorPickerManager;
 import net.runelite.client.util.LinkBrowser;
 import net.runelite.client.util.OSType;
 import net.runelite.rlawt.AWTContext;
@@ -522,6 +524,9 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 	private int gameTicksUntilSceneReload = 0;
 	private long colorFilterChangedAt;
 
+	@Inject
+	private ColorPickerManager colorPickerManager;
+
 	@Provides
 	HdPluginConfig provideConfig(ConfigManager configManager) {
 		return configManager.getConfig(HdPluginConfig.class);
@@ -735,6 +740,10 @@ public class HdPlugin extends Plugin implements DrawCallbacks {
 				checkGLErrors();
 
 				clientThread.invokeLater(this::displayUpdateMessage);
+
+				var picker = colorPickerManager.create(client, Color.WHITE, "Color picker", false);
+				picker.setOnColorChange(c -> uboGlobal.dirtNormalFactor.set(c.getAlpha() / 255.f));
+				picker.setVisible(true);
 			} catch (Throwable err) {
 				log.error("Error while starting 117 HD", err);
 				stopPlugin();

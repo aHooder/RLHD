@@ -42,6 +42,12 @@ vec3 sampleNormalMap(const Material material, const vec2 uv, const mat3 TBN) {
     n.xy *= sign(material.textureScale.xy);
     // Scale the normal map's Z-component to adjust strength
     n.z *= material.textureScale.z;
+
+    if (material.normalMap == MAT_DIRT_1_N.colorMap || material.normalMap == MAT_DIRT_2_N.colorMap) {
+        n = mix(n, vec3(0, 0, 1), pow(abs(IN.normal.y), exp(dirtNormalFactor * 16 - 8)));
+        n = normalize(n);
+    }
+
     // Transform the normal from tangent space to world space
     n = TBN * n;
     // Assume the normal is already normalized
