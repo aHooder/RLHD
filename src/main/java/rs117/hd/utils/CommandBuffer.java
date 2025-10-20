@@ -50,65 +50,55 @@ public class CommandBuffer {
 	}
 
 	public void SetWorldViewIndex(int index) {
-		ensureCapacity(2);
-		cmd[writeHead++] = UNIFORM_WORLD_VIEW_ID;
-		cmd[writeHead++] = index;
+		ensureCapacity(1);
+		cmd[writeHead++] = (UNIFORM_WORLD_VIEW_ID & 0xFF) | ((long) index << 8);
 	}
 
 	public void BindVertexArray(int vao) {
-		ensureCapacity(2);
-		cmd[writeHead++] = GL_BIND_VERTEX_ARRAY_TYPE;
-		cmd[writeHead++] = vao;
+		ensureCapacity(1);
+		cmd[writeHead++] = (GL_BIND_VERTEX_ARRAY_TYPE & 0xFF) | ((long) vao << 8);
 	}
 
 	public void BindElementsArray(int ebo) {
-		ensureCapacity(2);
-		cmd[writeHead++] = GL_BIND_ELEMENTS_ARRAY_TYPE;
-		cmd[writeHead++] = ebo;
+		ensureCapacity(1);
+		cmd[writeHead++] = (GL_BIND_ELEMENTS_ARRAY_TYPE & 0xFF) | ((long) ebo << 8);
 	}
 
 	public void DepthMask(boolean writeDepth) {
-		ensureCapacity(2);
-		cmd[writeHead++] = GL_DEPTH_MASK_TYPE;
-		cmd[writeHead++] = writeDepth ? 1 : 0;
+		ensureCapacity(1);
+		cmd[writeHead++] = (GL_DEPTH_MASK_TYPE & 0xFF) | ((writeDepth ? 1 : 0) << 8);
 	}
 
 	public void ColorMask(boolean writeRed, boolean writeGreen, boolean writeBlue, boolean writeAlpha) {
-		ensureCapacity(5);
-		cmd[writeHead++] = GL_COLOR_MASK_TYPE;
-		cmd[writeHead++] = writeRed ? 1 : 0;
-		cmd[writeHead++] = writeGreen ? 1 : 0;
-		cmd[writeHead++] = writeBlue ? 1 : 0;
-		cmd[writeHead++] = writeAlpha ? 1 : 0;
+		ensureCapacity(1);
+		cmd[writeHead++] = (GL_COLOR_MASK_TYPE & 0xFF) |
+						   ((writeRed ? 1 : 0) << 8) |
+						   ((writeGreen ? 1 : 0) << 9) |
+						   ((writeBlue ? 1 : 0) << 10) |
+						   ((writeAlpha ? 1 : 0) << 11);
 	}
 
 	public void MultiDrawArrays(int mode, int[] offsets, int[] counts) {
 		assert offsets.length == counts.length;
 
-		ensureCapacity(3 + (offsets.length * 2));
-		cmd[writeHead++] = GL_MULTI_DRAW_ARRAYS_TYPE;
-		cmd[writeHead++] = mode;
-		cmd[writeHead++] = offsets.length;
+		/*
+		ensureCapacity(1 + offsets.length);
+		cmd[writeHead++] = (GL_MULTI_DRAW_ARRAYS_TYPE & 0xFF) | ((long) mode << 8) | (long) offsets.length << 32;
 		for (int i = 0; i < offsets.length; i++) {
-			cmd[writeHead++] = offsets[i];
-			cmd[writeHead++] = counts[i];
-		}
+			cmd[writeHead++] = (((long)offsets[i]) << 32) | (counts[i] & 0xffffffffL);
+		}*/
 	}
 
 	public void DrawElements(int mode, int vertexCount, long offset) {
-		ensureCapacity(4);
-		cmd[writeHead++] = GL_DRAW_ELEMENTS_TYPE;
-		cmd[writeHead++] = mode;
-		cmd[writeHead++] = vertexCount;
+		ensureCapacity(2);
+		cmd[writeHead++] = (GL_DRAW_ELEMENTS_TYPE & 0xFF) | ((long) mode << 8) | (long) vertexCount << 32;
 		cmd[writeHead++] = offset;
 	}
 
 	public void DrawArrays(int mode, int offset, int vertexCount) {
-		ensureCapacity(4);
-		cmd[writeHead++] = GL_DRAW_ARRAYS_TYPE;
-		cmd[writeHead++] = mode;
-		cmd[writeHead++] = offset;
-		cmd[writeHead++] = vertexCount;
+		ensureCapacity(2);
+		cmd[writeHead++] = (GL_DRAW_ARRAYS_TYPE & 0xFF) | ((long) mode << 8);
+		cmd[writeHead++] = (((long)offset) << 32) | (vertexCount & 0xffffffffL);
 	}
 
 	public void Enable(int capability) {
@@ -130,7 +120,8 @@ public class CommandBuffer {
 			IntBuffer offsets = null, counts = null;
 			readHead = 0;
 			while (readHead < writeHead) {
-				int type = (int) cmd[readHead++];
+				long data = (int) cmd[readHead++];
+				int type = (int)(data & 0xFF);
 				switch (type) {
 					case UNIFORM_BASE_OFFSET: {
 						int x = (int) cmd[readHead++];
@@ -141,38 +132,40 @@ public class CommandBuffer {
 						break;
 					}
 					case UNIFORM_WORLD_VIEW_ID: {
-						int id = (int) cmd[readHead++];
+						int id = (int)(data >> 8);
 						if (uboCommandBuffer != null)
 							uboCommandBuffer.worldViewIndex.set(id);
 						break;
 					}
 					case GL_DEPTH_MASK_TYPE: {
-						int state = (int) cmd[readHead++];
+						int state = (int)((data >> 8) & 1);
 						if (SKIP_DEPTH_MASKING)
 							continue;
 						glDepthMask(state == 1);
 						break;
 					}
 					case GL_COLOR_MASK_TYPE: {
-						int red = (int) cmd[readHead++];
-						int green = (int) cmd[readHead++];
-						int blue = (int) cmd[readHead++];
-						int alpha = (int) cmd[readHead++];
+						int red = (int)((data >> 8) & 1);
+						int green = (int)((data >> 9) & 1);
+						int blue = (int)((data >> 10) & 1);
+						int alpha = (int)((data >> 11) & 1);
 						glColorMask(red == 1, green == 1, blue == 1, alpha == 1);
 						break;
 					}
 					case GL_BIND_VERTEX_ARRAY_TYPE: {
-						glBindVertexArray((int) cmd[readHead++]);
+						glBindVertexArray((int)(data >> 8));
 						break;
 					}
 					case GL_BIND_ELEMENTS_ARRAY_TYPE: {
-						glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, (int) cmd[readHead++]);
+						glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, (int)(data >> 8));
 						break;
 					}
 					case GL_DRAW_ARRAYS_TYPE: {
-						int mode = (int) cmd[readHead++];
-						int offset = (int) cmd[readHead++];
-						int count = (int) cmd[readHead++];
+						long packed = cmd[readHead++];
+
+						int mode = (int) data >> 8;
+						int offset = (int)(packed >> 32);
+						int count = (int)packed;
 
 						if (uboCommandBuffer != null && uboCommandBuffer.isDirty())
 							uboCommandBuffer.upload();
@@ -181,9 +174,9 @@ public class CommandBuffer {
 						break;
 					}
 					case GL_DRAW_ELEMENTS_TYPE: {
-						int mode = (int) cmd[readHead++];
-						int vertexCount = (int) cmd[readHead++];
-						long byteOffset = cmd[readHead++];
+						int mode = (int) data >> 8;
+						long byteOffset = (int)cmd[readHead++];
+						int vertexCount = (int)(data >> 32);
 
 						if (uboCommandBuffer != null && uboCommandBuffer.isDirty())
 							uboCommandBuffer.upload();
@@ -192,8 +185,8 @@ public class CommandBuffer {
 						break;
 					}
 					case GL_MULTI_DRAW_ARRAYS_TYPE: {
-						int mode = (int) cmd[readHead++];
-						int drawCount = (int) cmd[readHead++];
+						int mode = (int) data >> 8;
+						int drawCount = (int)(data >> 32);
 
 						if (offsets == null || offsets.capacity() < drawCount) {
 							offsets = stack.callocInt(drawCount);
@@ -201,8 +194,9 @@ public class CommandBuffer {
 						}
 
 						for (int i = 0; i < drawCount; i++) {
-							offsets.put((int) cmd[readHead++]);
-							counts.put((int) cmd[readHead++]);
+							long packed = cmd[readHead++];
+							offsets.put((int)(packed >> 32));
+							counts.put((int)packed);
 						}
 
 						offsets.flip();
