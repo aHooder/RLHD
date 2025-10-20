@@ -202,9 +202,6 @@ public final class CommandBuffer {
 
 		if(VALIDATE) logReadResult(result);
 
-		int remainder = readBitHead & 7;
-		if (remainder != 0) readBits(8 - remainder);
-
 		return result;
 	}
 
@@ -251,9 +248,6 @@ public final class CommandBuffer {
 			readHead = originalReadHead;
 			readBitHead = originalReadBitHead;
 		}
-
-		int remainder = writeBitHead & 7;
-		if (remainder != 0) writeBits(0, 8 - remainder);
 	}
 
 	protected void appendToValidationLog(String str) {
