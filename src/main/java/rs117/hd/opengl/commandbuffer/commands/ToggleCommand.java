@@ -2,24 +2,23 @@ package rs117.hd.opengl.commandbuffer.commands;
 
 import rs117.hd.opengl.commandbuffer.BaseCommand;
 
-import static org.lwjgl.opengl.GL11C.glDisable;
-import static org.lwjgl.opengl.GL11C.glEnable;
+import static org.lwjgl.opengl.GL11.glDisable;
+import static org.lwjgl.opengl.GL11.glEnable;
 
-public class ToggleCommand extends BaseCommand {
+public final class ToggleCommand extends BaseCommand {
 	public int capability;
 	public boolean state;
-
 
 	@Override
 	public void doWrite() {
 		write32(capability);
-		write1(state ? 1 : 0);
+		writeFlag(state);
 	}
 
 	@Override
 	public void doRead() {
 		capability = read32();
-		state = read1() == 1;
+		state = readFlag();
 	}
 
 	@Override

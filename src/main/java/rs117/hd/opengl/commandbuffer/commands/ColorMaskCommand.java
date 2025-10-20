@@ -4,27 +4,26 @@ import rs117.hd.opengl.commandbuffer.BaseCommand;
 
 import static org.lwjgl.opengl.GL11.glColorMask;
 
-public class ColorMaskCommand extends BaseCommand {
+public final class ColorMaskCommand extends BaseCommand {
 	public boolean red;
 	public boolean green;
 	public boolean blue;
 	public boolean alpha;
 
-
 	@Override
 	protected void doWrite() {
-		write1(red   ? 1 : 0);
-		write1(green ? 1 : 0);
-		write1(blue  ? 1 : 0);
-		write1(alpha ? 1 : 0);
+		writeFlag(red);
+		writeFlag(green);
+		writeFlag(blue);
+		writeFlag(alpha);
 	}
 
 	@Override
 	protected void doRead() {
-		red   = read1() == 1;
-		green = read1() == 1;
-		blue  = read1() == 1;
-		alpha = read1() == 1;
+		red   = readFlag();
+		green = readFlag();
+		blue  = readFlag();
+		alpha = readFlag();
 	}
 
 	@Override
