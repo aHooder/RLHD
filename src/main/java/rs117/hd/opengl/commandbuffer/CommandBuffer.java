@@ -4,6 +4,7 @@ import java.util.Arrays;
 import lombok.Setter;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import rs117.hd.HdPlugin;
 import rs117.hd.opengl.commandbuffer.commands.BindElementsArrayCommand;
 import rs117.hd.opengl.commandbuffer.commands.BindVertexArrayCommand;
 import rs117.hd.opengl.commandbuffer.commands.ColorMaskCommand;
@@ -17,6 +18,8 @@ import rs117.hd.opengl.uniforms.UBOCommandBuffer;
 
 @Slf4j
 public class CommandBuffer {
+	private static final StringBuilder SB = new StringBuilder();
+
 	private static int COMMAND_COUNT = 0;
 	private static final BaseCommand[] REGISTERED_COMMANDS = {
 		(DRAW_ARRAYS_COMMAND = REGISTER_COMMAND(DrawArraysCommand::new)),
@@ -72,10 +75,11 @@ public class CommandBuffer {
 
 		if(validate) {
 			UPDATE_CMD_UBO_COMMAND.read(this);
-			assert UPDATE_CMD_UBO_COMMAND.isBaseOffset &&
+			assert readHead == writeHead &&
+				   UPDATE_CMD_UBO_COMMAND.isBaseOffset &&
 				   UPDATE_CMD_UBO_COMMAND.x == x &&
 				   UPDATE_CMD_UBO_COMMAND.y == y &&
-				   UPDATE_CMD_UBO_COMMAND.z == z;
+				   UPDATE_CMD_UBO_COMMAND.z == z : UPDATE_CMD_UBO_COMMAND.sb.toString();
 		}
 	}
 
@@ -86,7 +90,8 @@ public class CommandBuffer {
 
 		if(validate) {
 			UPDATE_CMD_UBO_COMMAND.read(this);
-			assert UPDATE_CMD_UBO_COMMAND.worldViewId == index;
+			assert readHead == writeHead &&
+				   UPDATE_CMD_UBO_COMMAND.worldViewId == index : UPDATE_CMD_UBO_COMMAND.sb.toString();
 		}
 	}
 
@@ -96,7 +101,8 @@ public class CommandBuffer {
 
 		if(validate) {
 			BIND_VERTEX_ARRAY_COMMAND.read(this);
-			assert BIND_VERTEX_ARRAY_COMMAND.vao == vao;
+			assert readHead == writeHead &&
+				   BIND_VERTEX_ARRAY_COMMAND.vao == vao : BIND_VERTEX_ARRAY_COMMAND.sb.toString();
 		}
 	}
 
@@ -106,7 +112,8 @@ public class CommandBuffer {
 
 		if(validate) {
 			BIND_ELEMENTS_ARRAY_COMMAND.read(this);
-			assert BIND_ELEMENTS_ARRAY_COMMAND.ebo == ebo;
+			assert readHead == writeHead &&
+				   BIND_ELEMENTS_ARRAY_COMMAND.ebo == ebo : BIND_ELEMENTS_ARRAY_COMMAND.sb.toString();
 		}
 	}
 
@@ -116,7 +123,8 @@ public class CommandBuffer {
 
 		if(validate) {
 			DEPTH_MASK_COMMAND.read(this);
-			assert DEPTH_MASK_COMMAND.flag == writeDepth;
+			assert readHead == writeHead &&
+				   DEPTH_MASK_COMMAND.flag == writeDepth : DEPTH_MASK_COMMAND.sb.toString();
 		}
 	}
 
@@ -125,13 +133,15 @@ public class CommandBuffer {
 		COLOR_MASK_COMMAND.green = writeGreen;
 		COLOR_MASK_COMMAND.blue = writeBlue;
 		COLOR_MASK_COMMAND.alpha = writeAlpha;
+		COLOR_MASK_COMMAND.write(this);
 
 		if(validate) {
 			COLOR_MASK_COMMAND.read(this);
-			assert COLOR_MASK_COMMAND.red == writeRed &&
+			assert readHead == writeHead &&
+				   COLOR_MASK_COMMAND.red == writeRed &&
 				   COLOR_MASK_COMMAND.green == writeGreen &&
 				   COLOR_MASK_COMMAND.blue == writeBlue &&
-				   COLOR_MASK_COMMAND.alpha == writeAlpha;
+				   COLOR_MASK_COMMAND.alpha == writeAlpha : COLOR_MASK_COMMAND.sb.toString();
 		}
 	}
 
@@ -140,6 +150,15 @@ public class CommandBuffer {
 		MULTI_DRAW_ARRAYS_COMMAND.offsets = offsets;
 		MULTI_DRAW_ARRAYS_COMMAND.counts = counts;
 		MULTI_DRAW_ARRAYS_COMMAND.write(this);
+
+		if(validate) {
+			MULTI_DRAW_ARRAYS_COMMAND.read(this);
+			assert readHead == writeHead && MULTI_DRAW_ARRAYS_COMMAND.mode == mode : MULTI_DRAW_ARRAYS_COMMAND.sb.toString();
+			for(int i = 0; i < offsets.length; i++) {
+				assert offsets[i] == MULTI_DRAW_ARRAYS_COMMAND.offsetsBuffer.get(i) : MULTI_DRAW_ARRAYS_COMMAND.sb.toString();
+				assert counts[i] == MULTI_DRAW_ARRAYS_COMMAND.countsBuffer.get(i) : MULTI_DRAW_ARRAYS_COMMAND.sb.toString();
+			}
+		}
 	}
 
 	public void DrawElements(int mode, int vertexCount, long offset) {
@@ -150,9 +169,10 @@ public class CommandBuffer {
 
 		if(validate) {
 			DRAW_ELEMENTS_COMMAND.read(this);
-			assert DRAW_ELEMENTS_COMMAND.mode == mode &&
+			assert readHead == writeHead &&
+				   DRAW_ELEMENTS_COMMAND.mode == mode &&
 				   DRAW_ELEMENTS_COMMAND.vertexCount == vertexCount &&
-				   DRAW_ELEMENTS_COMMAND.offset == offset;
+				   DRAW_ELEMENTS_COMMAND.offset == offset : DRAW_ELEMENTS_COMMAND.sb.toString();
 		}
 	}
 
@@ -164,9 +184,10 @@ public class CommandBuffer {
 
 		if(validate) {
 			DRAW_ARRAYS_COMMAND.read(this);
-			assert DRAW_ARRAYS_COMMAND.mode == mode &&
+			assert readHead == writeHead &&
+				   DRAW_ARRAYS_COMMAND.mode == mode &&
 				   DRAW_ARRAYS_COMMAND.offset == offset &&
-				   DRAW_ARRAYS_COMMAND.vertexCount == vertexCount;
+				   DRAW_ARRAYS_COMMAND.vertexCount == vertexCount : DRAW_ARRAYS_COMMAND.sb.toString();
 		}
 	}
 
@@ -186,7 +207,7 @@ public class CommandBuffer {
 		if(validate) {
 			TOGGLE_COMMAND.read(this);
 			assert TOGGLE_COMMAND.capability == capability &&
-				   TOGGLE_COMMAND.state == enabled;
+				   TOGGLE_COMMAND.state == enabled : TOGGLE_COMMAND.sb.toString();
 		}
 	}
 
@@ -203,6 +224,13 @@ public class CommandBuffer {
 			}
 			command.read(this);
 			command.execute();
+
+			if(HdPlugin.checkGLErrors(command.getName())) {
+				command.print(SB);
+				log.warn("Encountered Error whilst processing command:\n{}", SB.toString());
+				SB.setLength(0);
+				break;
+			}
 		}
 	}
 

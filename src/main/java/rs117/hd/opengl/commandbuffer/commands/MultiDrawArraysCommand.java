@@ -11,8 +11,8 @@ public class MultiDrawArraysCommand extends BaseCommand {
 	public int[] offsets;
 	public int[] counts;
 
-	private IntBuffer offsetsBuffer;
-	private IntBuffer countsBuffer;
+	public IntBuffer offsetsBuffer;
+	public IntBuffer countsBuffer;
 
 	public MultiDrawArraysCommand() { super(true); }
 
@@ -23,6 +23,7 @@ public class MultiDrawArraysCommand extends BaseCommand {
 		write16(mode);
 		write32(offsets.length);
 		for(int i = 0; i < offsets.length; i++) {
+			assert offsets[i] >= 0 && counts[i] >= 0;
 			write32(offsets[i]);
 			write32(counts[i]);
 		}
@@ -35,19 +36,19 @@ public class MultiDrawArraysCommand extends BaseCommand {
 	public void doRead() {
 		mode = read16();
 
-		int count = read32();
-		if(offsetsBuffer == null || offsetsBuffer.capacity() < count) {
+		int length = read32();
+		if(offsetsBuffer == null || offsetsBuffer.capacity() < length) {
 			if(offsetsBuffer != null) MemoryUtil.memFree(offsetsBuffer);
 			if(countsBuffer != null)  MemoryUtil.memFree(countsBuffer);
 
-			offsetsBuffer = MemoryUtil.memAllocInt(count * 2);
-			countsBuffer  = MemoryUtil.memAllocInt(count * 2);
+			offsetsBuffer = MemoryUtil.memAllocInt(length * 2);
+			countsBuffer  = MemoryUtil.memAllocInt(length * 2);
 		} else {
 			offsetsBuffer.clear();
 			countsBuffer.clear();
 		}
 
-		for(int i = 0; i < count; i++) {
+		for(int i = 0; i < length; i++) {
 			offsetsBuffer.put(read32());
 			countsBuffer.put(read32());
 		}
@@ -70,11 +71,11 @@ public class MultiDrawArraysCommand extends BaseCommand {
 			if(i > 0) sb.append(", ");
 			sb.append(offsetsBuffer.get(i));
 		}
-		sb.append("], ");
+		sb.append("], [");
 		for(int i = 0; i < countsBuffer.limit(); i++) {
 			if(i > 0) sb.append(", ");
 			sb.append(countsBuffer.get(i));
 		}
-		sb.append(");");
+		sb.append("]);");
 	}
 }
