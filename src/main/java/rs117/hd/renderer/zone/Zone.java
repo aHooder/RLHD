@@ -11,10 +11,10 @@ import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
+import rs117.hd.opengl.commandbuffer.CommandBuffer;
 import rs117.hd.scene.SceneContext;
 import rs117.hd.scene.materials.Material;
 import rs117.hd.utils.Camera;
-import rs117.hd.utils.CommandBuffer;
 
 import static net.runelite.api.Perspective.*;
 import static org.lwjgl.opengl.GL33C.*;

@@ -47,6 +47,8 @@ import rs117.hd.HdPlugin;
 import rs117.hd.HdPluginConfig;
 import rs117.hd.config.ColorFilter;
 import rs117.hd.config.DynamicLights;
+import rs117.hd.opengl.commandbuffer.CommandBuffer;
+import rs117.hd.opengl.commandbuffer.commands.DepthMaskCommand;
 import rs117.hd.opengl.shader.SceneShaderProgram;
 import rs117.hd.opengl.shader.ShaderException;
 import rs117.hd.opengl.shader.ShaderIncludes;
@@ -68,7 +70,6 @@ import rs117.hd.scene.materials.Material;
 import rs117.hd.scene.model_overrides.ModelOverride;
 import rs117.hd.utils.Camera;
 import rs117.hd.utils.ColorUtils;
-import rs117.hd.utils.CommandBuffer;
 import rs117.hd.utils.HDUtils;
 import rs117.hd.utils.Mat4;
 import rs117.hd.utils.ModelHash;
@@ -789,10 +790,10 @@ public class ZoneRenderer implements Renderer {
 			glDepthFunc(GL_LEQUAL);
 			glDisable(GL_CULL_FACE);
 
-			CommandBuffer.SKIP_DEPTH_MASKING = true;
+			DepthMaskCommand.SKIP_DEPTH_MASKING = true;
 			sceneCmd.execute();
 			directionalCmd.execute();
-			CommandBuffer.SKIP_DEPTH_MASKING = false;
+			DepthMaskCommand.SKIP_DEPTH_MASKING = false;
 
 			glDisable(GL_DEPTH_TEST);
 
