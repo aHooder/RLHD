@@ -6,7 +6,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
-import rs117.hd.utils.CommandBuffer;
+import rs117.hd.opengl.commandbuffer.CommandBuffer;
 
 import static org.lwjgl.opengl.GL33C.*;
 
