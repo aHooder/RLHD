@@ -59,7 +59,7 @@ public class CommandBuffer {
 	protected int writeHead = 0;
 	protected int readHead = 0;
 
-	private final boolean validate = true;
+	private final boolean validate = false;
 
 	public void ensureCapacity(int numLongs) {
 		if (writeHead + numLongs >= cmd.length)

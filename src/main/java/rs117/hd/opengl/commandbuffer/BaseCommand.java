@@ -19,7 +19,7 @@ public abstract class BaseCommand {
 	protected int wordIndex;
 	protected CommandBuffer buffer;
 	protected final StringBuilder sb = new StringBuilder();
-	protected boolean validate = true;
+	protected boolean validate = false;
 
 	protected BaseCommand(boolean isDrawCall) {
 		this.name = getClass().getSimpleName();
