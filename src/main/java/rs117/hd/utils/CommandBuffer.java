@@ -42,11 +42,9 @@ public class CommandBuffer {
 	}
 
 	public void SetBaseOffset(int x, int y, int z) {
-		ensureCapacity(4);
-		cmd[writeHead++] = UNIFORM_BASE_OFFSET;
-		cmd[writeHead++] = x;
-		cmd[writeHead++] = y;
-		cmd[writeHead++] = z;
+		ensureCapacity(2);
+		cmd[writeHead++] = (UNIFORM_BASE_OFFSET & 0xFF) | ((long)x << 32);
+		cmd[writeHead++] = (((long)y) << 32) | (z & 0xFFFFFFFFL);
 	}
 
 	public void SetWorldViewIndex(int index) {
@@ -127,9 +125,10 @@ public class CommandBuffer {
 				int type = (int)(data & 0xFF);
 				switch (type) {
 					case UNIFORM_BASE_OFFSET: {
-						int x = (int) cmd[readHead++];
-						int y = (int) cmd[readHead++];
-						int z = (int) cmd[readHead++];
+						long packed = cmd[readHead++];
+						int x = (int)(data >> 32);
+						int y = (int)(packed >> 32);
+						int z = (int) packed;
 						if (uboCommandBuffer != null)
 							uboCommandBuffer.sceneBase.set(x, y, z);
 						break;
