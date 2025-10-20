@@ -356,7 +356,7 @@ public class HdPlugin extends Plugin {
 	public boolean configModelBatching;
 	public boolean configModelCaching;
 	public boolean configShadowsEnabled;
-	public boolean configRoofShadowsEnabled;
+	public boolean configRoofShadows;
 	public boolean configExpandShadowDraw;
 	public boolean configUseFasterModelHashing;
 	public boolean configUndoVanillaShading;
@@ -1466,7 +1466,7 @@ public class HdPlugin extends Plugin {
 	private void updateCachedConfigs() {
 		configShadowMode = config.shadowMode();
 		configShadowsEnabled = configShadowMode != ShadowMode.OFF;
-		configRoofShadowsEnabled = config.enableRoofShadows();
+		configRoofShadows = config.roofShadows();
 		configGroundTextures = config.groundTextures();
 		configGroundBlending = config.groundBlending();
 		configModelTextures = config.modelTextures();

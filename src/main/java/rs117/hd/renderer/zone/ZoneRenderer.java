@@ -28,6 +28,7 @@ import com.google.common.base.Stopwatch;
 import com.google.inject.Injector;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -895,15 +896,22 @@ public class ZoneRenderer implements Renderer {
 			return;
 
 		int offset = ctx.sceneContext.sceneOffset >> 3;
-		if(z.inSceneFrustum) {
+		if (z.inSceneFrustum) {
 			sceneCmd.SetWorldViewIndex(uboWorldViews.getIndex(scene));
 			z.renderOpaque(sceneCmd, zx - offset, zz - offset, minLevel, level, maxLevel, hideRoofIds);
 		}
 
-		if(z.inShadowFrustum) {
+		if (z.inShadowFrustum) {
 			directionalCmd.SetWorldViewIndex(uboWorldViews.getIndex(scene));
-			int shadowMaxLevel = plugin.configRoofShadowsEnabled ? 3 : maxLevel;
-			z.renderOpaque(directionalCmd, zx - offset, zz - offset, minLevel, level, shadowMaxLevel, hideRoofIds);
+			z.renderOpaque(
+				directionalCmd,
+				zx - offset,
+				zz - offset,
+				minLevel,
+				level,
+				plugin.configRoofShadows ? 3 : maxLevel,
+				plugin.configRoofShadows ? Collections.emptySet() : hideRoofIds
+			);
 		}
 
 		checkGLErrors();
@@ -921,19 +929,17 @@ public class ZoneRenderer implements Renderer {
 		if (!z.initialized)
 			return;
 
-		boolean hasNoAlpha = z.sizeA == 0 && z.alphaModels.isEmpty();
-		boolean renderWater = level == 0 && z.hasWater;
+		boolean hasAlpha = z.sizeA != 0 || !z.alphaModels.isEmpty();
+		boolean renderWater = z.inSceneFrustum && level == 0 && z.hasWater;
 
-		if (renderWater || !hasNoAlpha) {
+		if (renderWater || hasAlpha)
 			sceneCmd.SetWorldViewIndex(uboWorldViews.getIndex(scene));
-			directionalCmd.SetWorldViewIndex(uboWorldViews.getIndex(scene));
-		}
 
 		int offset = ctx.sceneContext.sceneOffset >> 3;
-		if (renderWater && z.inSceneFrustum)
+		if (renderWater)
 			z.renderOpaqueLevel(sceneCmd, zx - offset, zz - offset, Zone.LEVEL_WATER_SURFACE);
 
-		if (hasNoAlpha)
+		if (hasAlpha)
 			return;
 
 		if (level == 0) {
@@ -941,7 +947,7 @@ public class ZoneRenderer implements Renderer {
 			z.multizoneLocs(ctx.sceneContext, zx - offset, zz - offset, sceneCamera, ctx.zones);
 		}
 
-		if(z.inSceneFrustum) {
+		if (z.inSceneFrustum) {
 			z.renderAlpha(
 				sceneCmd,
 				zx - offset,
@@ -955,18 +961,18 @@ public class ZoneRenderer implements Renderer {
 			);
 		}
 
-		if(z.inShadowFrustum) {
-			int shadowMaxLevel = plugin.configRoofShadowsEnabled ? 3 : maxLevel;
+		if (z.inShadowFrustum) {
+			directionalCmd.SetWorldViewIndex(uboWorldViews.getIndex(scene));
 			z.renderAlpha(
 				directionalCmd,
 				zx - offset,
 				zz - offset,
 				minLevel,
 				this.level,
-				shadowMaxLevel,
+				plugin.configRoofShadows ? 3 : maxLevel,
 				level,
 				sceneCamera,
-				hideRoofIds
+				plugin.configRoofShadows ? Collections.emptySet() : hideRoofIds
 			);
 		}
 
