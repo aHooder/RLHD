@@ -81,12 +81,15 @@ public class CommandBuffer {
 	public void MultiDrawArrays(int mode, int[] offsets, int[] counts) {
 		assert offsets.length == counts.length;
 
-		/*
+		if(offsets.length == 0) {
+			return;
+		}
+
 		ensureCapacity(1 + offsets.length);
 		cmd[writeHead++] = (GL_MULTI_DRAW_ARRAYS_TYPE & 0xFF) | ((long) mode << 8) | (long) offsets.length << 32;
 		for (int i = 0; i < offsets.length; i++) {
-			cmd[writeHead++] = (((long)offsets[i]) << 32) | (counts[i] & 0xffffffffL);
-		}*/
+			cmd[writeHead++] = (((long)offsets[i]) << 32) | (counts[i] & 0xFFFFFFFFL);
+		}
 	}
 
 	public void DrawElements(int mode, int vertexCount, long offset) {
@@ -120,7 +123,7 @@ public class CommandBuffer {
 			IntBuffer offsets = null, counts = null;
 			readHead = 0;
 			while (readHead < writeHead) {
-				long data = (int) cmd[readHead++];
+				long data = cmd[readHead++];
 				int type = (int)(data & 0xFF);
 				switch (type) {
 					case UNIFORM_BASE_OFFSET: {
