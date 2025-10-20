@@ -497,6 +497,19 @@ public interface HdPluginConfig extends Config
 		return false;
 	}
 
+	String KEY_ROOF_SHADOWS = "enableRoofShadows";
+	@ConfigItem(
+		keyName = KEY_ROOF_SHADOWS,
+		name = "Roof Shadows",
+		description = "Enables roofs always casting shadows regardless of their removal.",
+		position = 8,
+		section = lightingSettings
+	)
+	default boolean enableRoofShadows()
+	{
+		return true;
+	}
+
 	String KEY_SHADOW_RESOLUTION = "shadowResolution";
 	@ConfigItem(
 		keyName = KEY_SHADOW_RESOLUTION,

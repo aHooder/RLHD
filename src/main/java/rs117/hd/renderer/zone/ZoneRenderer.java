@@ -790,7 +790,6 @@ public class ZoneRenderer implements Renderer {
 			glDisable(GL_CULL_FACE);
 
 			CommandBuffer.SKIP_DEPTH_MASKING = true;
-			sceneCmd.execute();
 			directionalCmd.execute();
 			CommandBuffer.SKIP_DEPTH_MASKING = false;
 
@@ -895,11 +894,17 @@ public class ZoneRenderer implements Renderer {
 		if (!z.initialized || z.sizeO == 0)
 			return;
 
-		CommandBuffer cmd = ctx != root || z.inSceneFrustum ? sceneCmd : directionalCmd;
-		cmd.SetWorldViewIndex(uboWorldViews.getIndex(scene));
-
 		int offset = ctx.sceneContext.sceneOffset >> 3;
-		z.renderOpaque(cmd, zx - offset, zz - offset, minLevel, level, maxLevel, hideRoofIds);
+		if(z.inSceneFrustum) {
+			sceneCmd.SetWorldViewIndex(uboWorldViews.getIndex(scene));
+			z.renderOpaque(sceneCmd, zx - offset, zz - offset, minLevel, level, maxLevel, hideRoofIds);
+		}
+
+		if(z.inShadowFrustum) {
+			directionalCmd.SetWorldViewIndex(uboWorldViews.getIndex(scene));
+			int shadowMaxLevel = plugin.configRoofShadowsEnabled ? 3 : maxLevel;
+			z.renderOpaque(directionalCmd, zx - offset, zz - offset, minLevel, level, shadowMaxLevel, hideRoofIds);
+		}
 
 		checkGLErrors();
 	}
@@ -916,16 +921,17 @@ public class ZoneRenderer implements Renderer {
 		if (!z.initialized)
 			return;
 
-		CommandBuffer cmd = ctx != root || z.inSceneFrustum ? sceneCmd : directionalCmd;
 		boolean hasNoAlpha = z.sizeA == 0 && z.alphaModels.isEmpty();
 		boolean renderWater = level == 0 && z.hasWater;
 
-		if (renderWater || !hasNoAlpha)
-			cmd.SetWorldViewIndex(uboWorldViews.getIndex(scene));
+		if (renderWater || !hasNoAlpha) {
+			sceneCmd.SetWorldViewIndex(uboWorldViews.getIndex(scene));
+			directionalCmd.SetWorldViewIndex(uboWorldViews.getIndex(scene));
+		}
 
 		int offset = ctx.sceneContext.sceneOffset >> 3;
-		if (renderWater)
-			z.renderOpaqueLevel(cmd, zx - offset, zz - offset, Zone.LEVEL_WATER_SURFACE);
+		if (renderWater && z.inSceneFrustum)
+			z.renderOpaqueLevel(sceneCmd, zx - offset, zz - offset, Zone.LEVEL_WATER_SURFACE);
 
 		if (hasNoAlpha)
 			return;
@@ -935,17 +941,34 @@ public class ZoneRenderer implements Renderer {
 			z.multizoneLocs(ctx.sceneContext, zx - offset, zz - offset, sceneCamera, ctx.zones);
 		}
 
-		z.renderAlpha(
-			cmd,
-			zx - offset,
-			zz - offset,
-			minLevel,
-			this.level,
-			maxLevel,
-			level,
-			sceneCamera,
-			hideRoofIds
-		);
+		if(z.inSceneFrustum) {
+			z.renderAlpha(
+				sceneCmd,
+				zx - offset,
+				zz - offset,
+				minLevel,
+				this.level,
+				maxLevel,
+				level,
+				sceneCamera,
+				hideRoofIds
+			);
+		}
+
+		if(z.inShadowFrustum) {
+			int shadowMaxLevel = plugin.configRoofShadowsEnabled ? 3 : maxLevel;
+			z.renderAlpha(
+				directionalCmd,
+				zx - offset,
+				zz - offset,
+				minLevel,
+				this.level,
+				shadowMaxLevel,
+				level,
+				sceneCamera,
+				hideRoofIds
+			);
+		}
 
 		checkGLErrors();
 	}
@@ -964,10 +987,12 @@ public class ZoneRenderer implements Renderer {
 
 				if (scene.getWorldViewId() == -1) {
 					sceneCmd.SetBaseOffset(0, 0, 0);
+					directionalCmd.SetBaseOffset(0, 0, 0);
 
 					// Draw opaque
 					vaoO.unmap();
 					vaoO.drawAll(this, sceneCmd);
+					vaoO.drawAll(this, directionalCmd);
 					vaoO.resetAll();
 
 					vaoPO.unmap();
@@ -980,6 +1005,7 @@ public class ZoneRenderer implements Renderer {
 					// Draw players opaque, writing only depth
 					sceneCmd.ColorMask(false, false, false, false);
 					vaoPO.drawAll(this, sceneCmd);
+					vaoPO.drawAll(this, directionalCmd);
 					sceneCmd.ColorMask(true, true, true, true);
 
 					vaoPO.resetAll();
