@@ -1824,14 +1824,17 @@ public class HdPlugin extends Plugin {
 		// @formatter:on
 	}
 
-	public static void checkGLErrors() {
-		if (SKIP_GL_ERROR_CHECKS)
-			return;
+	public static boolean checkGLErrors() { return checkGLErrors(null); }
 
+	public static boolean checkGLErrors(String context) {
+		if (SKIP_GL_ERROR_CHECKS)
+			return false;
+
+		boolean hasError = false;
 		while (true) {
 			int err = glGetError();
 			if (err == GL_NO_ERROR)
-				return;
+				return hasError;
 
 			String errStr;
 			switch (err) {
@@ -1858,7 +1861,12 @@ public class HdPlugin extends Plugin {
 					break;
 			}
 
-			log.debug("glGetError:", new Exception(errStr));
+			if(context != null) {
+				log.debug("{} - glGetError:", context, new Exception(errStr));
+			} else {
+				log.debug("glGetError:", new Exception(errStr));
+			}
+			hasError = true;
 		}
 	}
 
