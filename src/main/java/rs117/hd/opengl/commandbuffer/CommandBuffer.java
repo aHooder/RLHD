@@ -1,7 +1,7 @@
 package rs117.hd.opengl.commandbuffer;
 
+import java.nio.BufferUnderflowException;
 import java.util.Arrays;
-import lombok.Setter;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import rs117.hd.HdPlugin;
@@ -17,8 +17,10 @@ import rs117.hd.opengl.commandbuffer.commands.UpdateCMDUBOCommand;
 import rs117.hd.opengl.uniforms.UBOCommandBuffer;
 
 @Slf4j
-public class CommandBuffer {
-	private static final StringBuilder SB = new StringBuilder();
+public final class CommandBuffer {
+	public static boolean VALIDATE = false;
+
+	private static final int BITS_PER_WORD = 64;
 
 	private static int COMMAND_COUNT = 0;
 	private static final BaseCommand[] REGISTERED_COMMANDS = {
@@ -52,14 +54,16 @@ public class CommandBuffer {
 		return newCommand;
 	}
 
-	@Setter
-	protected UBOCommandBuffer uboCommandBuffer;
+	public UBOCommandBuffer uboCommandBuffer;
 
-	protected long[] cmd = new long[1 << 20]; // ~1 million calls
-	protected int writeHead = 0;
-	protected int readHead = 0;
+	private long[] cmd = new long[1 << 20]; // ~1 million calls
+	private int writeHead = 0;
+	private int writeBitHead = 0;
 
-	private final boolean validate = false;
+	private int readHead = 0;
+	private int readBitHead = 0;
+
+	private final StringBuilder validation_log = new StringBuilder();
 
 	public void ensureCapacity(int numLongs) {
 		if (writeHead + numLongs >= cmd.length)
@@ -72,60 +76,27 @@ public class CommandBuffer {
 		UPDATE_CMD_UBO_COMMAND.y = y;
 		UPDATE_CMD_UBO_COMMAND.z = z;
 		UPDATE_CMD_UBO_COMMAND.write(this);
-
-		if(validate) {
-			UPDATE_CMD_UBO_COMMAND.read(this);
-			assert readHead == writeHead &&
-				   UPDATE_CMD_UBO_COMMAND.isBaseOffset &&
-				   UPDATE_CMD_UBO_COMMAND.x == x &&
-				   UPDATE_CMD_UBO_COMMAND.y == y &&
-				   UPDATE_CMD_UBO_COMMAND.z == z : UPDATE_CMD_UBO_COMMAND.sb.toString();
-		}
 	}
 
 	public void SetWorldViewIndex(int index) {
 		UPDATE_CMD_UBO_COMMAND.isBaseOffset = false;
 		UPDATE_CMD_UBO_COMMAND.worldViewId = index;
 		UPDATE_CMD_UBO_COMMAND.write(this);
-
-		if(validate) {
-			UPDATE_CMD_UBO_COMMAND.read(this);
-			assert readHead == writeHead &&
-				   UPDATE_CMD_UBO_COMMAND.worldViewId == index : UPDATE_CMD_UBO_COMMAND.sb.toString();
-		}
 	}
 
 	public void BindVertexArray(int vao) {
 		BIND_VERTEX_ARRAY_COMMAND.vao = vao;
 		BIND_VERTEX_ARRAY_COMMAND.write(this);
-
-		if(validate) {
-			BIND_VERTEX_ARRAY_COMMAND.read(this);
-			assert readHead == writeHead &&
-				   BIND_VERTEX_ARRAY_COMMAND.vao == vao : BIND_VERTEX_ARRAY_COMMAND.sb.toString();
-		}
 	}
 
 	public void BindElementsArray(int ebo) {
 		BIND_ELEMENTS_ARRAY_COMMAND.ebo = ebo;
 		BIND_ELEMENTS_ARRAY_COMMAND.write(this);
-
-		if(validate) {
-			BIND_ELEMENTS_ARRAY_COMMAND.read(this);
-			assert readHead == writeHead &&
-				   BIND_ELEMENTS_ARRAY_COMMAND.ebo == ebo : BIND_ELEMENTS_ARRAY_COMMAND.sb.toString();
-		}
 	}
 
 	public void DepthMask(boolean writeDepth) {
 		DEPTH_MASK_COMMAND.flag = writeDepth;
 		DEPTH_MASK_COMMAND.write(this);
-
-		if(validate) {
-			DEPTH_MASK_COMMAND.read(this);
-			assert readHead == writeHead &&
-				   DEPTH_MASK_COMMAND.flag == writeDepth : DEPTH_MASK_COMMAND.sb.toString();
-		}
 	}
 
 	public void ColorMask(boolean writeRed, boolean writeGreen, boolean writeBlue, boolean writeAlpha) {
@@ -134,15 +105,6 @@ public class CommandBuffer {
 		COLOR_MASK_COMMAND.blue = writeBlue;
 		COLOR_MASK_COMMAND.alpha = writeAlpha;
 		COLOR_MASK_COMMAND.write(this);
-
-		if(validate) {
-			COLOR_MASK_COMMAND.read(this);
-			assert readHead == writeHead &&
-				   COLOR_MASK_COMMAND.red == writeRed &&
-				   COLOR_MASK_COMMAND.green == writeGreen &&
-				   COLOR_MASK_COMMAND.blue == writeBlue &&
-				   COLOR_MASK_COMMAND.alpha == writeAlpha : COLOR_MASK_COMMAND.sb.toString();
-		}
 	}
 
 	public void MultiDrawArrays(int mode, int[] offsets, int[] counts) {
@@ -150,30 +112,13 @@ public class CommandBuffer {
 		MULTI_DRAW_ARRAYS_COMMAND.offsets = offsets;
 		MULTI_DRAW_ARRAYS_COMMAND.counts = counts;
 		MULTI_DRAW_ARRAYS_COMMAND.write(this);
-
-		if(validate) {
-			MULTI_DRAW_ARRAYS_COMMAND.read(this);
-			assert readHead == writeHead && MULTI_DRAW_ARRAYS_COMMAND.mode == mode : MULTI_DRAW_ARRAYS_COMMAND.sb.toString();
-			for(int i = 0; i < offsets.length; i++) {
-				assert offsets[i] == MULTI_DRAW_ARRAYS_COMMAND.offsetsBuffer.get(i) : MULTI_DRAW_ARRAYS_COMMAND.sb.toString();
-				assert counts[i] == MULTI_DRAW_ARRAYS_COMMAND.countsBuffer.get(i) : MULTI_DRAW_ARRAYS_COMMAND.sb.toString();
-			}
-		}
 	}
 
-	public void DrawElements(int mode, int vertexCount, long offset) {
+	public void DrawElements(int mode, int vertexCount, long bytesOffset) {
 		DRAW_ELEMENTS_COMMAND.mode = mode;
 		DRAW_ELEMENTS_COMMAND.vertexCount = vertexCount;
-		DRAW_ELEMENTS_COMMAND.offset = offset;
+		DRAW_ELEMENTS_COMMAND.bytesOffset = bytesOffset;
 		DRAW_ELEMENTS_COMMAND.write(this);
-
-		if(validate) {
-			DRAW_ELEMENTS_COMMAND.read(this);
-			assert readHead == writeHead &&
-				   DRAW_ELEMENTS_COMMAND.mode == mode &&
-				   DRAW_ELEMENTS_COMMAND.vertexCount == vertexCount &&
-				   DRAW_ELEMENTS_COMMAND.offset == offset : DRAW_ELEMENTS_COMMAND.sb.toString();
-		}
 	}
 
 	public void DrawArrays(int mode, int offset, int vertexCount) {
@@ -181,14 +126,6 @@ public class CommandBuffer {
 		DRAW_ARRAYS_COMMAND.offset = offset;
 		DRAW_ARRAYS_COMMAND.vertexCount = vertexCount;
 		DRAW_ARRAYS_COMMAND.write(this);
-
-		if(validate) {
-			DRAW_ARRAYS_COMMAND.read(this);
-			assert readHead == writeHead &&
-				   DRAW_ARRAYS_COMMAND.mode == mode &&
-				   DRAW_ARRAYS_COMMAND.offset == offset &&
-				   DRAW_ARRAYS_COMMAND.vertexCount == vertexCount : DRAW_ARRAYS_COMMAND.sb.toString();
-		}
 	}
 
 	public void Enable(int capability) {
@@ -203,39 +140,165 @@ public class CommandBuffer {
 		TOGGLE_COMMAND.capability = capability;
 		TOGGLE_COMMAND.state = enabled;
 		TOGGLE_COMMAND.write(this);
-
-		if(validate) {
-			TOGGLE_COMMAND.read(this);
-			assert TOGGLE_COMMAND.capability == capability &&
-				   TOGGLE_COMMAND.state == enabled : TOGGLE_COMMAND.sb.toString();
-		}
 	}
 
 	@SneakyThrows
 	public void execute() {
 		readHead = 0;
-		while (readHead < writeHead) {
-			int type = (int) (cmd[readHead] & 0xFF);
-			assert type < REGISTERED_COMMANDS.length;
+		readBitHead = 0;
+		if(VALIDATE) validation_log.setLength(0);
+		while (readHead < writeHead || (readHead == writeHead && readBitHead < writeBitHead)) {
+			int type = (int)readBits(8);
+			assert type < REGISTERED_COMMANDS.length : validation_log.toString();
 
 			BaseCommand command = REGISTERED_COMMANDS[type];
 			if (command.isDrawCall() && uboCommandBuffer != null && uboCommandBuffer.isDirty()) {
 				uboCommandBuffer.upload();
 			}
+
 			command.read(this);
+
+			command.print(validation_log);
+			validation_log.append("\n");
+
 			command.execute();
 
 			if(HdPlugin.checkGLErrors(command.getName())) {
-				command.print(SB);
-				log.warn("Encountered Error whilst processing command:\n{}", SB.toString());
-				SB.setLength(0);
+				log.debug("=== CommandBuffer START ===\n{}\n=== CommandBuffer END ===", validation_log);
+				validation_log.setLength(0);
 				break;
 			}
 		}
 	}
 
+	protected long readBits(int numBits) {
+		long result = 0;
+		int shift = 0;
+
+		if (readHead >= cmd.length)
+			throw new BufferUnderflowException();
+
+		while (numBits > 0) {
+			long word = cmd[readHead];
+			int bitsLeftInWord = BITS_PER_WORD - readBitHead;
+			int bitsToRead = Math.min(bitsLeftInWord, numBits);
+
+			if(VALIDATE) logReadBits(numBits, readHead, readBitHead, bitsToRead);
+
+			long mask = bitsToRead == BITS_PER_WORD ? ~0L : (1L << bitsToRead) - 1;
+			long bits = (word >>> readBitHead) & mask;
+
+			result |= bits << shift;
+
+			readBitHead += bitsToRead;
+			if (readBitHead == BITS_PER_WORD) {
+				readBitHead = 0;
+				readHead++;
+			}
+
+			shift += bitsToRead;
+			numBits -= bitsToRead;
+		}
+
+		if(VALIDATE) logReadResult(result);
+
+		int remainder = readBitHead & 7;
+		if (remainder != 0) readBits(8 - remainder);
+
+		return result;
+	}
+
+	protected void writeBits(long value, int numBits) {
+		long originalValue = value;
+		int originalNumBits = numBits;
+		int originalWriteHead = writeHead;
+		int originalWriteBitHead = writeBitHead;
+
+		while (numBits > 0) {
+			int bitsLeftInWord = BITS_PER_WORD - writeBitHead;
+			int bitsToWrite = Math.min(bitsLeftInWord, numBits);
+
+			long valueMask = bitsToWrite == BITS_PER_WORD ? ~0L : (1L << bitsToWrite) - 1L;
+			long bits = value & valueMask;
+
+			if(VALIDATE) logWriteBits(value, numBits, writeHead, writeBitHead, bitsToWrite);
+
+			long destMask = bitsToWrite == BITS_PER_WORD ? ~0L : valueMask << writeBitHead;
+			cmd[writeHead] = (cmd[writeHead] & ~destMask) | ((bits << writeBitHead) & destMask);
+
+			writeBitHead += bitsToWrite;
+			if (writeBitHead == BITS_PER_WORD) {
+				writeBitHead = 0;
+				writeHead++;
+				ensureCapacity(writeHead);
+				cmd[writeHead] = 0;
+			}
+
+			value >>>= bitsToWrite;
+			numBits -= bitsToWrite;
+		}
+
+		if(VALIDATE) {
+			int originalReadHead = readHead;
+			int originalReadBitHead = readBitHead;
+
+			readHead = originalWriteHead;
+			readBitHead = originalWriteBitHead;
+
+			long decoded = readBits(originalNumBits);
+			assert decoded == originalValue : "read: " + decoded + " but expected: " + originalValue + "\nValidation Log:" + validation_log;
+
+			readHead = originalReadHead;
+			readBitHead = originalReadBitHead;
+		}
+
+		int remainder = writeBitHead & 7;
+		if (remainder != 0) writeBits(0, 8 - remainder);
+	}
+
+	protected void appendToValidationLog(String str) {
+		validation_log.append(str);
+	}
+
+	private void logWriteBits(long value, int numBits, int wordIndex, int bitHead, int bitsToWrite) {
+		validation_log.append("writeBits(");
+		validation_log.append(value);
+		validation_log.append(", ");
+		validation_log.append(numBits);
+		validation_log.append(") wordIndex: ");
+		validation_log.append(wordIndex);
+		validation_log.append(" bitHead: ");
+		validation_log.append(bitHead);
+		validation_log.append(" bitsToWrite: ");
+		validation_log.append(bitsToWrite);
+		validation_log.append("\n");
+	}
+
+	private void logReadBits(int numBits, int wordIndex, int bitHead, int bitsToRead) {
+		validation_log.append("readBits(");
+		validation_log.append(numBits);
+		validation_log.append(") wordIndex: ");
+		validation_log.append(wordIndex);
+		validation_log.append(" bitHead: ");
+		validation_log.append(bitHead);
+		validation_log.append(" bitsToRead: ");
+		validation_log.append(bitsToRead);
+		validation_log.append("\n");
+	}
+
+	private void logReadResult(long result) {
+		validation_log.append("readBits() Result: ");
+		validation_log.append(result);
+		validation_log.append("\n");
+	}
+
 	public void reset() {
 		writeHead = 0;
+		writeBitHead = 0;
+
 		readHead = 0;
+		readBitHead = 0;
+
+		validation_log.setLength(0);
 	}
 }

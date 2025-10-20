@@ -244,8 +244,8 @@ public class ZoneRenderer implements Renderer {
 		uboCommandBuffer.initialize(UNIFORM_BLOCK_COMMAND_BUFFER);
 		uboWorldViews.initialize(UNIFORM_BLOCK_WORLD_VIEWS);
 
-		sceneCmd.setUboCommandBuffer(uboCommandBuffer);
-		directionalCmd.setUboCommandBuffer(uboCommandBuffer);
+		sceneCmd.uboCommandBuffer = uboCommandBuffer;
+		directionalCmd.uboCommandBuffer = uboCommandBuffer;
 	}
 
 	@Override
@@ -791,9 +791,11 @@ public class ZoneRenderer implements Renderer {
 			glDepthFunc(GL_LEQUAL);
 			glDisable(GL_CULL_FACE);
 
+			frameTimer.begin(Timer.COMMAND_BUFFER_EXECUTE);
 			DepthMaskCommand.SKIP_DEPTH_MASKING = true;
 			directionalCmd.execute();
 			DepthMaskCommand.SKIP_DEPTH_MASKING = false;
+			frameTimer.end(Timer.COMMAND_BUFFER_EXECUTE);
 
 			glDisable(GL_DEPTH_TEST);
 
@@ -834,7 +836,9 @@ public class ZoneRenderer implements Renderer {
 		glDepthFunc(GL_GREATER);
 
 		// Render the scene
+		frameTimer.begin(Timer.COMMAND_BUFFER_EXECUTE);
 		sceneCmd.execute();
+		frameTimer.end(Timer.COMMAND_BUFFER_EXECUTE);
 
 		// TODO: Filler tiles
 

@@ -4,19 +4,19 @@ import rs117.hd.opengl.commandbuffer.BaseCommand;
 
 import static org.lwjgl.opengl.GL11.glDepthMask;
 
-public class DepthMaskCommand extends BaseCommand {
+public final class DepthMaskCommand extends BaseCommand {
 	public static boolean SKIP_DEPTH_MASKING;
 
 	public boolean flag;
 
 	@Override
 	protected void doWrite() {
-		write1(flag ? 1 : 0);
+		writeFlag(flag);
 	}
 
 	@Override
 	protected void doRead() {
-		flag = read1() == 1;
+		flag = readFlag();
 	}
 
 	@Override

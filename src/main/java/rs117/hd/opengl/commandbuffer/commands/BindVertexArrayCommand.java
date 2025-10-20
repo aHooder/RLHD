@@ -4,7 +4,7 @@ import rs117.hd.opengl.commandbuffer.BaseCommand;
 
 import static org.lwjgl.opengl.GL30.glBindVertexArray;
 
-public class BindVertexArrayCommand extends BaseCommand {
+public final class BindVertexArrayCommand extends BaseCommand {
 	public int vao;
 
 	@Override

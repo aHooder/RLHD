@@ -6,7 +6,7 @@ import rs117.hd.opengl.commandbuffer.BaseCommand;
 
 import static org.lwjgl.opengl.GL14.glMultiDrawArrays;
 
-public class MultiDrawArraysCommand extends BaseCommand {
+public final class MultiDrawArraysCommand extends BaseCommand {
 	public int mode;
 	public int[] offsets;
 	public int[] counts;
@@ -23,7 +23,8 @@ public class MultiDrawArraysCommand extends BaseCommand {
 		write16(mode);
 		write32(offsets.length);
 		for(int i = 0; i < offsets.length; i++) {
-			assert offsets[i] >= 0 && counts[i] >= 0;
+			assert offsets[i] >= 0 : "offset must be >= 0";
+			assert counts[i] >= 0 : "vertexCount must be >= 0";
 			write32(offsets[i]);
 			write32(counts[i]);
 		}
@@ -59,6 +60,7 @@ public class MultiDrawArraysCommand extends BaseCommand {
 
 	@Override
 	public void execute() {
+
 		glMultiDrawArrays(mode, offsetsBuffer, countsBuffer);
 	}
 

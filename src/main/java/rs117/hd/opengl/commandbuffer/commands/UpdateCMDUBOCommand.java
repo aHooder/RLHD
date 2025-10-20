@@ -2,14 +2,14 @@ package rs117.hd.opengl.commandbuffer.commands;
 
 import rs117.hd.opengl.commandbuffer.BaseCommand;
 
-public class UpdateCMDUBOCommand extends BaseCommand {
+public final class UpdateCMDUBOCommand extends BaseCommand {
 	public boolean isBaseOffset;
 	public int x, y, z;
 	public int worldViewId;
 
 	@Override
 	protected void doWrite() {
-		write1(isBaseOffset ? 1 : 0);
+		writeFlag(isBaseOffset);
 		if(isBaseOffset) {
 			write32(x);
 			write32(y);
@@ -21,7 +21,7 @@ public class UpdateCMDUBOCommand extends BaseCommand {
 
 	@Override
 	protected void doRead() {
-		isBaseOffset = read1() == 1;
+		isBaseOffset = readFlag();
 		if(isBaseOffset) {
 			x = read32();
 			y = read32();

@@ -5,7 +5,7 @@ import rs117.hd.opengl.commandbuffer.BaseCommand;
 import static org.lwjgl.opengl.GL15.GL_ELEMENT_ARRAY_BUFFER;
 import static org.lwjgl.opengl.GL15.glBindBuffer;
 
-public class BindElementsArrayCommand extends BaseCommand {
+public final class BindElementsArrayCommand extends BaseCommand {
 	public int ebo;
 
 	@Override

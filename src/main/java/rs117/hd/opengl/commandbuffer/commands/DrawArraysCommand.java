@@ -2,9 +2,9 @@ package rs117.hd.opengl.commandbuffer.commands;
 
 import rs117.hd.opengl.commandbuffer.BaseCommand;
 
-import static org.lwjgl.opengl.GL11.glDrawArrays;
+import static org.lwjgl.opengl.GL11C.glDrawArrays;
 
-public class DrawArraysCommand extends BaseCommand {
+public final class DrawArraysCommand extends BaseCommand {
 	public int mode;
 	public int vertexCount;
 	public int offset;
@@ -13,9 +13,13 @@ public class DrawArraysCommand extends BaseCommand {
 
 	@Override
 	public void doWrite() {
+		assert mode >= 0 : "mode must be >= 0";
+		assert vertexCount >= 0 : "vertexCount must be >= 0";
+		assert offset >= 0 : "offset must be >= 0";
+
 		write16(mode);
 		write32(vertexCount);
-		write64(offset);
+		write32(offset);
 	}
 
 	@Override
@@ -23,10 +27,15 @@ public class DrawArraysCommand extends BaseCommand {
 		mode = read16();
 		vertexCount = read32();
 		offset = read32();
+
+		assert mode >= 0 : "mode must be >= 0";
+		assert vertexCount >= 0 : "vertexCount must be >= 0";
+		assert offset >= 0 : "offset must be >= 0";
 	}
 
 	@Override
 	public void execute() {
+
 		glDrawArrays(mode, offset, vertexCount);
 	}
 
