@@ -22,7 +22,6 @@ import rs117.hd.opengl.commandbuffer.commands.ShaderProgramCommand;
 import rs117.hd.opengl.commandbuffer.commands.ToggleCommand;
 import rs117.hd.opengl.commandbuffer.commands.ViewportCommand;
 import rs117.hd.opengl.shader.ShaderProgram;
-import rs117.hd.opengl.uniforms.UBOCommandBuffer;
 import rs117.hd.opengl.uniforms.UniformBuffer;
 
 @Slf4j
@@ -87,9 +86,10 @@ public final class CommandBuffer {
 		return newCommand;
 	}
 
-	public UBOCommandBuffer uboCommandBuffer;
-
 	private long[] cmd = new long[1 << 20]; // ~1 million calls
+
+	private UniformBuffer<?>[] pendingUBOUploads = new UniformBuffer[100];
+	private int pendingUBOUploadsCount = 0;
 
 	private Object[] objects = new Object[100];
 	private int objectCount = 0;
@@ -107,17 +107,15 @@ public final class CommandBuffer {
 			cmd = Arrays.copyOf(cmd, cmd.length * 2);
 	}
 
-	public void SetUniformProperty(UniformBuffer.Property property, boolean upload, int... values) {
+	public void SetUniformProperty(UniformBuffer.Property property, int... values) {
 		SET_UNIFORM_BUFFER_PROPERTY_COMMAND.property = property;
-		SET_UNIFORM_BUFFER_PROPERTY_COMMAND.upload = upload;
 		SET_UNIFORM_BUFFER_PROPERTY_COMMAND.intValues = values;
 		SET_UNIFORM_BUFFER_PROPERTY_COMMAND.isFloat = false;
 		SET_UNIFORM_BUFFER_PROPERTY_COMMAND.write();
 	}
 
-	public void SetUniformProperty(UniformBuffer.Property property, boolean upload, float... values) {
+	public void SetUniformProperty(UniformBuffer.Property property, float... values) {
 		SET_UNIFORM_BUFFER_PROPERTY_COMMAND.property = property;
-		SET_UNIFORM_BUFFER_PROPERTY_COMMAND.upload = upload;
 		SET_UNIFORM_BUFFER_PROPERTY_COMMAND.floatValues = values;
 		SET_UNIFORM_BUFFER_PROPERTY_COMMAND.isFloat = true;
 		SET_UNIFORM_BUFFER_PROPERTY_COMMAND.write();
@@ -299,8 +297,15 @@ public final class CommandBuffer {
 			assert type < REGISTERED_COMMANDS.length : "Unknown Command Type";
 
 			BaseCommand command = REGISTERED_COMMANDS[type];
-			if (command.isDrawCall() && uboCommandBuffer != null && uboCommandBuffer.isDirty()) {
-				uboCommandBuffer.upload();
+
+			if (command.isDrawCall()) {
+				for(int i = 0; i < pendingUBOUploadsCount; i++) {
+					if(pendingUBOUploads[i].isDirty()) {
+						pendingUBOUploads[i].upload();
+						pendingUBOUploads[i] = null;
+					}
+				}
+				pendingUBOUploadsCount = 0;
 			}
 
 			command.doRead();
@@ -313,19 +318,34 @@ public final class CommandBuffer {
 		}
 	}
 
+	protected void markUniformBufferDirty(UniformBuffer<?> buffer) {
+		for(int i = 0; i < pendingUBOUploadsCount; i++) {
+			if(pendingUBOUploads[i] == buffer) {
+				return;
+			}
+		}
+		pendingUBOUploads[pendingUBOUploadsCount++] = buffer;
+	}
+
 	protected void writeObject(Object object) {
+		for(int i = 0; i < objectCount; i++) {
+			if(objects[i] == object) {
+				writeBits(i, 32);
+				return;
+			}
+		}
+
 		if (objectCount >= objects.length) {
 			objects = Arrays.copyOf(objects, objects.length * 2);
 		}
+
 		writeBits(objectCount, 32);
 		objects[objectCount++] = object;
 	}
 
 	protected <T> T readObject() {
 		int index = (int)readBits(32);
-		Object object = objects[index];
-		objects[index] = null;
-		return (T) object;
+		return (T) objects[index];
 	}
 
 	protected long readBits(int numBits) {
@@ -403,7 +423,10 @@ public final class CommandBuffer {
 		readBitHead = 0;
 
 		// Objects need to be cleared to avoid holding onto a reference and preventing garbage collection
-		Arrays.fill(objects, null);
+		Arrays.fill(objects, 0, objectCount, null);
 		objectCount = 0;
+
+		Arrays.fill(pendingUBOUploads, 0, pendingUBOUploadsCount, null);
+		pendingUBOUploadsCount = 0;
 	}
 }

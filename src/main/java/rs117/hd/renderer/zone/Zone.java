@@ -237,7 +237,7 @@ class Zone {
 
 		convertForDraw(VERT_SIZE);
 
-		cmd.SetUniformProperty(ubo.sceneBase, true, zx << 10, 0, zz << 10);
+		cmd.SetUniformProperty(ubo.sceneBase, zx << 10, 0, zz << 10);
 		cmd.BindVertexArray(glVao);
 		if(glDrawOffset.length > 1) {
 			cmd.MultiDrawArrays(GL_TRIANGLES, glDrawOffset, glDrawLength);
@@ -257,7 +257,7 @@ class Zone {
 
 		convertForDraw(VERT_SIZE);
 
-		cmd.SetUniformProperty(ubo.sceneBase, true, zx << 10, 0, zz << 10);
+		cmd.SetUniformProperty(ubo.sceneBase, zx << 10, 0, zz << 10);
 		cmd.BindVertexArray(glVao);
 		if(glDrawOffset.length > 1) {
 			cmd.MultiDrawArrays(GL_TRIANGLES, glDrawOffset, glDrawLength);
@@ -624,9 +624,9 @@ class Zone {
 
 	private void flush(UBOCommandBuffer ubo, CommandBuffer cmd) {
 		if (lastDrawMode == TEMP) {
-			cmd.SetUniformProperty(ubo.sceneBase, true, 0, 0, 0);
+			cmd.SetUniformProperty(ubo.sceneBase, 0, 0, 0);
 		} else {
-			cmd.SetUniformProperty(ubo.sceneBase, true, lastzx << 10, 0, lastzz << 10);
+			cmd.SetUniformProperty(ubo.sceneBase, lastzx << 10, 0, lastzz << 10);
 		}
 
 		if (lastDrawMode == STATIC) {

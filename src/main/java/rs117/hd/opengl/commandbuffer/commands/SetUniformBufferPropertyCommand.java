@@ -9,7 +9,6 @@ public class SetUniformBufferPropertyCommand extends BaseCommand {
 	public int[] intValues;
 	public float[] floatValues;
 	public boolean isFloat;
-	public boolean upload;
 
 	private int stagingSize;
 	private int[] stagingIntValues;
@@ -21,7 +20,6 @@ public class SetUniformBufferPropertyCommand extends BaseCommand {
 	protected void doWrite() {
 		writeObject(property);
 		writeFlag(isFloat);
-		writeFlag(upload);
 		if(isFloat) {
 			write32(floatValues.length);
 			for(float f : floatValues) {
@@ -41,7 +39,6 @@ public class SetUniformBufferPropertyCommand extends BaseCommand {
 	protected void doRead() {
 		property = readObject();
 		isFloat = readFlag();
-		upload = readFlag();
 		stagingSize = read32();
 		if(isFloat) {
 			if(stagingFloatValues == null || stagingFloatValues.length < stagingSize) {
@@ -99,11 +96,7 @@ public class SetUniformBufferPropertyCommand extends BaseCommand {
 					break;
 			}
 		}
-
-		if(upload) {
-			// TODO: Upload should only be done once before the next draw call
-			property.getOwner().upload();
-		}
+		markUniformBufferDirty(property.getOwner());
 	}
 
 	@Override

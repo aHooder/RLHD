@@ -2,7 +2,7 @@ package rs117.hd.opengl.commandbuffer;
 
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-import rs117.hd.opengl.uniforms.UBOCommandBuffer;
+import rs117.hd.opengl.uniforms.UniformBuffer;
 
 @Slf4j
 public abstract class BaseCommand {
@@ -30,10 +30,6 @@ public abstract class BaseCommand {
 
 	protected BaseCommand() { this(false, false); }
 
-	protected UBOCommandBuffer getUBOCommandBuffer() {
-		return owner.uboCommandBuffer;
-	}
-
 	protected abstract void execute();
 	protected abstract void print(StringBuilder sb);
 
@@ -44,6 +40,8 @@ public abstract class BaseCommand {
 
 	protected abstract void doWrite();
 	protected abstract void doRead();
+
+	protected final void markUniformBufferDirty(UniformBuffer buffer) { owner.markUniformBufferDirty(buffer); }
 
 	protected final void write1(int value)   { owner.writeBits(value & 0x1L, 1); }
 	protected final void write8(int value)   { owner.writeBits(value & 0xFFL, 8); }

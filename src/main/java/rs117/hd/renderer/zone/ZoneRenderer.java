@@ -248,9 +248,6 @@ public class ZoneRenderer implements Renderer {
 
 		uboCommandBuffer.initialize(UNIFORM_BLOCK_COMMAND_BUFFER);
 		uboWorldViews.initialize(UNIFORM_BLOCK_WORLD_VIEWS);
-
-		sceneDrawCmd.uboCommandBuffer = uboCommandBuffer;
-		directionalDrawCmd.uboCommandBuffer = uboCommandBuffer;
 	}
 
 	@Override
@@ -356,8 +353,8 @@ public class ZoneRenderer implements Renderer {
 			vaoO.addRange(topLevel);
 			vaoPO.addRange(topLevel);
 			vaoPOShadow.addRange(topLevel);
-			sceneDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, true, uboWorldViews.getIndex(scene));
-			directionalDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, true, uboWorldViews.getIndex(scene));
+			sceneDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, uboWorldViews.getIndex(scene));
+			directionalDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, uboWorldViews.getIndex(scene));
 		}
 	}
 
@@ -748,8 +745,8 @@ public class ZoneRenderer implements Renderer {
 		sceneDrawCmd.reset();
 		directionalDrawCmd.reset();
 
-		sceneDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, true, uboWorldViews.getIndex(null));
-		directionalDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, true, uboWorldViews.getIndex(null));
+		sceneDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, uboWorldViews.getIndex(null));
+		directionalDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, uboWorldViews.getIndex(null));
 
 		checkGLErrors();
 	}
@@ -760,8 +757,8 @@ public class ZoneRenderer implements Renderer {
 		if (scene.getWorldViewId() == WorldView.TOPLEVEL) {
 			postDrawTopLevel();
 		} else {
-			sceneDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, true, uboWorldViews.getIndex(null));
-			directionalDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, true, uboWorldViews.getIndex(null));
+			sceneDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, uboWorldViews.getIndex(null));
+			directionalDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, uboWorldViews.getIndex(null));
 		}
 	}
 
@@ -894,12 +891,12 @@ public class ZoneRenderer implements Renderer {
 
 		int offset = ctx.sceneContext.sceneOffset >> 3;
 		if (z.inSceneFrustum) {
-			sceneDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, true, uboWorldViews.getIndex(scene));
+			sceneDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, uboWorldViews.getIndex(scene));
 			z.renderOpaque(uboCommandBuffer, sceneDrawCmd, zx - offset, zz - offset, minLevel, level, maxLevel, hideRoofIds);
 		}
 
 		if (z.inShadowFrustum) {
-			directionalDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, true, uboWorldViews.getIndex(scene));
+			directionalDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, uboWorldViews.getIndex(scene));
 			z.renderOpaque(
 				uboCommandBuffer,
 				directionalDrawCmd,
@@ -931,7 +928,7 @@ public class ZoneRenderer implements Renderer {
 		boolean renderWater = z.inSceneFrustum && level == 0 && z.hasWater;
 
 		if (renderWater || hasAlpha)
-			sceneDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, true, uboWorldViews.getIndex(scene));
+			sceneDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, uboWorldViews.getIndex(scene));
 
 		int offset = ctx.sceneContext.sceneOffset >> 3;
 		if (renderWater)
@@ -962,7 +959,7 @@ public class ZoneRenderer implements Renderer {
 		}
 
 		if (z.inShadowFrustum) {
-			directionalDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, true, uboWorldViews.getIndex(scene));
+			directionalDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, uboWorldViews.getIndex(scene));
 			z.renderAlpha(
 				uboCommandBuffer,
 				directionalDrawCmd,
@@ -995,8 +992,8 @@ public class ZoneRenderer implements Renderer {
 				vaoPOShadow.addRange(scene);
 
 				if (scene.getWorldViewId() == -1) {
-					sceneDrawCmd.SetUniformProperty(uboCommandBuffer.sceneBase, true, 0, 0, 0);
-					directionalDrawCmd.SetUniformProperty(uboCommandBuffer.sceneBase, true, 0, 0, 0);
+					sceneDrawCmd.SetUniformProperty(uboCommandBuffer.sceneBase, 0, 0, 0);
+					directionalDrawCmd.SetUniformProperty(uboCommandBuffer.sceneBase, 0, 0, 0);
 
 					// Draw opaque
 					vaoO.unmap();
