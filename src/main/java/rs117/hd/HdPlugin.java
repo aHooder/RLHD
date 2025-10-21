@@ -345,7 +345,7 @@ public class HdPlugin extends Plugin {
 	public final UBOLights uboLightsCulling = new UBOLights(true);
 	public final UBOUI uboUI = new UBOUI();
 
-	public final CommandBuffer backbufferCmd = new CommandBuffer();
+	public final CommandBuffer backbufferCmd = new CommandBuffer().SetTimeExecution(true);
 
 	// Configs used frequently enough to be worth caching
 	public boolean configGroundTextures;
@@ -1378,8 +1378,7 @@ public class HdPlugin extends Plugin {
 		if (client.getGameState().getState() < GameState.LOADING.getState())
 			overlayColor = 0;
 
-		frameTimer.begin(Timer.RENDER_UI);
-
+		backbufferCmd.BeginTimer(Timer.RENDER_UI);
 		backbufferCmd.BindFrameBuffer(GL_FRAMEBUFFER, awtContext.getFramebuffer(false));
 		// Disable alpha writes, just in case the default FBO has an alpha channel
 		backbufferCmd.ColorMask(true, true, true, false);
@@ -1417,7 +1416,7 @@ public class HdPlugin extends Plugin {
 		backbufferCmd.Disable(GL_BLEND);
 		backbufferCmd.ColorMask(true, true, true, true);
 
-		frameTimer.end(Timer.RENDER_UI);
+		backbufferCmd.EndTimer(Timer.RENDER_UI);
 	}
 
 	/**

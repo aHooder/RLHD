@@ -15,6 +15,9 @@ import static org.lwjgl.opengl.GL33C.*;
 @Slf4j
 @Singleton
 public class FrameTimer {
+	@Getter
+	private static FrameTimer instance;
+
 	@Inject
 	private ClientThread clientThread;
 
@@ -36,6 +39,10 @@ public class FrameTimer {
 
 	public long cumulativeError;
 	public long errorCompensation;
+
+	public FrameTimer() {
+		instance = this;
+	}
 
 	private void initialize() {
 		clientThread.invoke(() -> {

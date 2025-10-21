@@ -740,6 +740,9 @@ public class ZoneRenderer implements Renderer {
 
 		// Reset buffers for the next frame
 		eboAlphaStaging.clear();
+
+		// Reset Command Buffers
+		plugin.backbufferCmd.reset();
 		sceneDrawCmd.reset();
 		directionalDrawCmd.reset();
 
@@ -768,6 +771,8 @@ public class ZoneRenderer implements Renderer {
 
 		vaoA.unmap();
 
+		plugin.backbufferCmd.BeginTimer(Timer.RENDER_FRAME);
+
 		// Scene draw state to apply before all recorded commands
 		if (eboAlphaStaging.position() > 0) {
 			eboAlphaStaging.flip();
@@ -779,10 +784,9 @@ public class ZoneRenderer implements Renderer {
 			plugin.fboShadowMap != 0 &&
 			environmentManager.currentDirectionalStrength > 0
 		) {
-			frameTimer.begin(Timer.RENDER_SHADOWS);
-
 			// Render to the shadow depth map
 			directionalPassCmd.reset();
+			directionalPassCmd.BeginTimer(Timer.RENDER_SHADOWS);
 			directionalPassCmd.Viewport(0, 0, plugin.shadowMapResolution, plugin.shadowMapResolution);
 			directionalPassCmd.BindFrameBuffer(GL_FRAMEBUFFER, plugin.fboShadowMap);
 			directionalPassCmd.ClearDepth(1.0f);
@@ -797,12 +801,13 @@ public class ZoneRenderer implements Renderer {
 
 			directionalPassCmd.Disable(GL_DEPTH_TEST);
 
-			directionalPassCmd.submit();
-			frameTimer.end(Timer.RENDER_SHADOWS);
+			directionalPassCmd.EndTimer(Timer.RENDER_SHADOWS);
+
+			plugin.backbufferCmd.ExecuteCommandBuffer(directionalPassCmd);
 		}
 
-		frameTimer.begin(Timer.RENDER_SCENE);
 		scenePassCmd.reset();
+		scenePassCmd.BeginTimer(Timer.RENDER_SCENE);
 		scenePassCmd.SetShaderProgram(sceneProgram);
 
 		scenePassCmd.BindFrameBuffer(GL_DRAW_FRAMEBUFFER, plugin.fboScene);
@@ -817,7 +822,11 @@ public class ZoneRenderer implements Renderer {
 			gammaCorrectedFogColor[2],
 			1f
 		);
+
+		scenePassCmd.BeginTimer(Timer.CLEAR_SCENE);
 		scenePassCmd.ClearColorAndDepth(gammaCorrectedFogColor[0], gammaCorrectedFogColor[1], gammaCorrectedFogColor[2], 1f, 0.0f);
+		scenePassCmd.EndTimer(Timer.CLEAR_SCENE);
+
 		scenePassCmd.Enable(GL_CULL_FACE);
 		scenePassCmd.Enable(GL_DEPTH_TEST);
 		scenePassCmd.SetDepthFunc(GL_GREATER);
@@ -831,24 +840,10 @@ public class ZoneRenderer implements Renderer {
 		scenePassCmd.Disable(GL_DEPTH_TEST);
 		scenePassCmd.Disable(GL_BLEND);
 
-		scenePassCmd.submit();
+		scenePassCmd.EndTimer(Timer.RENDER_SCENE);
+		plugin.backbufferCmd.ExecuteCommandBuffer(scenePassCmd);
 
 		frameTimer.end(Timer.DRAW_SCENE);
-		frameTimer.end(Timer.RENDER_SCENE);
-		frameTimer.begin(Timer.RENDER_FRAME);
-
-
-		// The client only updates animations once per client tick, so we can skip updating geometry buffers,
-		// but the compute shaders should still be executed in case the camera angle has changed.
-		// Technically we could skip compute shaders as well when the camera is unchanged,
-		// but it would only lead to micro stuttering when rotating the camera, compared to no rotation.
-//		if (!plugin.redrawPreviousFrame) {
-//			updateSceneVao(hRenderBufferVertices, hRenderBufferUvs, hRenderBufferNormals);
-//		}
-
-//		frameTimer.begin(Timer.COMPUTE);
-//		plugin.uboCompute.upload();
-//		frameTimer.end(Timer.COMPUTE);
 
 		checkGLErrors();
 	}
@@ -1274,7 +1269,6 @@ public class ZoneRenderer implements Renderer {
 		}
 
 		if (sceneFboValid && plugin.sceneResolution != null && plugin.sceneViewport != null) {
-			plugin.backbufferCmd.reset();
 			plugin.backbufferCmd.BlitFramebuffer(
 				plugin.fboScene, plugin.fboSceneResolve, plugin.awtContext.getFramebuffer(false),
 				plugin.sceneResolution[0], plugin.sceneResolution[1],
@@ -1288,12 +1282,14 @@ public class ZoneRenderer implements Renderer {
 
 		plugin.drawUi(overlayColor);
 
+		plugin.backbufferCmd.BeginTimer(Timer.SWAP_BUFFERS);
+		plugin.backbufferCmd.SwapBuffers(plugin.awtContext);
+		plugin.backbufferCmd.EndTimer(Timer.SWAP_BUFFERS);
+		plugin.backbufferCmd.EndTimer(Timer.RENDER_FRAME);
+
 		plugin.backbufferCmd.submit();
 
 		try {
-			frameTimer.begin(Timer.SWAP_BUFFERS);
-			plugin.awtContext.swapBuffers();
-			frameTimer.end(Timer.SWAP_BUFFERS);
 			drawManager.processDrawComplete(plugin::screenshot);
 		} catch (RuntimeException ex) {
 			// this is always fatal
@@ -1308,7 +1304,6 @@ public class ZoneRenderer implements Renderer {
 		glBindFramebuffer(GL_FRAMEBUFFER, plugin.awtContext.getFramebuffer(false));
 
 		frameTimer.end(Timer.DRAW_FRAME);
-		frameTimer.end(Timer.RENDER_FRAME);
 		frameTimer.endFrameAndReset();
 //		frameModelInfoMap.clear();
 		checkGLErrors();

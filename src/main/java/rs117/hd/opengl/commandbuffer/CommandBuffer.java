@@ -1,8 +1,8 @@
 package rs117.hd.opengl.commandbuffer;
 
 import java.util.Arrays;
-import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import net.runelite.rlawt.AWTContext;
 import rs117.hd.HdPlugin;
 import rs117.hd.opengl.commandbuffer.commands.BindElementsArrayCommand;
 import rs117.hd.opengl.commandbuffer.commands.BindFrameBufferCommand;
@@ -16,14 +16,18 @@ import rs117.hd.opengl.commandbuffer.commands.DepthMaskCommand;
 import rs117.hd.opengl.commandbuffer.commands.DrawArraysCommand;
 import rs117.hd.opengl.commandbuffer.commands.DrawElementsCommand;
 import rs117.hd.opengl.commandbuffer.commands.ExecuteCommandBufferCommand;
+import rs117.hd.opengl.commandbuffer.commands.FrameTimerCommand;
 import rs117.hd.opengl.commandbuffer.commands.MultiDrawArraysCommand;
 import rs117.hd.opengl.commandbuffer.commands.SetShaderUniformCommand;
 import rs117.hd.opengl.commandbuffer.commands.SetUniformBufferPropertyCommand;
 import rs117.hd.opengl.commandbuffer.commands.ShaderProgramCommand;
+import rs117.hd.opengl.commandbuffer.commands.SwapBuffersCommand;
 import rs117.hd.opengl.commandbuffer.commands.ToggleCommand;
 import rs117.hd.opengl.commandbuffer.commands.ViewportCommand;
 import rs117.hd.opengl.shader.ShaderProgram;
 import rs117.hd.opengl.uniforms.UniformBuffer;
+import rs117.hd.overlays.FrameTimer;
+import rs117.hd.overlays.Timer;
 
 import static rs117.hd.utils.MathUtils.*;
 
@@ -60,6 +64,8 @@ public final class CommandBuffer {
 		(SET_UNIFORM_BUFFER_PROPERTY_COMMAND = REGISTER_COMMAND(SetUniformBufferPropertyCommand::new)),
 		(SET_SHADER_PROPERTY_COMMAND = REGISTER_COMMAND(SetShaderUniformCommand::new)),
 		(EXECUTE_COMMAND_BUFFER_COMMAND = REGISTER_COMMAND(ExecuteCommandBufferCommand::new)),
+		(SWAP_BUFFER_COMMAND = REGISTER_COMMAND(SwapBuffersCommand::new)),
+		(FRAME_TIMER_COMMAND = REGISTER_COMMAND(FrameTimerCommand::new)),
 	};
 
 	private final DrawArraysCommand DRAW_ARRAYS_COMMAND;
@@ -80,6 +86,8 @@ public final class CommandBuffer {
 	private final SetShaderUniformCommand SET_SHADER_PROPERTY_COMMAND;
 	private final ShaderProgramCommand SHADER_PROGRAM_COMMAND;
 	private final ExecuteCommandBufferCommand EXECUTE_COMMAND_BUFFER_COMMAND;
+	private final SwapBuffersCommand SWAP_BUFFER_COMMAND;
+	private final FrameTimerCommand FRAME_TIMER_COMMAND;
 
 	interface ICreateCommand<T extends BaseCommand> { T construct(); }
 
@@ -93,7 +101,7 @@ public final class CommandBuffer {
 
 	private long[] cmd = new long[1 << 20]; // ~1 million calls
 
-	private UniformBuffer<?>[] pendingUBOUploads = new UniformBuffer[100];
+	private final UniformBuffer<?>[] pendingUBOUploads = new UniformBuffer[100];
 	private int pendingUBOUploadsCount = 0;
 
 	private Object[] objects = new Object[100];
@@ -105,11 +113,11 @@ public final class CommandBuffer {
 	private int readHead = 0;
 	private int readBitHead = 0;
 
-	private final StringBuilder cmd_log = new StringBuilder();
+	private boolean timeExecution = false;
 
-	public void ensureCapacity(int numLongs) {
-		if (writeHead + numLongs >= cmd.length)
-			cmd = Arrays.copyOf(cmd, cmd.length * 2);
+	public CommandBuffer SetTimeExecution(boolean timeExecution) {
+		this.timeExecution = timeExecution;
+		return this;
 	}
 
 	public void SetUniformProperty(UniformBuffer.Property property, int... values) {
@@ -276,6 +284,23 @@ public final class CommandBuffer {
 		BLIT_FRAME_BUFFER_COMMAND.write();
 	}
 
+	public void BeginTimer(Timer timer) {
+		FRAME_TIMER_COMMAND.timer = timer;
+		FRAME_TIMER_COMMAND.begin = true;
+		FRAME_TIMER_COMMAND.write();
+	}
+
+	public void EndTimer(Timer timer) {
+		FRAME_TIMER_COMMAND.timer = timer;
+		FRAME_TIMER_COMMAND.begin = false;
+		FRAME_TIMER_COMMAND.write();
+	}
+
+	public void SwapBuffers(AWTContext context) {
+		SWAP_BUFFER_COMMAND.awtContext = context;
+		SWAP_BUFFER_COMMAND.write();
+	}
+
 	public void Enable(int capability) {
 		Toggle(capability, true);
 	}
@@ -290,10 +315,9 @@ public final class CommandBuffer {
 		TOGGLE_COMMAND.write();
 	}
 
-	public void printCommandBuffer() {
+	public void printCommandBuffer(StringBuilder sb) {
 		readHead = 0;
 		readBitHead = 0;
-		cmd_log.setLength(0);
 
 		while (readHead < writeHead || (readHead == writeHead && readBitHead < writeBitHead)) {
 			int type = (int) readBits(8);
@@ -301,15 +325,21 @@ public final class CommandBuffer {
 
 			BaseCommand command = REGISTERED_COMMANDS[type];
 			command.doRead();
-			command.print(cmd_log);
+			command.print(sb);
 		}
-		log.debug("=== CommandBuffer START ===\n{}\n=== CommandBuffer END ===", cmd_log);
 	}
 
-	@SneakyThrows
 	public void submit() {
 		readHead = 0;
 		readBitHead = 0;
+
+		long readElapsed = 0;
+		long readTimestamp = 0;
+		long executeTimestamp = 0;
+
+		if(timeExecution) {
+			executeTimestamp = System.nanoTime();
+		}
 
 		while (readHead < writeHead || (readHead == writeHead && readBitHead < writeBitHead)) {
 			final int type = (int)readBits(8);
@@ -327,14 +357,23 @@ public final class CommandBuffer {
 				pendingUBOUploadsCount = 0;
 			}
 
+			readTimestamp = System.nanoTime();
 			command.doRead();
+			readElapsed += System.nanoTime() - readTimestamp;
+
 			command.execute();
 
 			if(command.isGLCommand() && HdPlugin.checkGLErrors(command.getName())) {
-				printCommandBuffer();
+				StringBuilder sb = new StringBuilder();
+				printCommandBuffer(sb);
+				log.debug("=== CommandBuffer START ===\n{}\n=== CommandBuffer END ===", sb);
 				break;
 			}
 		}
+		if(timeExecution) {
+			FrameTimer.getInstance().add(Timer.COMMAND_BUFFER_EXECUTE, System.nanoTime() - executeTimestamp);
+		}
+		FrameTimer.getInstance().add(Timer.COMMAND_BUFFER_READ, readElapsed);
 	}
 
 	protected void markUniformBufferDirty(UniformBuffer<?> buffer) {
@@ -424,7 +463,8 @@ public final class CommandBuffer {
 			writeBitHead += bitsToWrite;
 			if (writeBitHead == BITS_PER_WORD) {
 				writeHead++;
-				ensureCapacity(writeHead);
+				if (writeHead >= cmd.length)
+					cmd = Arrays.copyOf(cmd, cmd.length * 2);
 
 				writeBitHead = 0;
 				word = 0;

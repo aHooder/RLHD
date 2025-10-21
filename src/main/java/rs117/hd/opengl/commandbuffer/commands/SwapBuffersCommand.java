@@ -1,30 +1,29 @@
 package rs117.hd.opengl.commandbuffer.commands;
 
+import net.runelite.rlawt.AWTContext;
 import rs117.hd.opengl.commandbuffer.BaseCommand;
-import rs117.hd.opengl.commandbuffer.CommandBuffer;
 
-public class ExecuteCommandBufferCommand extends BaseCommand {
+public class SwapBuffersCommand extends BaseCommand {
 
-	public CommandBuffer cmd;
+	public AWTContext awtContext;
 
 	@Override
 	protected void doWrite() {
-		writeObject(cmd);
+		writeObject(awtContext);
 	}
 
 	@Override
 	protected void doRead() {
-		cmd = readObject();
+		awtContext = readObject();
 	}
 
 	@Override
 	protected void execute() {
-		cmd.submit();
+		awtContext.swapBuffers();
 	}
 
 	@Override
 	protected void print(StringBuilder sb) {
-		sb.append("ExecuteCommandBufferCommand");
-		cmd.printCommandBuffer(sb);
+		sb.append("awtContext.swapBuffers();");
 	}
 }
