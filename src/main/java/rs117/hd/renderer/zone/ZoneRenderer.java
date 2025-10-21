@@ -527,7 +527,7 @@ public class ZoneRenderer implements Renderer {
 
 				directionalCamera.setPositionX(centerXZ[0]);
 				directionalCamera.setPositionZ(centerXZ[1]);
-				directionalCamera.setNearPlane(10000);
+				directionalCamera.setNearPlane(radius);
 				directionalCamera.setZoom(1.0f);
 				directionalCamera.setViewportWidth((int) radius);
 				directionalCamera.setViewportHeight((int) radius);
