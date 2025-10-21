@@ -24,6 +24,8 @@ import rs117.hd.opengl.commandbuffer.commands.ViewportCommand;
 import rs117.hd.opengl.shader.ShaderProgram;
 import rs117.hd.opengl.uniforms.UniformBuffer;
 
+import static rs117.hd.utils.MathUtils.*;
+
 @Slf4j
 public final class CommandBuffer {
 	private static final int BITS_PER_WORD = 64;
@@ -330,7 +332,7 @@ public final class CommandBuffer {
 	protected void writeObject(Object object) {
 		for(int i = 0; i < objectCount; i++) {
 			if(objects[i] == object) {
-				writeBits(i, 32);
+				writeBits(i, 8);
 				return;
 			}
 		}
@@ -339,12 +341,13 @@ public final class CommandBuffer {
 			objects = Arrays.copyOf(objects, objects.length * 2);
 		}
 
-		writeBits(objectCount, 32);
+		assert objectCount < 255 : "Too many objects in command buffer, limit needs increasing: " + objectCount + " > 255";
+		writeBits(objectCount, 8);
 		objects[objectCount++] = object;
 	}
 
 	protected <T> T readObject() {
-		int index = (int)readBits(32);
+		int index = (int)readBits(8);
 		return (T) objects[index];
 	}
 
@@ -363,7 +366,7 @@ public final class CommandBuffer {
 		long result = 0;
 		int shift = 0;
 		while (numBits > 0) {
-			final int bitsToRead = Math.min(BITS_PER_WORD - readBitHead, numBits);
+			final int bitsToRead = min(BITS_PER_WORD - readBitHead, numBits);
 			final long bits = (word >>> readBitHead) & MASKS[bitsToRead];
 
 			result |= (bits << shift);
@@ -395,7 +398,7 @@ public final class CommandBuffer {
 
 		long word = cmd[writeHead];
 		while (numBits > 0) {
-			final int bitsToWrite = Math.min(BITS_PER_WORD - writeBitHead, numBits);
+			final int bitsToWrite = min(BITS_PER_WORD - writeBitHead, numBits);
 			final long bits = value & MASKS[bitsToWrite];
 
 			word |= bits << writeBitHead;
