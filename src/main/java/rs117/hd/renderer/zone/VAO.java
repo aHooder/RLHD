@@ -103,7 +103,7 @@ class VAO {
 
 			int count = end - start;
 
-			cmd.SetWorldViewIndex(renderer.uboWorldViews.getIndex(scene));
+			cmd.SetUniformProperty(renderer.uboCommandBuffer.worldViewIndex, true, renderer.uboWorldViews.getIndex(scene));
 			cmd.BindVertexArray(vao);
 			cmd.DrawArrays(GL_TRIANGLES, start / (VERT_SIZE / 4), count / (VAO.VERT_SIZE / 4));
 

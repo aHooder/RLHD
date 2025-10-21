@@ -17,12 +17,13 @@ import rs117.hd.opengl.commandbuffer.commands.DrawArraysCommand;
 import rs117.hd.opengl.commandbuffer.commands.DrawElementsCommand;
 import rs117.hd.opengl.commandbuffer.commands.ExecuteCommandBufferCommand;
 import rs117.hd.opengl.commandbuffer.commands.MultiDrawArraysCommand;
+import rs117.hd.opengl.commandbuffer.commands.SetUniformBufferPropertyCommand;
 import rs117.hd.opengl.commandbuffer.commands.ShaderProgramCommand;
 import rs117.hd.opengl.commandbuffer.commands.ToggleCommand;
-import rs117.hd.opengl.commandbuffer.commands.UpdateCMDUBOCommand;
 import rs117.hd.opengl.commandbuffer.commands.ViewportCommand;
 import rs117.hd.opengl.shader.ShaderProgram;
 import rs117.hd.opengl.uniforms.UBOCommandBuffer;
+import rs117.hd.opengl.uniforms.UniformBuffer;
 
 @Slf4j
 public final class CommandBuffer {
@@ -54,7 +55,7 @@ public final class CommandBuffer {
 		(BIND_ELEMENTS_ARRAY_COMMAND = REGISTER_COMMAND(BindElementsArrayCommand::new)),
 		(BIND_VERTEX_ARRAY_COMMAND = REGISTER_COMMAND(BindVertexArrayCommand::new)),
 		(BLIT_FRAME_BUFFER_COMMAND = REGISTER_COMMAND(BlitFrameBufferCommand::new)),
-		(UPDATE_CMD_UBO_COMMAND = REGISTER_COMMAND(UpdateCMDUBOCommand::new)),
+		(SET_UNIFORM_BUFFER_PROPERTY_COMMAND = REGISTER_COMMAND(SetUniformBufferPropertyCommand::new)),
 		(EXECUTE_COMMAND_BUFFER_COMMAND = REGISTER_COMMAND(ExecuteCommandBufferCommand::new)),
 	};
 
@@ -72,7 +73,7 @@ public final class CommandBuffer {
 	private final BindElementsArrayCommand BIND_ELEMENTS_ARRAY_COMMAND;
 	private final BindVertexArrayCommand BIND_VERTEX_ARRAY_COMMAND;
 	private final BlitFrameBufferCommand BLIT_FRAME_BUFFER_COMMAND;
-	private final UpdateCMDUBOCommand UPDATE_CMD_UBO_COMMAND;
+	private final SetUniformBufferPropertyCommand SET_UNIFORM_BUFFER_PROPERTY_COMMAND;
 	private final ShaderProgramCommand SHADER_PROGRAM_COMMAND;
 	private final ExecuteCommandBufferCommand EXECUTE_COMMAND_BUFFER_COMMAND;
 
@@ -106,18 +107,20 @@ public final class CommandBuffer {
 			cmd = Arrays.copyOf(cmd, cmd.length * 2);
 	}
 
-	public void SetBaseOffset(int x, int y, int z) {
-		UPDATE_CMD_UBO_COMMAND.isBaseOffset = true;
-		UPDATE_CMD_UBO_COMMAND.x = x;
-		UPDATE_CMD_UBO_COMMAND.y = y;
-		UPDATE_CMD_UBO_COMMAND.z = z;
-		UPDATE_CMD_UBO_COMMAND.write();
+	public void SetUniformProperty(UniformBuffer.Property property, boolean upload, int... values) {
+		SET_UNIFORM_BUFFER_PROPERTY_COMMAND.property = property;
+		SET_UNIFORM_BUFFER_PROPERTY_COMMAND.upload = upload;
+		SET_UNIFORM_BUFFER_PROPERTY_COMMAND.intValues = values;
+		SET_UNIFORM_BUFFER_PROPERTY_COMMAND.isFloat = false;
+		SET_UNIFORM_BUFFER_PROPERTY_COMMAND.write();
 	}
 
-	public void SetWorldViewIndex(int index) {
-		UPDATE_CMD_UBO_COMMAND.isBaseOffset = false;
-		UPDATE_CMD_UBO_COMMAND.worldViewId = index;
-		UPDATE_CMD_UBO_COMMAND.write();
+	public void SetUniformProperty(UniformBuffer.Property property, boolean upload, float... values) {
+		SET_UNIFORM_BUFFER_PROPERTY_COMMAND.property = property;
+		SET_UNIFORM_BUFFER_PROPERTY_COMMAND.upload = upload;
+		SET_UNIFORM_BUFFER_PROPERTY_COMMAND.floatValues = values;
+		SET_UNIFORM_BUFFER_PROPERTY_COMMAND.isFloat = true;
+		SET_UNIFORM_BUFFER_PROPERTY_COMMAND.write();
 	}
 
 	public void BindVertexArray(int vao) {

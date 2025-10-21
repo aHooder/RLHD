@@ -215,7 +215,7 @@ public class ZoneRenderer implements Renderer {
 
 	private boolean sceneFboValid;
 
-	private final UBOCommandBuffer uboCommandBuffer = new UBOCommandBuffer();
+	public final UBOCommandBuffer uboCommandBuffer = new UBOCommandBuffer();
 	public final UBOWorldViews uboWorldViews = new UBOWorldViews(MAX_WORLDVIEWS);
 
 	private final WorldViewContext root = new WorldViewContext(null, NUM_ZONES, NUM_ZONES);
@@ -356,8 +356,8 @@ public class ZoneRenderer implements Renderer {
 			vaoO.addRange(topLevel);
 			vaoPO.addRange(topLevel);
 			vaoPOShadow.addRange(topLevel);
-			sceneDrawCmd.SetWorldViewIndex(uboWorldViews.getIndex(scene));
-			directionalDrawCmd.SetWorldViewIndex(uboWorldViews.getIndex(scene));
+			sceneDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, true, uboWorldViews.getIndex(scene));
+			directionalDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, true, uboWorldViews.getIndex(scene));
 		}
 	}
 
@@ -748,8 +748,8 @@ public class ZoneRenderer implements Renderer {
 		sceneDrawCmd.reset();
 		directionalDrawCmd.reset();
 
-		sceneDrawCmd.SetWorldViewIndex(uboWorldViews.getIndex(null));
-		directionalDrawCmd.SetWorldViewIndex(uboWorldViews.getIndex(null));
+		sceneDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, true, uboWorldViews.getIndex(null));
+		directionalDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, true, uboWorldViews.getIndex(null));
 
 		checkGLErrors();
 	}
@@ -760,8 +760,8 @@ public class ZoneRenderer implements Renderer {
 		if (scene.getWorldViewId() == WorldView.TOPLEVEL) {
 			postDrawTopLevel();
 		} else {
-			sceneDrawCmd.SetWorldViewIndex(uboWorldViews.getIndex(null));
-			directionalDrawCmd.SetWorldViewIndex(uboWorldViews.getIndex(null));
+			sceneDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, true, uboWorldViews.getIndex(null));
+			directionalDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, true, uboWorldViews.getIndex(null));
 		}
 	}
 
@@ -894,13 +894,14 @@ public class ZoneRenderer implements Renderer {
 
 		int offset = ctx.sceneContext.sceneOffset >> 3;
 		if (z.inSceneFrustum) {
-			sceneDrawCmd.SetWorldViewIndex(uboWorldViews.getIndex(scene));
-			z.renderOpaque(sceneDrawCmd, zx - offset, zz - offset, minLevel, level, maxLevel, hideRoofIds);
+			sceneDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, true, uboWorldViews.getIndex(scene));
+			z.renderOpaque(uboCommandBuffer, sceneDrawCmd, zx - offset, zz - offset, minLevel, level, maxLevel, hideRoofIds);
 		}
 
 		if (z.inShadowFrustum) {
-			directionalDrawCmd.SetWorldViewIndex(uboWorldViews.getIndex(scene));
+			directionalDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, true, uboWorldViews.getIndex(scene));
 			z.renderOpaque(
+				uboCommandBuffer,
 				directionalDrawCmd,
 				zx - offset,
 				zz - offset,
@@ -930,11 +931,11 @@ public class ZoneRenderer implements Renderer {
 		boolean renderWater = z.inSceneFrustum && level == 0 && z.hasWater;
 
 		if (renderWater || hasAlpha)
-			sceneDrawCmd.SetWorldViewIndex(uboWorldViews.getIndex(scene));
+			sceneDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, true, uboWorldViews.getIndex(scene));
 
 		int offset = ctx.sceneContext.sceneOffset >> 3;
 		if (renderWater)
-			z.renderOpaqueLevel(sceneDrawCmd, zx - offset, zz - offset, Zone.LEVEL_WATER_SURFACE);
+			z.renderOpaqueLevel(uboCommandBuffer, sceneDrawCmd, zx - offset, zz - offset, Zone.LEVEL_WATER_SURFACE);
 
 		if (!hasAlpha)
 			return;
@@ -946,6 +947,7 @@ public class ZoneRenderer implements Renderer {
 
 		if (z.inSceneFrustum) {
 			z.renderAlpha(
+				uboCommandBuffer,
 				sceneDrawCmd,
 				zx - offset,
 				zz - offset,
@@ -960,8 +962,9 @@ public class ZoneRenderer implements Renderer {
 		}
 
 		if (z.inShadowFrustum) {
-			directionalDrawCmd.SetWorldViewIndex(uboWorldViews.getIndex(scene));
+			directionalDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, true, uboWorldViews.getIndex(scene));
 			z.renderAlpha(
+				uboCommandBuffer,
 				directionalDrawCmd,
 				zx - offset,
 				zz - offset,
@@ -992,8 +995,8 @@ public class ZoneRenderer implements Renderer {
 				vaoPOShadow.addRange(scene);
 
 				if (scene.getWorldViewId() == -1) {
-					sceneDrawCmd.SetBaseOffset(0, 0, 0);
-					directionalDrawCmd.SetBaseOffset(0, 0, 0);
+					sceneDrawCmd.SetUniformProperty(uboCommandBuffer.sceneBase, true, 0, 0, 0);
+					directionalDrawCmd.SetUniformProperty(uboCommandBuffer.sceneBase, true, 0, 0, 0);
 
 					// Draw opaque
 					vaoO.unmap();

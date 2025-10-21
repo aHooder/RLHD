@@ -42,6 +42,7 @@ public abstract class UniformBuffer<GLBUFFER extends GLBuffer> {
 	@AllArgsConstructor
 	@RequiredArgsConstructor
 	public static class Property {
+		@Getter
 		private UniformBuffer<?> owner;
 		private int position;
 		private int offset = -1;
