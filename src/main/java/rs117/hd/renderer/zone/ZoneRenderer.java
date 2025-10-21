@@ -1008,7 +1008,7 @@ public class ZoneRenderer implements Renderer {
 
 					vaoPO.unmap();
 
-					// Draw players shadows
+					// Draw player shadows
 					vaoPOShadow.unmap();
 					vaoPOShadow.drawAll(this, directionalCmd);
 					vaoPOShadow.resetAll();
@@ -1123,7 +1123,7 @@ public class ZoneRenderer implements Renderer {
 			int zz = (gameObject.getY() >> 10) + offset;
 			Zone zone = ctx.zones[zx][zz];
 
-			if(zone.inSceneFrustum) {
+			if (zone.inSceneFrustum) {
 				// opaque player faces have their own vao and are drawn in a separate pass from normal opaque faces
 				// because they are not depth tested. transparent player faces don't need their own vao because normal
 				// transparent faces are already not depth tested
@@ -1163,8 +1163,9 @@ public class ZoneRenderer implements Renderer {
 				}
 			}
 
-			if(zone.inShadowFrustum) {
-				// Only Visible within the Shadow frustum, we don't care about sorting and just want to draw depth
+			if (zone.inShadowFrustum) {
+				// Since priority sorting of models includes back-face culling,
+				// we need to upload the entire model again for shadows
 				VAO o = vaoPOShadow.get(size);
 				sceneUploader.uploadTempModel(
 					m,
