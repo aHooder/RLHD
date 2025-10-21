@@ -495,13 +495,16 @@ class Zone {
 		int currentLevel,
 		int maxLevel,
 		int level,
+		boolean isShadow,
 		Camera camera,
 		Set<Integer> hiddenRoofIds
 	) {
 		if (alphaModels.isEmpty())
 			return;
 
-		cmd.DepthMask(false);
+		if(!isShadow) {
+			cmd.DepthMask(false);
+		}
 
 		drawIdx = 0;
 		lastDrawMode = lastVao = 0;
@@ -612,7 +615,9 @@ class Zone {
 		}
 
 		flush(cmd);
-		cmd.DepthMask(true);
+		if(!isShadow) {
+			cmd.DepthMask(true);
+		}
 	}
 
 	private void flush(CommandBuffer cmd) {

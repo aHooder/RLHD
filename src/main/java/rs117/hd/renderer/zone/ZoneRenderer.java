@@ -790,10 +790,11 @@ public class ZoneRenderer implements Renderer {
 			directionalPassCmd.BindFrameBuffer(GL_FRAMEBUFFER, plugin.fboShadowMap);
 			directionalPassCmd.ClearDepth(1.0f);
 
-			directionalPassCmd.SetShaderProgram(plugin.shadowProgram);
 			directionalPassCmd.Enable(GL_DEPTH_TEST);
 			directionalPassCmd.Disable(GL_CULL_FACE);
 			directionalPassCmd.SetDepthFunc(GL_LEQUAL);
+
+			directionalPassCmd.SetShaderProgram(plugin.shadowProgram);
 
 			directionalPassCmd.ExecuteCommandBuffer(directionalDrawCmd);
 
@@ -950,6 +951,7 @@ public class ZoneRenderer implements Renderer {
 				this.level,
 				maxLevel,
 				level,
+				false,
 				sceneCamera,
 				hideRoofIds
 			);
@@ -965,6 +967,7 @@ public class ZoneRenderer implements Renderer {
 				this.level,
 				plugin.configRoofShadows ? 3 : maxLevel,
 				level,
+				true,
 				sceneCamera,
 				plugin.configRoofShadows ? Collections.emptySet() : hideRoofIds
 			);
