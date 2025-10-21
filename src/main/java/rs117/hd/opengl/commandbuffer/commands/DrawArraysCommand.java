@@ -13,31 +13,20 @@ public final class DrawArraysCommand extends BaseCommand {
 
 	@Override
 	public void doWrite() {
-		assert mode >= 0 : "mode must be >= 0";
-		assert vertexCount >= 0 : "vertexCount must be >= 0";
-		assert offset >= 0 : "offset must be >= 0";
-
-		write16(mode);
+		write8(mode);
 		write32(vertexCount);
 		write32(offset);
 	}
 
 	@Override
 	public void doRead() {
-		mode = read16();
+		mode = read8();
 		vertexCount = read32();
 		offset = read32();
-
-		assert mode >= 0 : "mode must be >= 0";
-		assert vertexCount >= 0 : "vertexCount must be >= 0";
-		assert offset >= 0 : "offset must be >= 0";
 	}
 
 	@Override
-	public void execute() {
-
-		glDrawArrays(mode, offset, vertexCount);
-	}
+	public void execute() { glDrawArrays(mode, offset, vertexCount); }
 
 	@Override
 	public void print(StringBuilder sb) {

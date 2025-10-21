@@ -14,24 +14,16 @@ public final class DrawElementsCommand extends BaseCommand {
 
 	@Override
 	public void doWrite() {
-		assert mode >= 0 : "mode must be >= 0";
-		assert vertexCount >= 0 : "vertexCount must be >= 0";
-		assert bytesOffset >= 0 : "bytesOffset must be >= 0";
-
-		write16(mode);
+		write8(mode);
 		write32(vertexCount);
 		write64(bytesOffset);
 	}
 
 	@Override
 	public void doRead() {
-		mode = read16();
+		mode = read8();
 		vertexCount = read32();
 		bytesOffset = read64();
-
-		assert mode >= 0 : "mode must be >= 0";
-		assert vertexCount >= 0 : "vertexCount must be >= 0";
-		assert bytesOffset >= 0 : "bytesOffset must be >= 0";
 	}
 
 	@Override

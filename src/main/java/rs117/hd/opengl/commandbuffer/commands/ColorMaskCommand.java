@@ -27,9 +27,7 @@ public final class ColorMaskCommand extends BaseCommand {
 	}
 
 	@Override
-	public void execute() {
-		glColorMask(red, green, blue, alpha);
-	}
+	public void execute() { glColorMask(red, green, blue, alpha); }
 
 	@Override
 	public void print(StringBuilder sb) {

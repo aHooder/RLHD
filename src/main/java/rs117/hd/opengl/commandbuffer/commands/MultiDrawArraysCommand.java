@@ -20,11 +20,9 @@ public final class MultiDrawArraysCommand extends BaseCommand {
 	public void doWrite() {
 		assert offsets.length == counts.length;
 
-		write16(mode);
+		write8(mode);
 		write32(offsets.length);
 		for(int i = 0; i < offsets.length; i++) {
-			assert offsets[i] >= 0 : "offset must be >= 0";
-			assert counts[i] >= 0 : "vertexCount must be >= 0";
 			write32(offsets[i]);
 			write32(counts[i]);
 		}
@@ -35,7 +33,7 @@ public final class MultiDrawArraysCommand extends BaseCommand {
 
 	@Override
 	public void doRead() {
-		mode = read16();
+		mode = read8();
 
 		int length = read32();
 		if(offsetsBuffer == null || offsetsBuffer.capacity() < length) {
@@ -59,10 +57,7 @@ public final class MultiDrawArraysCommand extends BaseCommand {
 	}
 
 	@Override
-	public void execute() {
-
-		glMultiDrawArrays(mode, offsetsBuffer, countsBuffer);
-	}
+	public void execute() { glMultiDrawArrays(mode, offsetsBuffer, countsBuffer); }
 
 	@Override
 	public void print(StringBuilder sb) {
