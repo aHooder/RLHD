@@ -18,7 +18,7 @@ public abstract class BaseCommand {
 	@Getter
 	private final boolean isGLCommand;
 
-	protected CommandBuffer buffer;
+	protected CommandBuffer owner;
 
 	protected BaseCommand(boolean isDrawCall, boolean isGLCommand) {
 		this.name = getClass().getSimpleName();
@@ -31,7 +31,7 @@ public abstract class BaseCommand {
 	protected BaseCommand() { this(false, false); }
 
 	protected UBOCommandBuffer getUBOCommandBuffer() {
-		return buffer.uboCommandBuffer;
+		return owner.uboCommandBuffer;
 	}
 
 	protected abstract void execute();
@@ -45,17 +45,23 @@ public abstract class BaseCommand {
 	protected abstract void doWrite();
 	protected abstract void doRead();
 
-	protected final void write1(int value)   { buffer.writeBits(value & 0x1L, 1); }
-	protected final void write8(int value)   { buffer.writeBits(value & 0xFFL, 8); }
-	protected final void write16(int value)  { buffer.writeBits(value & 0xFFFFL, 16); }
-	protected final void write32(int value)  { buffer.writeBits(value & 0xFFFFFFFFL, 32); }
-	protected final void write64(long value) { buffer.writeBits(value, 64); }
+	protected final void write1(int value)   { owner.writeBits(value & 0x1L, 1); }
+	protected final void write8(int value)   { owner.writeBits(value & 0xFFL, 8); }
+	protected final void write16(int value)  { owner.writeBits(value & 0xFFFFL, 16); }
+	protected final void write32(int value)  { owner.writeBits(value & 0xFFFFFFFFL, 32); }
+	protected final void write64(long value) { owner.writeBits(value, 64); }
 
-	protected final int read1()    { return (int) buffer.readBits(1); }
-	protected final int read8()    { return (int) buffer.readBits(8); }
-	protected final int read16()   { return (int) buffer.readBits(16); }
-	protected final int read32()   { return (int) buffer.readBits(32); }
-	protected final long read64()  { return buffer.readBits(64); }
+	protected final int read1()    { return (int) owner.readBits(1); }
+	protected final int read8()    { return (int) owner.readBits(8); }
+	protected final int read16()   { return (int) owner.readBits(16); }
+	protected final int read32()   { return (int) owner.readBits(32); }
+	protected final long read64()  { return owner.readBits(64); }
+
+	protected final void writeObject(Object value)  {owner.writeObject(value);}
+	protected final <T> T readObject()  { return owner.readObject(); }
+
+	protected final void write32F(float value)  { write32(Float.floatToIntBits(value)); }
+	protected final float read32F()  { return Float.intBitsToFloat(read32()); }
 
 	protected final void writeFlag(boolean value) { write1(value ? 1 : 0); }
 	protected final boolean readFlag() { return read1() != 0; }

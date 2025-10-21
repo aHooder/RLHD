@@ -5,14 +5,22 @@ import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import rs117.hd.HdPlugin;
 import rs117.hd.opengl.commandbuffer.commands.BindElementsArrayCommand;
+import rs117.hd.opengl.commandbuffer.commands.BindFrameBufferCommand;
 import rs117.hd.opengl.commandbuffer.commands.BindVertexArrayCommand;
+import rs117.hd.opengl.commandbuffer.commands.BlendFuncCommand;
+import rs117.hd.opengl.commandbuffer.commands.ClearCommand;
 import rs117.hd.opengl.commandbuffer.commands.ColorMaskCommand;
+import rs117.hd.opengl.commandbuffer.commands.DepthFuncCommand;
 import rs117.hd.opengl.commandbuffer.commands.DepthMaskCommand;
 import rs117.hd.opengl.commandbuffer.commands.DrawArraysCommand;
 import rs117.hd.opengl.commandbuffer.commands.DrawElementsCommand;
+import rs117.hd.opengl.commandbuffer.commands.ExecuteCommandBufferCommand;
 import rs117.hd.opengl.commandbuffer.commands.MultiDrawArraysCommand;
+import rs117.hd.opengl.commandbuffer.commands.ShaderProgramCommand;
 import rs117.hd.opengl.commandbuffer.commands.ToggleCommand;
 import rs117.hd.opengl.commandbuffer.commands.UpdateCMDUBOCommand;
+import rs117.hd.opengl.commandbuffer.commands.ViewportCommand;
+import rs117.hd.opengl.shader.ShaderProgram;
 import rs117.hd.opengl.uniforms.UBOCommandBuffer;
 
 @Slf4j
@@ -33,30 +41,44 @@ public final class CommandBuffer {
 		(DRAW_ARRAYS_COMMAND = REGISTER_COMMAND(DrawArraysCommand::new)),
 		(DRAW_ELEMENTS_COMMAND = REGISTER_COMMAND(DrawElementsCommand::new)),
 		(MULTI_DRAW_ARRAYS_COMMAND = REGISTER_COMMAND(MultiDrawArraysCommand::new)),
+		(BIND_FRAMEBUFFER_COMMAND = REGISTER_COMMAND(BindFrameBufferCommand::new)),
+		(VIEWPORT_COMMAND = REGISTER_COMMAND(ViewportCommand::new)),
+		(CLEAR_COMMAND = REGISTER_COMMAND(ClearCommand::new)),
 		(TOGGLE_COMMAND = REGISTER_COMMAND(ToggleCommand::new)),
+		(SHADER_PROGRAM_COMMAND = REGISTER_COMMAND(ShaderProgramCommand::new)),
 		(COLOR_MASK_COMMAND = REGISTER_COMMAND(ColorMaskCommand::new)),
+		(DEPTH_FUNC_COMMAND = REGISTER_COMMAND(DepthFuncCommand::new)),
 		(DEPTH_MASK_COMMAND = REGISTER_COMMAND(DepthMaskCommand::new)),
+		(BLENDED_FUNC_COMMAND = REGISTER_COMMAND(BlendFuncCommand::new)),
 		(BIND_ELEMENTS_ARRAY_COMMAND = REGISTER_COMMAND(BindElementsArrayCommand::new)),
 		(BIND_VERTEX_ARRAY_COMMAND = REGISTER_COMMAND(BindVertexArrayCommand::new)),
 		(UPDATE_CMD_UBO_COMMAND = REGISTER_COMMAND(UpdateCMDUBOCommand::new)),
+		(EXECUTE_COMMAND_BUFFER_COMMAND = REGISTER_COMMAND(ExecuteCommandBufferCommand::new)),
 	};
 
 	private final DrawArraysCommand DRAW_ARRAYS_COMMAND;
 	private final DrawElementsCommand DRAW_ELEMENTS_COMMAND;
 	private final MultiDrawArraysCommand MULTI_DRAW_ARRAYS_COMMAND;
 	private final ToggleCommand TOGGLE_COMMAND;
+	private final BindFrameBufferCommand BIND_FRAMEBUFFER_COMMAND;
+	private final ViewportCommand VIEWPORT_COMMAND;
+	private final ClearCommand CLEAR_COMMAND;
 	private final ColorMaskCommand COLOR_MASK_COMMAND;
+	private final DepthFuncCommand DEPTH_FUNC_COMMAND;
 	private final DepthMaskCommand DEPTH_MASK_COMMAND;
+	private final BlendFuncCommand BLENDED_FUNC_COMMAND;
 	private final BindElementsArrayCommand BIND_ELEMENTS_ARRAY_COMMAND;
 	private final BindVertexArrayCommand BIND_VERTEX_ARRAY_COMMAND;
 	private final UpdateCMDUBOCommand UPDATE_CMD_UBO_COMMAND;
+	private final ShaderProgramCommand SHADER_PROGRAM_COMMAND;
+	private final ExecuteCommandBufferCommand EXECUTE_COMMAND_BUFFER_COMMAND;
 
 	interface ICreateCommand<T extends BaseCommand> { T construct(); }
 
 	private <T extends BaseCommand> T REGISTER_COMMAND(ICreateCommand<T> createCommand) {
 		T newCommand = createCommand.construct();
 		newCommand.id = COMMAND_COUNT;
-		newCommand.buffer = this;
+		newCommand.owner = this;
 		COMMAND_COUNT++;
 		return newCommand;
 	}
@@ -64,6 +86,10 @@ public final class CommandBuffer {
 	public UBOCommandBuffer uboCommandBuffer;
 
 	private long[] cmd = new long[1 << 20]; // ~1 million calls
+
+	private Object[] objects = new Object[100];
+	private int objectCount = 0;
+
 	private int writeHead = 0;
 	private int writeBitHead = 0;
 
@@ -101,9 +127,62 @@ public final class CommandBuffer {
 		BIND_ELEMENTS_ARRAY_COMMAND.write();
 	}
 
+	public void SetDepthFunc(int DepthFunc) {
+		DEPTH_FUNC_COMMAND.mode = DepthFunc;
+		DEPTH_FUNC_COMMAND.write();
+	}
+
+	public void ExecuteCommandBuffer(CommandBuffer cmd) {
+		assert cmd != this;
+		EXECUTE_COMMAND_BUFFER_COMMAND.cmd = cmd;
+		EXECUTE_COMMAND_BUFFER_COMMAND.write();
+	}
+
+	public void SetShaderProgram(ShaderProgram program) {
+		assert program != null;
+		SHADER_PROGRAM_COMMAND.program = program;
+		SHADER_PROGRAM_COMMAND.write();
+	}
+
+	public void ClearDepth(float depth) {
+		CLEAR_COMMAND.clearColor = false;
+		CLEAR_COMMAND.clearDepth = true;
+		CLEAR_COMMAND.depth = depth;
+		CLEAR_COMMAND.write();
+	}
+
+	public void ClearColor(float red, float green, float blue, float alpha) {
+		CLEAR_COMMAND.clearColor = true;
+		CLEAR_COMMAND.clearDepth = false;
+		CLEAR_COMMAND.red = red;
+		CLEAR_COMMAND.green = green;
+		CLEAR_COMMAND.blue = blue;
+		CLEAR_COMMAND.alpha = alpha;
+		CLEAR_COMMAND.write();
+	}
+
+	public void ClearColorAndDepth(float red, float green, float blue, float alpha, float depth) {
+		CLEAR_COMMAND.clearColor = true;
+		CLEAR_COMMAND.clearDepth = true;
+		CLEAR_COMMAND.depth = depth;
+		CLEAR_COMMAND.red = red;
+		CLEAR_COMMAND.green = green;
+		CLEAR_COMMAND.blue = blue;
+		CLEAR_COMMAND.alpha = alpha;
+		CLEAR_COMMAND.write();
+	}
+
 	public void DepthMask(boolean writeDepth) {
 		DEPTH_MASK_COMMAND.flag = writeDepth;
 		DEPTH_MASK_COMMAND.write();
+	}
+
+	public void BlendFunc(int sfactorRGB, int dfactorRGB, int sfactorAlpha, int dfactorAlpha) {
+		BLENDED_FUNC_COMMAND.sfactorRGB = sfactorRGB;
+		BLENDED_FUNC_COMMAND.dfactorRGB = dfactorRGB;
+		BLENDED_FUNC_COMMAND.sfactorAlpha = sfactorAlpha;
+		BLENDED_FUNC_COMMAND.dfactorAlpha = dfactorAlpha;
+		BLENDED_FUNC_COMMAND.write();
 	}
 
 	public void ColorMask(boolean writeRed, boolean writeGreen, boolean writeBlue, boolean writeAlpha) {
@@ -133,6 +212,20 @@ public final class CommandBuffer {
 		DRAW_ARRAYS_COMMAND.offset = offset;
 		DRAW_ARRAYS_COMMAND.vertexCount = vertexCount;
 		DRAW_ARRAYS_COMMAND.write();
+	}
+
+	public void BindFrameBuffer(int target, int fbo) {
+		BIND_FRAMEBUFFER_COMMAND.target = target;
+		BIND_FRAMEBUFFER_COMMAND.fbo = fbo;
+		BIND_FRAMEBUFFER_COMMAND.write();
+	}
+
+	public void Viewport(int x, int y, int width, int height) {
+		VIEWPORT_COMMAND.x = x;
+		VIEWPORT_COMMAND.y = y;
+		VIEWPORT_COMMAND.width = width;
+		VIEWPORT_COMMAND.height = height;
+		VIEWPORT_COMMAND.write();
 	}
 
 	public void Enable(int capability) {
@@ -166,7 +259,7 @@ public final class CommandBuffer {
 	}
 
 	@SneakyThrows
-	public void execute() {
+	public void submit() {
 		readHead = 0;
 		readBitHead = 0;
 
@@ -187,6 +280,21 @@ public final class CommandBuffer {
 				break;
 			}
 		}
+	}
+
+	protected void writeObject(Object object) {
+		if (objectCount >= objects.length) {
+			objects = Arrays.copyOf(objects, objects.length * 2);
+		}
+		writeBits(objectCount, 32);
+		objects[objectCount++] = object;
+	}
+
+	protected <T> T readObject() {
+		int index = (int)readBits(32);
+		Object object = objects[index];
+		objects[index] = null;
+		return (T) object;
 	}
 
 	protected long readBits(int numBits) {
@@ -262,5 +370,9 @@ public final class CommandBuffer {
 
 		readHead = 0;
 		readBitHead = 0;
+
+		// Objects need to be cleared to avoid holding onto a reference and preventing garbage collection
+		Arrays.fill(objects, null);
+		objectCount = 0;
 	}
 }
