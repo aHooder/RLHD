@@ -1,6 +1,5 @@
 package rs117.hd.opengl.commandbuffer;
 
-import java.nio.BufferUnderflowException;
 import java.util.Arrays;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -172,7 +171,7 @@ public final class CommandBuffer {
 		readBitHead = 0;
 
 		while (readHead < writeHead || (readHead == writeHead && readBitHead < writeBitHead)) {
-			int type = (int)readBits(8);
+			final int type = (int)readBits(8);
 			assert type < REGISTERED_COMMANDS.length : "Unknown Command Type";
 
 			BaseCommand command = REGISTERED_COMMANDS[type];
@@ -183,7 +182,7 @@ public final class CommandBuffer {
 			command.doRead();
 			command.execute();
 
-			if(HdPlugin.checkGLErrors(command.getName())) {
+			if(command.isGLCommand() && HdPlugin.checkGLErrors(command.getName())) {
 				printCommandBuffer();
 				break;
 			}
@@ -191,9 +190,6 @@ public final class CommandBuffer {
 	}
 
 	protected long readBits(int numBits) {
-		if (readHead >= cmd.length)
-			throw new BufferUnderflowException();
-
 		long word = cmd[readHead];
 		if(readBitHead == 0) {
 			if (numBits == BITS_PER_WORD){
@@ -208,8 +204,8 @@ public final class CommandBuffer {
 		long result = 0;
 		int shift = 0;
 		while (numBits > 0) {
-			int bitsToRead = Math.min(BITS_PER_WORD - readBitHead, numBits);
-			long bits = (word >>> readBitHead) & MASKS[bitsToRead];
+			final int bitsToRead = Math.min(BITS_PER_WORD - readBitHead, numBits);
+			final long bits = (word >>> readBitHead) & MASKS[bitsToRead];
 
 			result |= (bits << shift);
 
@@ -240,11 +236,11 @@ public final class CommandBuffer {
 
 		long word = cmd[writeHead];
 		while (numBits > 0) {
-			int bitsToWrite = Math.min(BITS_PER_WORD - writeBitHead, numBits);
-			long bits = value & MASKS[bitsToWrite];
-			long destMask = (bitsToWrite == BITS_PER_WORD) ? ~0L : (MASKS[bitsToWrite] << writeBitHead);
+			final int bitsToWrite = Math.min(BITS_PER_WORD - writeBitHead, numBits);
+			final long bits = value & MASKS[bitsToWrite];
 
-			cmd[writeHead] = (word & ~destMask) | ((bits << writeBitHead) & destMask);
+			word |= bits << writeBitHead;
+			cmd[writeHead] = word;
 
 			writeBitHead += bitsToWrite;
 			if (writeBitHead == BITS_PER_WORD) {

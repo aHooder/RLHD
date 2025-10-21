@@ -7,6 +7,8 @@ import static org.lwjgl.opengl.GL30.glBindVertexArray;
 public final class BindVertexArrayCommand extends BaseCommand {
 	public int vao;
 
+	public BindVertexArrayCommand() { super(false, true); }
+
 	@Override
 	protected void doWrite() {
 		write32(vao);

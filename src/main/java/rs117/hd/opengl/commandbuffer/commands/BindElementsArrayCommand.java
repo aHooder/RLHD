@@ -8,6 +8,8 @@ import static org.lwjgl.opengl.GL15.glBindBuffer;
 public final class BindElementsArrayCommand extends BaseCommand {
 	public int ebo;
 
+	public BindElementsArrayCommand() { super(false, true); }
+
 	@Override
 	protected void doWrite() {
 		write32(ebo);

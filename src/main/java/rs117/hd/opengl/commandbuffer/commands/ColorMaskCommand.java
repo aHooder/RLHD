@@ -10,6 +10,8 @@ public final class ColorMaskCommand extends BaseCommand {
 	public boolean blue;
 	public boolean alpha;
 
+	public ColorMaskCommand() { super(false, true); }
+
 	@Override
 	protected void doWrite() {
 		writeFlag(red);

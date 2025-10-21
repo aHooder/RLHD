@@ -9,6 +9,8 @@ public final class ToggleCommand extends BaseCommand {
 	public int capability;
 	public boolean state;
 
+	public ToggleCommand() { super(false, true); }
+
 	@Override
 	public void doWrite() {
 		write32(capability);

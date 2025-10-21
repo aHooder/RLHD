@@ -9,6 +9,8 @@ public final class DepthMaskCommand extends BaseCommand {
 
 	public boolean flag;
 
+	public DepthMaskCommand() { super(false, true); }
+
 	@Override
 	protected void doWrite() {
 		writeFlag(flag);

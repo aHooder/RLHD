@@ -15,14 +15,20 @@ public abstract class BaseCommand {
 	@Getter
 	private final boolean isDrawCall;
 
+	@Getter
+	private final boolean isGLCommand;
+
 	protected CommandBuffer buffer;
 
-	protected BaseCommand(boolean isDrawCall) {
+	protected BaseCommand(boolean isDrawCall, boolean isGLCommand) {
 		this.name = getClass().getSimpleName();
 		this.isDrawCall = isDrawCall;
+		this.isGLCommand = isDrawCall || isGLCommand;
 	}
 
-	protected BaseCommand() { this(false); }
+	protected BaseCommand(boolean isDrawCall) { this(isDrawCall, false); }
+
+	protected BaseCommand() { this(false, false); }
 
 	protected UBOCommandBuffer getUBOCommandBuffer() {
 		return buffer.uboCommandBuffer;
