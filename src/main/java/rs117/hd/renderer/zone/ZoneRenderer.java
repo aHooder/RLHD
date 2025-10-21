@@ -152,10 +152,10 @@ public class ZoneRenderer implements Renderer {
 	private int minLevel, level, maxLevel;
 	private Set<Integer> hideRoofIds;
 
-	private final CommandBuffer scenePassCmd = new CommandBuffer();
+	private final CommandBuffer scenePassCmd = new CommandBuffer().SetExecutionTimer(Timer.SCENE_COMMAND_BUFFER_EXECUTE);
 	private final CommandBuffer sceneDrawCmd = new CommandBuffer();
 
-	private final CommandBuffer directionalPassCmd = new CommandBuffer();
+	private final CommandBuffer directionalPassCmd = new CommandBuffer().SetExecutionTimer(Timer.SHADOW_COMMAND_BUFFER_EXECUTE);
 	private final CommandBuffer directionalDrawCmd = new CommandBuffer();
 
 	private VAO.VAOList vaoO;

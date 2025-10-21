@@ -113,10 +113,10 @@ public final class CommandBuffer {
 	private int readHead = 0;
 	private int readBitHead = 0;
 
-	private boolean timeExecution = false;
+	private Timer executionTimer = null;
 
-	public CommandBuffer SetTimeExecution(boolean timeExecution) {
-		this.timeExecution = timeExecution;
+	public CommandBuffer SetExecutionTimer(Timer timer) {
+		this.executionTimer = timer;
 		return this;
 	}
 
@@ -337,7 +337,7 @@ public final class CommandBuffer {
 		long readTimestamp = 0;
 		long executeTimestamp = 0;
 
-		if(timeExecution) {
+		if(executionTimer != null) {
 			executeTimestamp = System.nanoTime();
 		}
 
@@ -370,8 +370,8 @@ public final class CommandBuffer {
 				break;
 			}
 		}
-		if(timeExecution) {
-			FrameTimer.getInstance().add(Timer.COMMAND_BUFFER_EXECUTE, System.nanoTime() - executeTimestamp);
+		if(executionTimer != null) {
+			FrameTimer.getInstance().add(executionTimer, System.nanoTime() - executeTimestamp);
 		}
 		FrameTimer.getInstance().add(Timer.COMMAND_BUFFER_READ, readElapsed);
 	}

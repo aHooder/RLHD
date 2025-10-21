@@ -345,7 +345,7 @@ public class HdPlugin extends Plugin {
 	public final UBOLights uboLightsCulling = new UBOLights(true);
 	public final UBOUI uboUI = new UBOUI();
 
-	public final CommandBuffer backbufferCmd = new CommandBuffer().SetTimeExecution(true);
+	public final CommandBuffer backbufferCmd = new CommandBuffer().SetExecutionTimer(Timer.BACKBUFFER_COMMAND_BUFFER_EXECUTE);
 
 	// Configs used frequently enough to be worth caching
 	public boolean configGroundTextures;
