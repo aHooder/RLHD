@@ -33,12 +33,6 @@ public abstract class BaseCommand {
 
 	public final void write(CommandBuffer buffer) {
 		this.buffer = buffer;
-
-		if(CommandBuffer.VALIDATE) {
-			buffer.appendToValidationLog(name);
-			buffer.appendToValidationLog("::write\n");
-		}
-
 		write8(id);
 		doWrite();
 	}
@@ -47,12 +41,6 @@ public abstract class BaseCommand {
 
 	public final void read(CommandBuffer buffer) {
 		this.buffer = buffer;
-
-		if(CommandBuffer.VALIDATE) {
-			buffer.appendToValidationLog(name);
-			buffer.appendToValidationLog("::read\n");
-		}
-
 		doRead();
 	}
 

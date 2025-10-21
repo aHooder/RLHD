@@ -18,8 +18,6 @@ import rs117.hd.opengl.uniforms.UBOCommandBuffer;
 
 @Slf4j
 public final class CommandBuffer {
-	public static boolean VALIDATE = false;
-
 	private static final int BITS_PER_WORD = 64;
 	private static final long[] MASKS = new long[65];
 
@@ -73,7 +71,6 @@ public final class CommandBuffer {
 	private int readBitHead = 0;
 
 	private final StringBuilder cmd_log = new StringBuilder();
-	private final StringBuilder validation_log = new StringBuilder();
 
 	public void ensureCapacity(int numLongs) {
 		if (writeHead + numLongs >= cmd.length)
@@ -155,12 +152,11 @@ public final class CommandBuffer {
 	public void printCommandBuffer() {
 		readHead = 0;
 		readBitHead = 0;
-		validation_log.setLength(0);
 		cmd_log.setLength(0);
 
 		while (readHead < writeHead || (readHead == writeHead && readBitHead < writeBitHead)) {
 			int type = (int) readBits(8);
-			assert type < REGISTERED_COMMANDS.length : validation_log.toString();
+			assert type < REGISTERED_COMMANDS.length : "Unknown Command Type";
 
 			BaseCommand command = REGISTERED_COMMANDS[type];
 			command.read(this);
@@ -173,11 +169,10 @@ public final class CommandBuffer {
 	public void execute() {
 		readHead = 0;
 		readBitHead = 0;
-		validation_log.setLength(0);
 
 		while (readHead < writeHead || (readHead == writeHead && readBitHead < writeBitHead)) {
 			int type = (int)readBits(8);
-			assert type < REGISTERED_COMMANDS.length : validation_log.toString();
+			assert type < REGISTERED_COMMANDS.length : "Unknown Command Type";
 
 			BaseCommand command = REGISTERED_COMMANDS[type];
 			if (command.isDrawCall() && uboCommandBuffer != null && uboCommandBuffer.isDirty()) {
@@ -198,51 +193,40 @@ public final class CommandBuffer {
 		if (readHead >= cmd.length)
 			throw new BufferUnderflowException();
 
-		long result = 0;
 		long word = cmd[readHead];
 		if(readBitHead == 0) {
 			if (numBits == BITS_PER_WORD){
 				readHead++;
-				result = word;
+				return word;
 			} else {
 				readBitHead += numBits;
-				result = word & MASKS[numBits];
-			}
-		} else {
-			int shift = 0;
-			while (numBits > 0) {
-				int bitsLeftInWord = BITS_PER_WORD - readBitHead;
-				int bitsToRead = Math.min(bitsLeftInWord, numBits);
-
-				if (VALIDATE) logReadBits(numBits, readHead, readBitHead, bitsToRead);
-
-				long mask = (bitsToRead == BITS_PER_WORD) ? ~0L : MASKS[bitsToRead];
-				long bits = (word >>> readBitHead) & mask;
-				result |= (bits << shift);
-
-				readBitHead += bitsToRead;
-				if (readBitHead == BITS_PER_WORD) {
-					readBitHead = 0;
-					readHead++;
-					word = cmd[readHead];
-				}
-
-				shift += bitsToRead;
-				numBits -= bitsToRead;
+				return word & MASKS[numBits];
 			}
 		}
 
-		if(VALIDATE) logReadResult(result);
+		long result = 0;
+		int shift = 0;
+		while (numBits > 0) {
+			int bitsToRead = Math.min(BITS_PER_WORD - readBitHead, numBits);
+			long bits = (word >>> readBitHead) & MASKS[bitsToRead];
+
+			result |= (bits << shift);
+
+			readBitHead += bitsToRead;
+			if (readBitHead == BITS_PER_WORD) {
+				readBitHead = 0;
+				readHead++;
+				word = cmd[readHead];
+			}
+
+			shift += bitsToRead;
+			numBits -= bitsToRead;
+		}
 
 		return result;
 	}
 
 	protected void writeBits(long value, int numBits) {
-		long originalValue = value;
-		int originalNumBits = numBits;
-		int originalWriteHead = writeHead;
-		int originalWriteBitHead = writeBitHead;
-
 		if (writeBitHead == 0) {
 			if (numBits == BITS_PER_WORD) {
 				cmd[writeHead++] = value;
@@ -250,84 +234,29 @@ public final class CommandBuffer {
 				writeBitHead += numBits;
 				cmd[writeHead] = value & MASKS[numBits];
 			}
-		} else {
-			long word = cmd[writeHead];
-			while (numBits > 0) {
-				int bitsLeftInWord = BITS_PER_WORD - writeBitHead;
-				int bitsToWrite = Math.min(bitsLeftInWord, numBits);
-
-				long bits = (bitsToWrite == BITS_PER_WORD) ? value : (value & MASKS[bitsToWrite]);
-
-				if (VALIDATE) logWriteBits(value, numBits, writeHead, writeBitHead, bitsToWrite);
-
-				long destMask = (bitsToWrite == BITS_PER_WORD) ? ~0L : (MASKS[bitsToWrite] << writeBitHead);
-				word = (word & ~destMask) | ((bits << writeBitHead) & destMask);
-				cmd[writeHead] = word;
-
-				writeBitHead += bitsToWrite;
-				if (writeBitHead == BITS_PER_WORD) {
-					writeHead++;
-					ensureCapacity(writeHead);
-
-					writeBitHead = 0;
-					word = 0;
-				}
-
-				value >>>= bitsToWrite;
-				numBits -= bitsToWrite;
-			}
-
-			if (VALIDATE) {
-				int originalReadHead = readHead;
-				int originalReadBitHead = readBitHead;
-
-				readHead = originalWriteHead;
-				readBitHead = originalWriteBitHead;
-
-				long decoded = readBits(originalNumBits);
-				assert decoded == originalValue :
-					"read: " + decoded + " but expected: " + originalValue + "\nValidation Log:" + validation_log;
-
-				readHead = originalReadHead;
-				readBitHead = originalReadBitHead;
-			}
+			return;
 		}
-	}
 
-	protected void appendToValidationLog(String str) {
-		validation_log.append(str);
-	}
+		long word = cmd[writeHead];
+		while (numBits > 0) {
+			int bitsToWrite = Math.min(BITS_PER_WORD - writeBitHead, numBits);
+			long bits = value & MASKS[bitsToWrite];
+			long destMask = (bitsToWrite == BITS_PER_WORD) ? ~0L : (MASKS[bitsToWrite] << writeBitHead);
 
-	private void logWriteBits(long value, int numBits, int wordIndex, int bitHead, int bitsToWrite) {
-		validation_log.append("writeBits(");
-		validation_log.append(value);
-		validation_log.append(", ");
-		validation_log.append(numBits);
-		validation_log.append(") wordIndex: ");
-		validation_log.append(wordIndex);
-		validation_log.append(" bitHead: ");
-		validation_log.append(bitHead);
-		validation_log.append(" bitsToWrite: ");
-		validation_log.append(bitsToWrite);
-		validation_log.append("\n");
-	}
+			cmd[writeHead] = (word & ~destMask) | ((bits << writeBitHead) & destMask);
 
-	private void logReadBits(int numBits, int wordIndex, int bitHead, int bitsToRead) {
-		validation_log.append("readBits(");
-		validation_log.append(numBits);
-		validation_log.append(") wordIndex: ");
-		validation_log.append(wordIndex);
-		validation_log.append(" bitHead: ");
-		validation_log.append(bitHead);
-		validation_log.append(" bitsToRead: ");
-		validation_log.append(bitsToRead);
-		validation_log.append("\n");
-	}
+			writeBitHead += bitsToWrite;
+			if (writeBitHead == BITS_PER_WORD) {
+				writeHead++;
+				ensureCapacity(writeHead);
 
-	private void logReadResult(long result) {
-		validation_log.append("readBits() Result: ");
-		validation_log.append(result);
-		validation_log.append("\n");
+				writeBitHead = 0;
+				word = 0;
+			}
+
+			value >>>= bitsToWrite;
+			numBits -= bitsToWrite;
+		}
 	}
 
 	public void reset() {
@@ -336,7 +265,5 @@ public final class CommandBuffer {
 
 		readHead = 0;
 		readBitHead = 0;
-
-		validation_log.setLength(0);
 	}
 }
