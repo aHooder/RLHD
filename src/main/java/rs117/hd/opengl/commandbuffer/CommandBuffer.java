@@ -17,6 +17,7 @@ import rs117.hd.opengl.commandbuffer.commands.DrawArraysCommand;
 import rs117.hd.opengl.commandbuffer.commands.DrawElementsCommand;
 import rs117.hd.opengl.commandbuffer.commands.ExecuteCommandBufferCommand;
 import rs117.hd.opengl.commandbuffer.commands.MultiDrawArraysCommand;
+import rs117.hd.opengl.commandbuffer.commands.SetShaderUniformCommand;
 import rs117.hd.opengl.commandbuffer.commands.SetUniformBufferPropertyCommand;
 import rs117.hd.opengl.commandbuffer.commands.ShaderProgramCommand;
 import rs117.hd.opengl.commandbuffer.commands.ToggleCommand;
@@ -57,6 +58,7 @@ public final class CommandBuffer {
 		(BIND_VERTEX_ARRAY_COMMAND = REGISTER_COMMAND(BindVertexArrayCommand::new)),
 		(BLIT_FRAME_BUFFER_COMMAND = REGISTER_COMMAND(BlitFrameBufferCommand::new)),
 		(SET_UNIFORM_BUFFER_PROPERTY_COMMAND = REGISTER_COMMAND(SetUniformBufferPropertyCommand::new)),
+		(SET_SHADER_PROPERTY_COMMAND = REGISTER_COMMAND(SetShaderUniformCommand::new)),
 		(EXECUTE_COMMAND_BUFFER_COMMAND = REGISTER_COMMAND(ExecuteCommandBufferCommand::new)),
 	};
 
@@ -75,6 +77,7 @@ public final class CommandBuffer {
 	private final BindVertexArrayCommand BIND_VERTEX_ARRAY_COMMAND;
 	private final BlitFrameBufferCommand BLIT_FRAME_BUFFER_COMMAND;
 	private final SetUniformBufferPropertyCommand SET_UNIFORM_BUFFER_PROPERTY_COMMAND;
+	private final SetShaderUniformCommand SET_SHADER_PROPERTY_COMMAND;
 	private final ShaderProgramCommand SHADER_PROGRAM_COMMAND;
 	private final ExecuteCommandBufferCommand EXECUTE_COMMAND_BUFFER_COMMAND;
 
@@ -121,6 +124,20 @@ public final class CommandBuffer {
 		SET_UNIFORM_BUFFER_PROPERTY_COMMAND.floatValues = values;
 		SET_UNIFORM_BUFFER_PROPERTY_COMMAND.isFloat = true;
 		SET_UNIFORM_BUFFER_PROPERTY_COMMAND.write();
+	}
+
+	public void SetUniformProperty(ShaderProgram.UniformProperty property, int... values) {
+		SET_SHADER_PROPERTY_COMMAND.property = property;
+		SET_SHADER_PROPERTY_COMMAND.intValues = values;
+		SET_SHADER_PROPERTY_COMMAND.isFloat = false;
+		SET_SHADER_PROPERTY_COMMAND.write();
+	}
+
+	public void SetUniformProperty(ShaderProgram.UniformProperty property, float... values) {
+		SET_SHADER_PROPERTY_COMMAND.property = property;
+		SET_SHADER_PROPERTY_COMMAND.floatValues = values;
+		SET_SHADER_PROPERTY_COMMAND.isFloat = true;
+		SET_SHADER_PROPERTY_COMMAND.write();
 	}
 
 	public void BindVertexArray(int vao) {

@@ -81,6 +81,7 @@ import rs117.hd.config.ShadingMode;
 import rs117.hd.config.ShadowMode;
 import rs117.hd.config.VanillaShadowMode;
 import rs117.hd.opengl.AsyncUICopy;
+import rs117.hd.opengl.commandbuffer.CommandBuffer;
 import rs117.hd.opengl.shader.ShaderException;
 import rs117.hd.opengl.shader.ShaderIncludes;
 import rs117.hd.opengl.shader.ShadowShaderProgram;
@@ -1367,7 +1368,7 @@ public class HdPlugin extends Plugin {
 		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 	}
 
-	public void drawUi(int overlayColor) {
+	public void drawUi(CommandBuffer cmd, int overlayColor) {
 		if (uiResolution == null || developerTools.isHideUiEnabled() && hasLoggedIn)
 			return;
 
@@ -1377,19 +1378,19 @@ public class HdPlugin extends Plugin {
 
 		frameTimer.begin(Timer.RENDER_UI);
 
-		glBindFramebuffer(GL_FRAMEBUFFER, awtContext.getFramebuffer(false));
+		cmd.BindFrameBuffer(GL_FRAMEBUFFER, awtContext.getFramebuffer(false));
 		// Disable alpha writes, just in case the default FBO has an alpha channel
-		glColorMask(true, true, true, false);
+		cmd.ColorMask(true, true, true, false);
 
-		glViewport(0, 0, actualUiResolution[0], actualUiResolution[1]);
+		cmd.Viewport(0, 0, uiResolution[0], uiResolution[1]);
 
-		tiledLightingOverlay.render();
+		tiledLightingOverlay.render(cmd);
 
-		uiProgram.use();
-		uboUI.sourceDimensions.set(uiResolution);
-		uboUI.targetDimensions.set(actualUiResolution);
-		uboUI.alphaOverlay.set(ColorUtils.srgba(overlayColor));
-		uboUI.upload();
+		cmd.SetShaderProgram(uiProgram);
+
+		cmd.SetUniformProperty(uboUI.sourceDimensions, uiResolution);
+		cmd.SetUniformProperty(uboUI.targetDimensions, actualUiResolution);
+		cmd.SetUniformProperty(uboUI.alphaOverlay, ColorUtils.srgba(overlayColor));
 
 		// Set the sampling function used when stretching the UI.
 		// This is probably better done with sampler objects instead of texture parameters, but this is easier and likely more portable.
@@ -1401,18 +1402,18 @@ public class HdPlugin extends Plugin {
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, function);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, function);
 
-		glEnable(GL_BLEND);
-		glBlendFuncSeparate(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
-		glBindVertexArray(vaoTri);
-		glDrawArrays(GL_TRIANGLES, 0, 3);
+		cmd.Enable(GL_BLEND);
+		cmd.BlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
+		cmd.BindVertexArray(vaoTri);
+		cmd.DrawArrays(GL_TRIANGLES, 0, 3);
 
-		shadowMapOverlay.render();
-		gammaCalibrationOverlay.render();
+		shadowMapOverlay.render(cmd);
+		gammaCalibrationOverlay.render(cmd);
 
 		// Reset
-		glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
-		glDisable(GL_BLEND);
-		glColorMask(true, true, true, true);
+		cmd.BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
+		cmd.Disable(GL_BLEND);
+		cmd.ColorMask(true, true, true, true);
 
 		frameTimer.end(Timer.RENDER_UI);
 	}

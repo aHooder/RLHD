@@ -45,7 +45,7 @@ public class SetUniformBufferPropertyCommand extends BaseCommand {
 				stagingFloatValues = new float[stagingSize];
 			}
 			for(int i = 0; i < stagingSize; i++) {
-				floatValues[i] = read32F();
+				stagingFloatValues[i] = read32F();
 			}
 		} else {
 			if(stagingIntValues == null || stagingIntValues.length < stagingSize) {

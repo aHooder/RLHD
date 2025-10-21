@@ -1288,10 +1288,9 @@ public class ZoneRenderer implements Renderer {
 			backbufferCmd.ClearColor(0, 0, 0, 1);
 		}
 
-		backbufferCmd.submit();
+		plugin.drawUi(backbufferCmd, overlayColor);
 
-		// TODO: Move drawUI over to a command buffer
-		plugin.drawUi(overlayColor);
+		backbufferCmd.submit();
 
 		try {
 			frameTimer.begin(Timer.SWAP_BUFFERS);

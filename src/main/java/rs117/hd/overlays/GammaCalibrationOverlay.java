@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
 import rs117.hd.HdPluginConfig;
+import rs117.hd.opengl.commandbuffer.CommandBuffer;
 
 import static org.lwjgl.opengl.GL33C.*;
 import static rs117.hd.HdPluginConfig.*;
@@ -47,8 +48,8 @@ public class GammaCalibrationOverlay extends ShaderOverlay<GammaCalibrationOverl
 	}
 
 	@Override
-	protected void updateUniforms() {
-		shader.uniCalibrationTimer.set(getTimeout());
+	protected void updateUniforms(CommandBuffer cmd) {
+		cmd.SetUniformProperty(shader.uniCalibrationTimer, getTimeout());
 	}
 
 	@Subscribe
