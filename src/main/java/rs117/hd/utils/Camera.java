@@ -12,9 +12,10 @@ public class Camera {
 	private static final int VIEW_PROJ_MATRIX_DIRTY = 1 << 2;
 	private static final int INV_VIEW_PROJ_MATRIX_DIRTY = 1 << 3;
 	private static final int FRUSTUM_PLANES_DIRTY = 1 << 4;
+	private static final int FRUSTUM_CORNERS_DIRTY = 1 << 5;
 
 	private static final int VIEW_PROJ_CHANGED =
-		VIEW_PROJ_MATRIX_DIRTY | INV_VIEW_PROJ_MATRIX_DIRTY | FRUSTUM_PLANES_DIRTY;
+		VIEW_PROJ_MATRIX_DIRTY | INV_VIEW_PROJ_MATRIX_DIRTY | FRUSTUM_PLANES_DIRTY | FRUSTUM_CORNERS_DIRTY;
 	private static final int PROJ_CHANGED = PROJECTION_MATRIX_DIRTY | VIEW_PROJ_CHANGED;
 	private static final int VIEW_CHANGED = VIEW_MATRIX_DIRTY | VIEW_PROJ_CHANGED;
 
@@ -23,6 +24,7 @@ public class Camera {
 	private float[] viewProjMatrix;
 	private float[] invViewProjMatrix;
 
+	private final float[][] frustumCorners = new float[8][3];
 	private final float[][] frustumPlanes = new float[6][4];
 	private final float[] position = new float[3];
 	private final float[] orientation = new float[2];
@@ -64,12 +66,27 @@ public class Camera {
 		return this;
 	}
 
+	public float getViewportWidth() {
+		return viewportWidth;
+	}
+
 	public Camera setViewportHeight(int newViewportHeight) {
 		if (viewportHeight != newViewportHeight) {
 			viewportHeight = newViewportHeight;
 			dirtyFlags |= PROJ_CHANGED;
 		}
 		return this;
+	}
+
+	public float getViewportHeight() {
+		return viewportHeight;
+	}
+
+	public float getAspectRatio() {
+		if (viewportHeight == 0) {
+			return 1.0f;
+		}
+		return (float) viewportWidth / (float) viewportHeight;
 	}
 
 	public Camera setNearPlane(float newNearPlane) {
@@ -332,7 +349,11 @@ public class Camera {
 	private void calculateInvViewProjMatrix() {
 		if ((dirtyFlags & INV_VIEW_PROJ_MATRIX_DIRTY) != 0) {
 			calculateViewProjMatrix();
-			invViewProjMatrix = Mat4.inverse(viewProjMatrix);
+			try {
+				invViewProjMatrix = Mat4.inverse(viewProjMatrix);
+			} catch (Exception ex) {
+				log.warn("Encountered an exception whilst solving inverse of camera ViewProj: ", ex);
+			}
 			dirtyFlags &= ~INV_VIEW_PROJ_MATRIX_DIRTY;
 		}
 	}
@@ -367,10 +388,22 @@ public class Camera {
 		return getFrustumPlanes(new float[6][4]);
 	}
 
-	public float[][] getFrustumCorners() {
+	private void calculateFrustumCorners() {
+		if ((dirtyFlags & FRUSTUM_CORNERS_DIRTY) == 0)
+			return;
 		calculateInvViewProjMatrix();
-		return Mat4.extractFrustumCorners(invViewProjMatrix);
+		Mat4.extractFrustumCorners(invViewProjMatrix, frustumCorners);
+		dirtyFlags &= ~FRUSTUM_CORNERS_DIRTY;
 	}
+
+	public float[][] getFrustumCorners(float[][] out) {
+		calculateFrustumCorners();
+		for (int i = 0; i < out.length; i++)
+			copyTo(out[i], frustumCorners[i]);
+		return frustumCorners;
+	}
+
+	public float[][] getFrustumCorners() { return getFrustumCorners(new float[8][3]); }
 
 	public boolean intersectsAABB(int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
 		calculateFrustumPlanes();
