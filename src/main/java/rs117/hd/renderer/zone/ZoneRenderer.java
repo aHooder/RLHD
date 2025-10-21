@@ -158,6 +158,8 @@ public class ZoneRenderer implements Renderer {
 	private final CommandBuffer directionalPassCmd = new CommandBuffer();
 	private final CommandBuffer directionalDrawCmd = new CommandBuffer();
 
+	private final CommandBuffer backbufferCmd = new CommandBuffer();
+
 	private VAO.VAOList vaoO;
 	private VAO.VAOList vaoA;
 	private VAO.VAOList vaoPO;
@@ -1274,38 +1276,21 @@ public class ZoneRenderer implements Renderer {
 		}
 
 		if (sceneFboValid && plugin.sceneResolution != null && plugin.sceneViewport != null) {
-			glBindFramebuffer(GL_READ_FRAMEBUFFER, plugin.fboScene);
-			if (plugin.fboSceneResolve != 0) {
-				// Blit from the scene FBO to the multisample resolve FBO
-				glBindFramebuffer(GL_DRAW_FRAMEBUFFER, plugin.fboSceneResolve);
-				glBlitFramebuffer(
-					0, 0, plugin.sceneResolution[0], plugin.sceneResolution[1],
-					0, 0, plugin.sceneResolution[0], plugin.sceneResolution[1],
-					GL_COLOR_BUFFER_BIT, GL_NEAREST
-				);
-				glBindFramebuffer(GL_READ_FRAMEBUFFER, plugin.fboSceneResolve);
-			}
-
-			// Blit from the resolved FBO to the default FBO
-			glBindFramebuffer(GL_DRAW_FRAMEBUFFER, plugin.awtContext.getFramebuffer(false));
-			glBlitFramebuffer(
-				0,
-				0,
-				plugin.sceneResolution[0],
-				plugin.sceneResolution[1],
-				plugin.sceneViewport[0],
-				plugin.sceneViewport[1],
-				plugin.sceneViewport[0] + plugin.sceneViewport[2],
-				plugin.sceneViewport[1] + plugin.sceneViewport[3],
-				GL_COLOR_BUFFER_BIT,
-				config.sceneScalingMode().glFilter
-			);
+			backbufferCmd.reset();
+			backbufferCmd.BlitFramebuffer(
+				plugin.fboScene, plugin.fboSceneResolve, plugin.awtContext.getFramebuffer(false),
+				plugin.sceneResolution[0], plugin.sceneResolution[1],
+				plugin.sceneViewport[0], plugin.sceneViewport[1],
+				plugin.sceneViewport[2], plugin.sceneViewport[3],
+				config.sceneScalingMode().glFilter);
 		} else {
-			glBindFramebuffer(GL_FRAMEBUFFER, plugin.awtContext.getFramebuffer(false));
-			glClearColor(0, 0, 0, 1);
-			glClear(GL_COLOR_BUFFER_BIT);
+			backbufferCmd.BindFrameBuffer(GL_FRAMEBUFFER, plugin.awtContext.getFramebuffer(false));
+			backbufferCmd.ClearColor(0, 0, 0, 1);
 		}
 
+		backbufferCmd.submit();
+
+		// TODO: Move drawUI over to a command buffer
 		plugin.drawUi(overlayColor);
 
 		try {

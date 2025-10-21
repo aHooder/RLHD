@@ -8,6 +8,7 @@ import rs117.hd.opengl.commandbuffer.commands.BindElementsArrayCommand;
 import rs117.hd.opengl.commandbuffer.commands.BindFrameBufferCommand;
 import rs117.hd.opengl.commandbuffer.commands.BindVertexArrayCommand;
 import rs117.hd.opengl.commandbuffer.commands.BlendFuncCommand;
+import rs117.hd.opengl.commandbuffer.commands.BlitFrameBufferCommand;
 import rs117.hd.opengl.commandbuffer.commands.ClearCommand;
 import rs117.hd.opengl.commandbuffer.commands.ColorMaskCommand;
 import rs117.hd.opengl.commandbuffer.commands.DepthFuncCommand;
@@ -52,6 +53,7 @@ public final class CommandBuffer {
 		(BLENDED_FUNC_COMMAND = REGISTER_COMMAND(BlendFuncCommand::new)),
 		(BIND_ELEMENTS_ARRAY_COMMAND = REGISTER_COMMAND(BindElementsArrayCommand::new)),
 		(BIND_VERTEX_ARRAY_COMMAND = REGISTER_COMMAND(BindVertexArrayCommand::new)),
+		(BLIT_FRAME_BUFFER_COMMAND = REGISTER_COMMAND(BlitFrameBufferCommand::new)),
 		(UPDATE_CMD_UBO_COMMAND = REGISTER_COMMAND(UpdateCMDUBOCommand::new)),
 		(EXECUTE_COMMAND_BUFFER_COMMAND = REGISTER_COMMAND(ExecuteCommandBufferCommand::new)),
 	};
@@ -69,6 +71,7 @@ public final class CommandBuffer {
 	private final BlendFuncCommand BLENDED_FUNC_COMMAND;
 	private final BindElementsArrayCommand BIND_ELEMENTS_ARRAY_COMMAND;
 	private final BindVertexArrayCommand BIND_VERTEX_ARRAY_COMMAND;
+	private final BlitFrameBufferCommand BLIT_FRAME_BUFFER_COMMAND;
 	private final UpdateCMDUBOCommand UPDATE_CMD_UBO_COMMAND;
 	private final ShaderProgramCommand SHADER_PROGRAM_COMMAND;
 	private final ExecuteCommandBufferCommand EXECUTE_COMMAND_BUFFER_COMMAND;
@@ -226,6 +229,31 @@ public final class CommandBuffer {
 		VIEWPORT_COMMAND.width = width;
 		VIEWPORT_COMMAND.height = height;
 		VIEWPORT_COMMAND.write();
+	}
+
+	public void BlitFramebuffer(
+		int srcFbo,
+		int resolveFbo,
+		int dstFbo,
+		int srcWidth,
+		int srcHeight,
+		int dstX,
+		int dstY,
+		int dstWidth,
+		int dstHeight,
+		int filter
+	) {
+		BLIT_FRAME_BUFFER_COMMAND.srcFbo = srcFbo;
+		BLIT_FRAME_BUFFER_COMMAND.resolveFbo = resolveFbo;
+		BLIT_FRAME_BUFFER_COMMAND.dstFbo = dstFbo;
+		BLIT_FRAME_BUFFER_COMMAND.srcWidth = srcWidth;
+		BLIT_FRAME_BUFFER_COMMAND.srcHeight = srcHeight;
+		BLIT_FRAME_BUFFER_COMMAND.dstX = dstX;
+		BLIT_FRAME_BUFFER_COMMAND.dstY = dstY;
+		BLIT_FRAME_BUFFER_COMMAND.dstWidth = dstWidth;
+		BLIT_FRAME_BUFFER_COMMAND.dstHeight = dstHeight;
+		BLIT_FRAME_BUFFER_COMMAND.filter = filter;
+		BLIT_FRAME_BUFFER_COMMAND.write();
 	}
 
 	public void Enable(int capability) {
