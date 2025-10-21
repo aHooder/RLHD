@@ -21,6 +21,15 @@ public final class CommandBuffer {
 	public static boolean VALIDATE = false;
 
 	private static final int BITS_PER_WORD = 64;
+	private static final long[] MASKS = new long[65];
+
+	static {
+		MASKS[0] = 0L;
+		for (int i = 1; i < BITS_PER_WORD; i++)  {
+			MASKS[i] = (1L << i) - 1L;
+		}
+		MASKS[BITS_PER_WORD] = ~0L;
+	}
 
 	private static int COMMAND_COUNT = 0;
 	private static final BaseCommand[] REGISTERED_COMMANDS = {
@@ -63,6 +72,7 @@ public final class CommandBuffer {
 	private int readHead = 0;
 	private int readBitHead = 0;
 
+	private final StringBuilder cmd_log = new StringBuilder();
 	private final StringBuilder validation_log = new StringBuilder();
 
 	public void ensureCapacity(int numLongs) {
@@ -142,11 +152,29 @@ public final class CommandBuffer {
 		TOGGLE_COMMAND.write(this);
 	}
 
+	public void printCommandBuffer() {
+		readHead = 0;
+		readBitHead = 0;
+		validation_log.setLength(0);
+		cmd_log.setLength(0);
+
+		while (readHead < writeHead || (readHead == writeHead && readBitHead < writeBitHead)) {
+			int type = (int) readBits(8);
+			assert type < REGISTERED_COMMANDS.length : validation_log.toString();
+
+			BaseCommand command = REGISTERED_COMMANDS[type];
+			command.read(this);
+			command.print(cmd_log);
+		}
+		log.debug("=== CommandBuffer START ===\n{}\n=== CommandBuffer END ===", cmd_log);
+	}
+
 	@SneakyThrows
 	public void execute() {
 		readHead = 0;
 		readBitHead = 0;
-		if(VALIDATE) validation_log.setLength(0);
+		validation_log.setLength(0);
+
 		while (readHead < writeHead || (readHead == writeHead && readBitHead < writeBitHead)) {
 			int type = (int)readBits(8);
 			assert type < REGISTERED_COMMANDS.length : validation_log.toString();
@@ -157,47 +185,51 @@ public final class CommandBuffer {
 			}
 
 			command.read(this);
-
-			command.print(validation_log);
-			validation_log.append("\n");
-
 			command.execute();
 
 			if(HdPlugin.checkGLErrors(command.getName())) {
-				log.debug("=== CommandBuffer START ===\n{}\n=== CommandBuffer END ===", validation_log);
-				validation_log.setLength(0);
+				printCommandBuffer();
 				break;
 			}
 		}
 	}
 
 	protected long readBits(int numBits) {
-		long result = 0;
-		int shift = 0;
-
 		if (readHead >= cmd.length)
 			throw new BufferUnderflowException();
 
-		while (numBits > 0) {
-			long word = cmd[readHead];
-			int bitsLeftInWord = BITS_PER_WORD - readBitHead;
-			int bitsToRead = Math.min(bitsLeftInWord, numBits);
-
-			if(VALIDATE) logReadBits(numBits, readHead, readBitHead, bitsToRead);
-
-			long mask = bitsToRead == BITS_PER_WORD ? ~0L : (1L << bitsToRead) - 1;
-			long bits = (word >>> readBitHead) & mask;
-
-			result |= bits << shift;
-
-			readBitHead += bitsToRead;
-			if (readBitHead == BITS_PER_WORD) {
-				readBitHead = 0;
+		long result = 0;
+		long word = cmd[readHead];
+		if(readBitHead == 0) {
+			if (numBits == BITS_PER_WORD){
 				readHead++;
+				result = word;
+			} else {
+				readBitHead += numBits;
+				result = word & MASKS[numBits];
 			}
+		} else {
+			int shift = 0;
+			while (numBits > 0) {
+				int bitsLeftInWord = BITS_PER_WORD - readBitHead;
+				int bitsToRead = Math.min(bitsLeftInWord, numBits);
 
-			shift += bitsToRead;
-			numBits -= bitsToRead;
+				if (VALIDATE) logReadBits(numBits, readHead, readBitHead, bitsToRead);
+
+				long mask = (bitsToRead == BITS_PER_WORD) ? ~0L : MASKS[bitsToRead];
+				long bits = (word >>> readBitHead) & mask;
+				result |= (bits << shift);
+
+				readBitHead += bitsToRead;
+				if (readBitHead == BITS_PER_WORD) {
+					readBitHead = 0;
+					readHead++;
+					word = cmd[readHead];
+				}
+
+				shift += bitsToRead;
+				numBits -= bitsToRead;
+			}
 		}
 
 		if(VALIDATE) logReadResult(result);
@@ -211,42 +243,54 @@ public final class CommandBuffer {
 		int originalWriteHead = writeHead;
 		int originalWriteBitHead = writeBitHead;
 
-		while (numBits > 0) {
-			int bitsLeftInWord = BITS_PER_WORD - writeBitHead;
-			int bitsToWrite = Math.min(bitsLeftInWord, numBits);
+		if (writeBitHead == 0) {
+			if (numBits == BITS_PER_WORD) {
+				cmd[writeHead++] = value;
+			} else {
+				writeBitHead += numBits;
+				cmd[writeHead] = value & MASKS[numBits];
+			}
+		} else {
+			long word = cmd[writeHead];
+			while (numBits > 0) {
+				int bitsLeftInWord = BITS_PER_WORD - writeBitHead;
+				int bitsToWrite = Math.min(bitsLeftInWord, numBits);
 
-			long valueMask = bitsToWrite == BITS_PER_WORD ? ~0L : (1L << bitsToWrite) - 1L;
-			long bits = value & valueMask;
+				long bits = (bitsToWrite == BITS_PER_WORD) ? value : (value & MASKS[bitsToWrite]);
 
-			if(VALIDATE) logWriteBits(value, numBits, writeHead, writeBitHead, bitsToWrite);
+				if (VALIDATE) logWriteBits(value, numBits, writeHead, writeBitHead, bitsToWrite);
 
-			long destMask = bitsToWrite == BITS_PER_WORD ? ~0L : valueMask << writeBitHead;
-			cmd[writeHead] = (cmd[writeHead] & ~destMask) | ((bits << writeBitHead) & destMask);
+				long destMask = (bitsToWrite == BITS_PER_WORD) ? ~0L : (MASKS[bitsToWrite] << writeBitHead);
+				word = (word & ~destMask) | ((bits << writeBitHead) & destMask);
+				cmd[writeHead] = word;
 
-			writeBitHead += bitsToWrite;
-			if (writeBitHead == BITS_PER_WORD) {
-				writeBitHead = 0;
-				writeHead++;
-				ensureCapacity(writeHead);
-				cmd[writeHead] = 0;
+				writeBitHead += bitsToWrite;
+				if (writeBitHead == BITS_PER_WORD) {
+					writeHead++;
+					ensureCapacity(writeHead);
+
+					writeBitHead = 0;
+					word = 0;
+				}
+
+				value >>>= bitsToWrite;
+				numBits -= bitsToWrite;
 			}
 
-			value >>>= bitsToWrite;
-			numBits -= bitsToWrite;
-		}
+			if (VALIDATE) {
+				int originalReadHead = readHead;
+				int originalReadBitHead = readBitHead;
 
-		if(VALIDATE) {
-			int originalReadHead = readHead;
-			int originalReadBitHead = readBitHead;
+				readHead = originalWriteHead;
+				readBitHead = originalWriteBitHead;
 
-			readHead = originalWriteHead;
-			readBitHead = originalWriteBitHead;
+				long decoded = readBits(originalNumBits);
+				assert decoded == originalValue :
+					"read: " + decoded + " but expected: " + originalValue + "\nValidation Log:" + validation_log;
 
-			long decoded = readBits(originalNumBits);
-			assert decoded == originalValue : "read: " + decoded + " but expected: " + originalValue + "\nValidation Log:" + validation_log;
-
-			readHead = originalReadHead;
-			readBitHead = originalReadBitHead;
+				readHead = originalReadHead;
+				readBitHead = originalReadBitHead;
+			}
 		}
 	}
 
