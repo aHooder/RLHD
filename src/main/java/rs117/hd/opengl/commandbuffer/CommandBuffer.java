@@ -29,8 +29,8 @@ public final class CommandBuffer {
 		MASKS[BITS_PER_WORD] = ~0L;
 	}
 
-	private static int COMMAND_COUNT = 0;
-	private static final BaseCommand[] REGISTERED_COMMANDS = {
+	private int COMMAND_COUNT = 0;
+	private final BaseCommand[] REGISTERED_COMMANDS = {
 		(DRAW_ARRAYS_COMMAND = REGISTER_COMMAND(DrawArraysCommand::new)),
 		(DRAW_ELEMENTS_COMMAND = REGISTER_COMMAND(DrawElementsCommand::new)),
 		(MULTI_DRAW_ARRAYS_COMMAND = REGISTER_COMMAND(MultiDrawArraysCommand::new)),
@@ -42,21 +42,22 @@ public final class CommandBuffer {
 		(UPDATE_CMD_UBO_COMMAND = REGISTER_COMMAND(UpdateCMDUBOCommand::new)),
 	};
 
-	private static final DrawArraysCommand DRAW_ARRAYS_COMMAND;
-	private static final DrawElementsCommand DRAW_ELEMENTS_COMMAND;
-	private static final MultiDrawArraysCommand MULTI_DRAW_ARRAYS_COMMAND;
-	private static final ToggleCommand TOGGLE_COMMAND;
-	private static final ColorMaskCommand COLOR_MASK_COMMAND;
-	private static final DepthMaskCommand DEPTH_MASK_COMMAND;
-	private static final BindElementsArrayCommand BIND_ELEMENTS_ARRAY_COMMAND;
-	private static final BindVertexArrayCommand BIND_VERTEX_ARRAY_COMMAND;
-	private static final UpdateCMDUBOCommand UPDATE_CMD_UBO_COMMAND;
+	private final DrawArraysCommand DRAW_ARRAYS_COMMAND;
+	private final DrawElementsCommand DRAW_ELEMENTS_COMMAND;
+	private final MultiDrawArraysCommand MULTI_DRAW_ARRAYS_COMMAND;
+	private final ToggleCommand TOGGLE_COMMAND;
+	private final ColorMaskCommand COLOR_MASK_COMMAND;
+	private final DepthMaskCommand DEPTH_MASK_COMMAND;
+	private final BindElementsArrayCommand BIND_ELEMENTS_ARRAY_COMMAND;
+	private final BindVertexArrayCommand BIND_VERTEX_ARRAY_COMMAND;
+	private final UpdateCMDUBOCommand UPDATE_CMD_UBO_COMMAND;
 
 	interface ICreateCommand<T extends BaseCommand> { T construct(); }
 
-	private static <T extends BaseCommand> T REGISTER_COMMAND(ICreateCommand<T> createCommand) {
+	private <T extends BaseCommand> T REGISTER_COMMAND(ICreateCommand<T> createCommand) {
 		T newCommand = createCommand.construct();
 		newCommand.id = COMMAND_COUNT;
+		newCommand.buffer = this;
 		COMMAND_COUNT++;
 		return newCommand;
 	}
@@ -82,28 +83,28 @@ public final class CommandBuffer {
 		UPDATE_CMD_UBO_COMMAND.x = x;
 		UPDATE_CMD_UBO_COMMAND.y = y;
 		UPDATE_CMD_UBO_COMMAND.z = z;
-		UPDATE_CMD_UBO_COMMAND.write(this);
+		UPDATE_CMD_UBO_COMMAND.write();
 	}
 
 	public void SetWorldViewIndex(int index) {
 		UPDATE_CMD_UBO_COMMAND.isBaseOffset = false;
 		UPDATE_CMD_UBO_COMMAND.worldViewId = index;
-		UPDATE_CMD_UBO_COMMAND.write(this);
+		UPDATE_CMD_UBO_COMMAND.write();
 	}
 
 	public void BindVertexArray(int vao) {
 		BIND_VERTEX_ARRAY_COMMAND.vao = vao;
-		BIND_VERTEX_ARRAY_COMMAND.write(this);
+		BIND_VERTEX_ARRAY_COMMAND.write();
 	}
 
 	public void BindElementsArray(int ebo) {
 		BIND_ELEMENTS_ARRAY_COMMAND.ebo = ebo;
-		BIND_ELEMENTS_ARRAY_COMMAND.write(this);
+		BIND_ELEMENTS_ARRAY_COMMAND.write();
 	}
 
 	public void DepthMask(boolean writeDepth) {
 		DEPTH_MASK_COMMAND.flag = writeDepth;
-		DEPTH_MASK_COMMAND.write(this);
+		DEPTH_MASK_COMMAND.write();
 	}
 
 	public void ColorMask(boolean writeRed, boolean writeGreen, boolean writeBlue, boolean writeAlpha) {
@@ -111,28 +112,28 @@ public final class CommandBuffer {
 		COLOR_MASK_COMMAND.green = writeGreen;
 		COLOR_MASK_COMMAND.blue = writeBlue;
 		COLOR_MASK_COMMAND.alpha = writeAlpha;
-		COLOR_MASK_COMMAND.write(this);
+		COLOR_MASK_COMMAND.write();
 	}
 
 	public void MultiDrawArrays(int mode, int[] offsets, int[] counts) {
 		MULTI_DRAW_ARRAYS_COMMAND.mode = mode;
 		MULTI_DRAW_ARRAYS_COMMAND.offsets = offsets;
 		MULTI_DRAW_ARRAYS_COMMAND.counts = counts;
-		MULTI_DRAW_ARRAYS_COMMAND.write(this);
+		MULTI_DRAW_ARRAYS_COMMAND.write();
 	}
 
 	public void DrawElements(int mode, int vertexCount, long bytesOffset) {
 		DRAW_ELEMENTS_COMMAND.mode = mode;
 		DRAW_ELEMENTS_COMMAND.vertexCount = vertexCount;
 		DRAW_ELEMENTS_COMMAND.bytesOffset = bytesOffset;
-		DRAW_ELEMENTS_COMMAND.write(this);
+		DRAW_ELEMENTS_COMMAND.write();
 	}
 
 	public void DrawArrays(int mode, int offset, int vertexCount) {
 		DRAW_ARRAYS_COMMAND.mode = mode;
 		DRAW_ARRAYS_COMMAND.offset = offset;
 		DRAW_ARRAYS_COMMAND.vertexCount = vertexCount;
-		DRAW_ARRAYS_COMMAND.write(this);
+		DRAW_ARRAYS_COMMAND.write();
 	}
 
 	public void Enable(int capability) {
@@ -146,7 +147,7 @@ public final class CommandBuffer {
 	public void Toggle(int capability, boolean enabled) {
 		TOGGLE_COMMAND.capability = capability;
 		TOGGLE_COMMAND.state = enabled;
-		TOGGLE_COMMAND.write(this);
+		TOGGLE_COMMAND.write();
 	}
 
 	public void printCommandBuffer() {
@@ -159,7 +160,7 @@ public final class CommandBuffer {
 			assert type < REGISTERED_COMMANDS.length : "Unknown Command Type";
 
 			BaseCommand command = REGISTERED_COMMANDS[type];
-			command.read(this);
+			command.doRead();
 			command.print(cmd_log);
 		}
 		log.debug("=== CommandBuffer START ===\n{}\n=== CommandBuffer END ===", cmd_log);
@@ -179,7 +180,7 @@ public final class CommandBuffer {
 				uboCommandBuffer.upload();
 			}
 
-			command.read(this);
+			command.doRead();
 			command.execute();
 
 			if(HdPlugin.checkGLErrors(command.getName())) {

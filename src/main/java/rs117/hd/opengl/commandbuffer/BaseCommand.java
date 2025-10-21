@@ -28,22 +28,15 @@ public abstract class BaseCommand {
 		return buffer.uboCommandBuffer;
 	}
 
-	public abstract void execute();
-	public abstract void print(StringBuilder sb);
+	protected abstract void execute();
+	protected abstract void print(StringBuilder sb);
 
-	public final void write(CommandBuffer buffer) {
-		this.buffer = buffer;
+	protected final void write() {
 		write8(id);
 		doWrite();
 	}
 
 	protected abstract void doWrite();
-
-	public final void read(CommandBuffer buffer) {
-		this.buffer = buffer;
-		doRead();
-	}
-
 	protected abstract void doRead();
 
 	protected final void write1(int value)   { buffer.writeBits(value & 0x1L, 1); }
