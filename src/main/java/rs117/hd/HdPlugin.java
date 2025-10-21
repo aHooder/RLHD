@@ -345,6 +345,8 @@ public class HdPlugin extends Plugin {
 	public final UBOLights uboLightsCulling = new UBOLights(true);
 	public final UBOUI uboUI = new UBOUI();
 
+	public final CommandBuffer backbufferCmd = new CommandBuffer();
+
 	// Configs used frequently enough to be worth caching
 	public boolean configGroundTextures;
 	public boolean configGroundBlending;
@@ -1368,7 +1370,7 @@ public class HdPlugin extends Plugin {
 		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 	}
 
-	public void drawUi(CommandBuffer cmd, int overlayColor) {
+	public void drawUi(int overlayColor) {
 		if (uiResolution == null || developerTools.isHideUiEnabled() && hasLoggedIn)
 			return;
 
@@ -1378,19 +1380,19 @@ public class HdPlugin extends Plugin {
 
 		frameTimer.begin(Timer.RENDER_UI);
 
-		cmd.BindFrameBuffer(GL_FRAMEBUFFER, awtContext.getFramebuffer(false));
+		backbufferCmd.BindFrameBuffer(GL_FRAMEBUFFER, awtContext.getFramebuffer(false));
 		// Disable alpha writes, just in case the default FBO has an alpha channel
-		cmd.ColorMask(true, true, true, false);
+		backbufferCmd.ColorMask(true, true, true, false);
 
-		cmd.Viewport(0, 0, uiResolution[0], uiResolution[1]);
+		backbufferCmd.Viewport(0, 0, uiResolution[0], uiResolution[1]);
 
-		tiledLightingOverlay.render(cmd);
+		tiledLightingOverlay.render(backbufferCmd);
 
-		cmd.SetShaderProgram(uiProgram);
+		backbufferCmd.SetShaderProgram(uiProgram);
 
-		cmd.SetUniformProperty(uboUI.sourceDimensions, uiResolution);
-		cmd.SetUniformProperty(uboUI.targetDimensions, actualUiResolution);
-		cmd.SetUniformProperty(uboUI.alphaOverlay, ColorUtils.srgba(overlayColor));
+		backbufferCmd.SetUniformProperty(uboUI.sourceDimensions, uiResolution);
+		backbufferCmd.SetUniformProperty(uboUI.targetDimensions, actualUiResolution);
+		backbufferCmd.SetUniformProperty(uboUI.alphaOverlay, ColorUtils.srgba(overlayColor));
 
 		// Set the sampling function used when stretching the UI.
 		// This is probably better done with sampler objects instead of texture parameters, but this is easier and likely more portable.
@@ -1402,18 +1404,18 @@ public class HdPlugin extends Plugin {
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, function);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, function);
 
-		cmd.Enable(GL_BLEND);
-		cmd.BlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
-		cmd.BindVertexArray(vaoTri);
-		cmd.DrawArrays(GL_TRIANGLES, 0, 3);
+		backbufferCmd.Enable(GL_BLEND);
+		backbufferCmd.BlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
+		backbufferCmd.BindVertexArray(vaoTri);
+		backbufferCmd.DrawArrays(GL_TRIANGLES, 0, 3);
 
-		shadowMapOverlay.render(cmd);
-		gammaCalibrationOverlay.render(cmd);
+		shadowMapOverlay.render(backbufferCmd);
+		gammaCalibrationOverlay.render(backbufferCmd);
 
 		// Reset
-		cmd.BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
-		cmd.Disable(GL_BLEND);
-		cmd.ColorMask(true, true, true, true);
+		backbufferCmd.BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
+		backbufferCmd.Disable(GL_BLEND);
+		backbufferCmd.ColorMask(true, true, true, true);
 
 		frameTimer.end(Timer.RENDER_UI);
 	}

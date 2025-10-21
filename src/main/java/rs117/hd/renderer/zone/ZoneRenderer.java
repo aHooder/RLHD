@@ -158,8 +158,6 @@ public class ZoneRenderer implements Renderer {
 	private final CommandBuffer directionalPassCmd = new CommandBuffer();
 	private final CommandBuffer directionalDrawCmd = new CommandBuffer();
 
-	private final CommandBuffer backbufferCmd = new CommandBuffer();
-
 	private VAO.VAOList vaoO;
 	private VAO.VAOList vaoA;
 	private VAO.VAOList vaoPO;
@@ -1276,21 +1274,21 @@ public class ZoneRenderer implements Renderer {
 		}
 
 		if (sceneFboValid && plugin.sceneResolution != null && plugin.sceneViewport != null) {
-			backbufferCmd.reset();
-			backbufferCmd.BlitFramebuffer(
+			plugin.backbufferCmd.reset();
+			plugin.backbufferCmd.BlitFramebuffer(
 				plugin.fboScene, plugin.fboSceneResolve, plugin.awtContext.getFramebuffer(false),
 				plugin.sceneResolution[0], plugin.sceneResolution[1],
 				plugin.sceneViewport[0], plugin.sceneViewport[1],
 				plugin.sceneViewport[2], plugin.sceneViewport[3],
 				config.sceneScalingMode().glFilter);
 		} else {
-			backbufferCmd.BindFrameBuffer(GL_FRAMEBUFFER, plugin.awtContext.getFramebuffer(false));
-			backbufferCmd.ClearColor(0, 0, 0, 1);
+			plugin.backbufferCmd.BindFrameBuffer(GL_FRAMEBUFFER, plugin.awtContext.getFramebuffer(false));
+			plugin.backbufferCmd.ClearColor(0, 0, 0, 1);
 		}
 
-		plugin.drawUi(backbufferCmd, overlayColor);
+		plugin.drawUi(overlayColor);
 
-		backbufferCmd.submit();
+		plugin.backbufferCmd.submit();
 
 		try {
 			frameTimer.begin(Timer.SWAP_BUFFERS);

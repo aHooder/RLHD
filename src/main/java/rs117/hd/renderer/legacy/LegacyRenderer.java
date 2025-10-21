@@ -1291,7 +1291,9 @@ public class LegacyRenderer implements Renderer {
 			glClear(GL_COLOR_BUFFER_BIT);
 		}
 
-		//plugin.drawUi(overlayColor); TODO: FIX ME!
+		plugin.backbufferCmd.reset();
+		plugin.drawUi(overlayColor);
+		plugin.backbufferCmd.submit();
 
 		try {
 			frameTimer.begin(Timer.SWAP_BUFFERS);
