@@ -1325,6 +1325,8 @@ public class LegacyRenderer implements Renderer {
 		if (client.getGameState().getState() < GameState.LOGGED_IN.getState())
 			return;
 
+		plugin.renderThread.waitForRenderingCompleted();
+
 		Scene scene = client.getTopLevelWorldView().getScene();
 		loadScene(scene);
 		if (plugin.skipScene == scene)
@@ -1336,6 +1338,8 @@ public class LegacyRenderer implements Renderer {
 	public void loadScene(Scene scene) {
 		if (!plugin.isActive())
 			return;
+
+		plugin.renderThread.waitForRenderingCompleted();
 
 		int expandedChunks = plugin.getExpandedMapLoadingChunks();
 		if (HDUtils.sceneIntersects(scene, expandedChunks, areaManager.getArea("PLAYER_OWNED_HOUSE"))) {

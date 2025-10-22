@@ -17,6 +17,7 @@ public enum Timer {
 	MODEL_PUSHING_VERTEX,
 	MODEL_PUSHING_NORMAL,
 	MODEL_PUSHING_UV(false, "Model pushing UV"),
+	RENDER_THREAD_COMPLETION,
 	COMMAND_BUFFER_READ,
 	SHADOW_COMMAND_BUFFER_EXECUTE(false, "Command Buffer Shadow"),
 	SCENE_COMMAND_BUFFER_EXECUTE(false, "Command Buffer Scene"),

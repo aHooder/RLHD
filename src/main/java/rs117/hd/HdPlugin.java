@@ -80,8 +80,8 @@ import rs117.hd.config.SeasonalTheme;
 import rs117.hd.config.ShadingMode;
 import rs117.hd.config.ShadowMode;
 import rs117.hd.config.VanillaShadowMode;
-import rs117.hd.opengl.AsyncUICopy;
 import rs117.hd.opengl.commandbuffer.CommandBuffer;
+import rs117.hd.opengl.commandbuffer.RenderThread;
 import rs117.hd.opengl.shader.ShaderException;
 import rs117.hd.opengl.shader.ShaderIncludes;
 import rs117.hd.opengl.shader.ShadowShaderProgram;
@@ -248,9 +248,6 @@ public class HdPlugin extends Plugin {
 	private ModelOverrideManager modelOverrideManager;
 
 	@Inject
-	private AsyncUICopy asyncUICopy;
-
-	@Inject
 	private FishingSpotReplacer fishingSpotReplacer;
 
 	@Inject
@@ -288,8 +285,11 @@ public class HdPlugin extends Plugin {
 
 	public Renderer renderer;
 
+	public RenderThread renderThread;
+
 	public static boolean SKIP_GL_ERROR_CHECKS;
 	public static GLCapabilities GL_CAPS;
+	public static GLCapabilities GL_RENDER_THREAD_CAPS;
 	public static boolean AMD_GPU;
 
 	public Canvas canvas;
@@ -364,7 +364,6 @@ public class HdPlugin extends Plugin {
 	public boolean configUseFasterModelHashing;
 	public boolean configUndoVanillaShading;
 	public boolean configPreserveVanillaNormals;
-	public boolean configAsyncUICopy;
 	public boolean configWindDisplacement;
 	public boolean configCharacterDisplacement;
 	public boolean configTiledLighting;
@@ -460,6 +459,8 @@ public class HdPlugin extends Plugin {
 				}
 
 				awtContext.createGLContext();
+
+				renderThread = new RenderThread(frameTimer, awtContext);
 
 				canvas.setIgnoreRepaint(true);
 
@@ -640,7 +641,6 @@ public class HdPlugin extends Plugin {
 			client.setUnlockedFps(false);
 			client.setExpandedMapLoading(0);
 
-			asyncUICopy.complete();
 			developerTools.deactivate();
 			tileOverrideManager.shutDown();
 			groundMaterialManager.shutDown();
@@ -675,6 +675,10 @@ public class HdPlugin extends Plugin {
 				}
 				renderer = null;
 			}
+
+			if(renderThread != null)
+				renderThread.shutdown();
+			renderThread = null;
 
 			if (awtContext != null)
 				awtContext.destroy();
@@ -1035,6 +1039,8 @@ public class HdPlugin extends Plugin {
 	public void updateTiledLightingFbo() {
 		assert configTiledLighting;
 
+		renderer.waitUntilIdle();
+
 		int[] newResolution = max(ivec(1), round(divide(vec(sceneResolution), TILED_LIGHTING_TILE_SIZE)));
 		int newLayerCount = configDynamicLights.getTiledLightingLayers();
 		if (Arrays.equals(newResolution, tiledLightingResolution) && tiledLightingLayerCount == newLayerCount)
@@ -1123,6 +1129,8 @@ public class HdPlugin extends Plugin {
 		if (Arrays.equals(sceneViewport, viewport))
 			return;
 
+		renderer.waitUntilIdle();
+
 		destroySceneFbo();
 		sceneViewport = viewport;
 
@@ -1206,6 +1214,8 @@ public class HdPlugin extends Plugin {
 	private void destroySceneFbo() {
 		sceneViewport = null;
 
+		renderer.waitUntilIdle();
+
 		if (fboScene != 0)
 			glDeleteFramebuffers(fboScene);
 		fboScene = 0;
@@ -1228,6 +1238,8 @@ public class HdPlugin extends Plugin {
 	}
 
 	private void initializeShadowMapFbo() {
+		renderer.waitUntilIdle();
+
 		if (!configShadowsEnabled) {
 			initializeDummyShadowMap();
 			return;
@@ -1290,6 +1302,8 @@ public class HdPlugin extends Plugin {
 	}
 
 	private void destroyShadowMapFbo() {
+		renderer.waitUntilIdle();
+
 		if (texShadowMap != 0)
 			glDeleteTextures(texShadowMap);
 		texShadowMap = 0;
@@ -1307,6 +1321,7 @@ public class HdPlugin extends Plugin {
 	}
 
 	public void prepareInterfaceTexture() {
+
 		int[] resolution = {
 			max(1, client.getCanvasWidth()),
 			max(1, client.getCanvasHeight())
@@ -1314,6 +1329,8 @@ public class HdPlugin extends Plugin {
 		boolean resize = !Arrays.equals(uiResolution, resolution);
 		if (resize) {
 			uiResolution = resolution;
+
+			renderer.waitUntilIdle();
 
 			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pboUi);
 			glBufferData(GL_PIXEL_UNPACK_BUFFER, uiResolution[0] * uiResolution[1] * 4L, GL_STREAM_DRAW);
@@ -1333,20 +1350,14 @@ public class HdPlugin extends Plugin {
 		}
 		round(actualUiResolution, multiply(vec(actualUiResolution), getDpiScaling()));
 
-		if (configAsyncUICopy) {
-			// Start copying the UI on a different thread, to be uploaded during the next frame
-			asyncUICopy.prepare(pboUi, texUi);
-			// If the window was just resized, upload once synchronously so there is something to show
-			if (resize)
-				asyncUICopy.complete();
-			return;
-		}
-
 		final BufferProvider bufferProvider = client.getBufferProvider();
 		final int[] pixels = bufferProvider.getPixels();
 		final int width = bufferProvider.getWidth();
 		final int height = bufferProvider.getHeight();
 
+		backbufferCmd.UploadPixelData(TEXTURE_UNIT_UI, texUi, pboUi, width, height, pixels);
+
+		/*
 		frameTimer.begin(Timer.MAP_UI_BUFFER);
 		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pboUi);
 		ByteBuffer mappedBuffer = glMapBuffer(GL_PIXEL_UNPACK_BUFFER, GL_WRITE_ONLY);
@@ -1367,7 +1378,7 @@ public class HdPlugin extends Plugin {
 			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, 0);
 			frameTimer.end(Timer.UPLOAD_UI);
 		}
-		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);*/
 	}
 
 	public void drawUi(int overlayColor) {
@@ -1420,8 +1431,8 @@ public class HdPlugin extends Plugin {
 	}
 
 	/**
-	 * Convert the front framebuffer to an Image
-	 */
+     * Convert the front framebuffer to an Image
+     */
 	public Image screenshot() {
 		if (uiResolution == null)
 			return null;
@@ -1487,7 +1498,6 @@ public class HdPlugin extends Plugin {
 		configUseFasterModelHashing = config.fasterModelHashing();
 		configUndoVanillaShading = config.shadingMode() != ShadingMode.VANILLA;
 		configPreserveVanillaNormals = config.preserveVanillaNormals();
-		configAsyncUICopy = config.asyncUICopy();
 		configWindDisplacement = config.windDisplacement();
 		configCharacterDisplacement = config.characterDisplacement();
 		configSeasonalTheme = config.seasonalTheme();
@@ -1561,6 +1571,8 @@ public class HdPlugin extends Plugin {
 			if (pendingConfigChanges.isEmpty())
 				return;
 
+			renderer.waitUntilIdle();
+
 			try {
 				// Synchronize with scene loading
 				synchronized (this) {
@@ -1598,9 +1610,6 @@ public class HdPlugin extends Plugin {
 									recompilePrograms = true;
 								if (configColorFilter == ColorFilter.CEL_SHADING || configColorFilterPrevious == ColorFilter.CEL_SHADING)
 									reloadScene = true;
-								break;
-							case KEY_ASYNC_UI_COPY:
-								asyncUICopy.complete();
 								break;
 						}
 
@@ -1683,9 +1692,6 @@ public class HdPlugin extends Plugin {
 								break;
 						}
 					}
-
-					if (reloadTexturesAndMaterials || recompilePrograms)
-						renderer.waitUntilIdle();
 
 					if (reloadTexturesAndMaterials) {
 						materialManager.reload(false);
@@ -1795,9 +1801,7 @@ public class HdPlugin extends Plugin {
 	public void onBeforeRender(BeforeRender beforeRender) {
 		SKIP_GL_ERROR_CHECKS = !log.isDebugEnabled() || developerTools.isFrameTimingsOverlayEnabled();
 
-		// Upload the UI which we began copying during the previous frame
-		if (configAsyncUICopy)
-			asyncUICopy.complete();
+		renderThread.waitForRenderingCompleted();
 
 		if (client.getScene() == null)
 			return;
@@ -1808,6 +1812,7 @@ public class HdPlugin extends Plugin {
 	@Subscribe
 	public void onClientTick(ClientTick clientTick) {
 		elapsedClientTime += 1 / 50f;
+
 
 		if (!enableFreezeFrame && skipScene != client.getScene())
 			redrawPreviousFrame = false;

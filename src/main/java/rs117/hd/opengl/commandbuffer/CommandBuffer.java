@@ -23,6 +23,7 @@ import rs117.hd.opengl.commandbuffer.commands.SetUniformBufferPropertyCommand;
 import rs117.hd.opengl.commandbuffer.commands.ShaderProgramCommand;
 import rs117.hd.opengl.commandbuffer.commands.SwapBuffersCommand;
 import rs117.hd.opengl.commandbuffer.commands.ToggleCommand;
+import rs117.hd.opengl.commandbuffer.commands.UploadPixelDataCommand;
 import rs117.hd.opengl.commandbuffer.commands.ViewportCommand;
 import rs117.hd.opengl.shader.ShaderProgram;
 import rs117.hd.opengl.uniforms.UniformBuffer;
@@ -63,6 +64,7 @@ public final class CommandBuffer {
 		(BLIT_FRAME_BUFFER_COMMAND = REGISTER_COMMAND(BlitFrameBufferCommand::new)),
 		(SET_UNIFORM_BUFFER_PROPERTY_COMMAND = REGISTER_COMMAND(SetUniformBufferPropertyCommand::new)),
 		(SET_SHADER_PROPERTY_COMMAND = REGISTER_COMMAND(SetShaderUniformCommand::new)),
+		(UPLOAD_PIXEL_DATA_COMMAND = REGISTER_COMMAND(UploadPixelDataCommand::new)),
 		(EXECUTE_COMMAND_BUFFER_COMMAND = REGISTER_COMMAND(ExecuteCommandBufferCommand::new)),
 		(SWAP_BUFFER_COMMAND = REGISTER_COMMAND(SwapBuffersCommand::new)),
 		(FRAME_TIMER_COMMAND = REGISTER_COMMAND(FrameTimerCommand::new)),
@@ -85,6 +87,7 @@ public final class CommandBuffer {
 	private final SetUniformBufferPropertyCommand SET_UNIFORM_BUFFER_PROPERTY_COMMAND;
 	private final SetShaderUniformCommand SET_SHADER_PROPERTY_COMMAND;
 	private final ShaderProgramCommand SHADER_PROGRAM_COMMAND;
+	private final UploadPixelDataCommand UPLOAD_PIXEL_DATA_COMMAND;
 	private final ExecuteCommandBufferCommand EXECUTE_COMMAND_BUFFER_COMMAND;
 	private final SwapBuffersCommand SWAP_BUFFER_COMMAND;
 	private final FrameTimerCommand FRAME_TIMER_COMMAND;
@@ -173,6 +176,17 @@ public final class CommandBuffer {
 		assert program != null;
 		SHADER_PROGRAM_COMMAND.program = program;
 		SHADER_PROGRAM_COMMAND.write();
+	}
+
+	public void UploadPixelData(int texUnit, int tex, int pbo, int width, int height, int[] data) {
+		assert UPLOAD_PIXEL_DATA_COMMAND.data == null;
+		UPLOAD_PIXEL_DATA_COMMAND.texUnit = texUnit;
+		UPLOAD_PIXEL_DATA_COMMAND.tex = tex;
+		UPLOAD_PIXEL_DATA_COMMAND.pbo = pbo;
+		UPLOAD_PIXEL_DATA_COMMAND.width = width;
+		UPLOAD_PIXEL_DATA_COMMAND.height = height;
+		UPLOAD_PIXEL_DATA_COMMAND.data = data;
+		UPLOAD_PIXEL_DATA_COMMAND.write();
 	}
 
 	public void ClearDepth(float depth) {
@@ -326,6 +340,7 @@ public final class CommandBuffer {
 			BaseCommand command = REGISTERED_COMMANDS[type];
 			command.doRead();
 			command.print(sb);
+			sb.append('\n');
 		}
 	}
 
@@ -364,10 +379,10 @@ public final class CommandBuffer {
 			command.execute();
 
 			if(command.isGLCommand() && HdPlugin.checkGLErrors(command.getName())) {
-				StringBuilder sb = new StringBuilder();
-				printCommandBuffer(sb);
-				log.debug("=== CommandBuffer START ===\n{}\n=== CommandBuffer END ===", sb);
-				break;
+				//StringBuilder sb = new StringBuilder();
+				//printCommandBuffer(sb);
+				//log.debug("=== CommandBuffer START ===\n{}\n=== CommandBuffer END ===", sb);
+				//break;
 			}
 		}
 		if(executionTimer != null) {

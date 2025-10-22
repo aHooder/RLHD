@@ -46,6 +46,8 @@ public class FrameTimer {
 
 	private void initialize() {
 		clientThread.invoke(() -> {
+			plugin.renderThread.waitForRenderingCompleted();
+
 			int[] queryNames = new int[NUM_GPU_TIMERS * 2];
 			glGenQueries(queryNames);
 			int queryIndex = 0;

@@ -271,6 +271,7 @@ public class ZoneRenderer implements Renderer {
 
 	@Override
 	public void waitUntilIdle() {
+		plugin.renderThread.waitForRenderingCompleted();
 		glFinish();
 	}
 
@@ -360,6 +361,8 @@ public class ZoneRenderer implements Renderer {
 		Scene scene,
 		float cameraX, float cameraY, float cameraZ, float cameraPitch, float cameraYaw
 	) {
+		plugin.renderThread.waitForRenderingCompleted();
+
 		scene.setDrawDistance(plugin.getDrawDistance());
 		plugin.updateSceneFbo();
 
@@ -771,7 +774,7 @@ public class ZoneRenderer implements Renderer {
 
 		vaoA.unmap();
 
-		plugin.backbufferCmd.BeginTimer(Timer.RENDER_FRAME);
+		plugin.renderThread.waitForRenderingCompleted();
 
 		// Scene draw state to apply before all recorded commands
 		if (eboAlphaStaging.position() > 0) {
@@ -780,12 +783,15 @@ public class ZoneRenderer implements Renderer {
 			glBufferData(GL_ELEMENT_ARRAY_BUFFER, eboAlphaStaging.getBuffer(), GL_STREAM_DRAW);
 		}
 
+		directionalPassCmd.reset();
+		scenePassCmd.reset();
+
 		if (plugin.configShadowsEnabled &&
 			plugin.fboShadowMap != 0 &&
 			environmentManager.currentDirectionalStrength > 0
 		) {
 			// Render to the shadow depth map
-			directionalPassCmd.reset();
+			directionalPassCmd.BeginTimer(Timer.RENDER_FRAME);
 			directionalPassCmd.BeginTimer(Timer.RENDER_SHADOWS);
 			directionalPassCmd.Viewport(0, 0, plugin.shadowMapResolution, plugin.shadowMapResolution);
 			directionalPassCmd.BindFrameBuffer(GL_FRAMEBUFFER, plugin.fboShadowMap);
@@ -803,10 +809,11 @@ public class ZoneRenderer implements Renderer {
 
 			directionalPassCmd.EndTimer(Timer.RENDER_SHADOWS);
 
-			plugin.backbufferCmd.ExecuteCommandBuffer(directionalPassCmd);
+			plugin.renderThread.submit(directionalPassCmd);
+		} else {
+			scenePassCmd.BeginTimer(Timer.RENDER_FRAME);
 		}
 
-		scenePassCmd.reset();
 		scenePassCmd.BeginTimer(Timer.RENDER_SCENE);
 		scenePassCmd.SetShaderProgram(sceneProgram);
 
@@ -841,7 +848,8 @@ public class ZoneRenderer implements Renderer {
 		scenePassCmd.Disable(GL_BLEND);
 
 		scenePassCmd.EndTimer(Timer.RENDER_SCENE);
-		plugin.backbufferCmd.ExecuteCommandBuffer(scenePassCmd);
+
+		plugin.renderThread.submit(scenePassCmd);
 
 		frameTimer.end(Timer.DRAW_SCENE);
 
@@ -882,6 +890,8 @@ public class ZoneRenderer implements Renderer {
 		if (!z.initialized || z.sizeO == 0)
 			return;
 
+		plugin.renderThread.waitForRenderingCompleted();
+
 		int offset = ctx.sceneContext.sceneOffset >> 3;
 		if (z.inSceneFrustum) {
 			sceneDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, uboWorldViews.getIndex(scene));
@@ -916,6 +926,8 @@ public class ZoneRenderer implements Renderer {
 		Zone z = ctx.zones[zx][zz];
 		if (!z.initialized)
 			return;
+
+		plugin.renderThread.waitForRenderingCompleted();
 
 		boolean hasAlpha = z.sizeA != 0 || !z.alphaModels.isEmpty();
 		boolean renderWater = z.inSceneFrustum && level == 0 && z.hasWater;
@@ -977,6 +989,8 @@ public class ZoneRenderer implements Renderer {
 		WorldViewContext ctx = context(scene);
 		if (ctx == null)
 			return;
+
+		plugin.renderThread.waitForRenderingCompleted();
 
 		switch (pass) {
 			case DrawCallbacks.PASS_OPAQUE:
@@ -1049,6 +1063,8 @@ public class ZoneRenderer implements Renderer {
 		if (modelOverride.hide)
 			return;
 
+		plugin.renderThread.waitForRenderingCompleted();
+
 		int preOrientation = HDUtils.getModelPreOrientation(HDUtils.getObjectConfig(tileObject));
 
 		byte[] transparencies = m.getFaceTransparencies();
@@ -1101,6 +1117,8 @@ public class ZoneRenderer implements Renderer {
 		ModelOverride modelOverride = modelOverrideManager.getOverride(uuid, worldPos);
 		if (modelOverride.hide)
 			return;
+
+		plugin.renderThread.waitForRenderingCompleted();
 
 		int preOrientation = HDUtils.getModelPreOrientation(gameObject.getConfig());
 
@@ -1214,6 +1232,8 @@ public class ZoneRenderer implements Renderer {
 				if (!zone.invalidate)
 					continue;
 
+				plugin.renderThread.waitForRenderingCompleted();
+
 				assert zone.initialized;
 				zone.free();
 				zone = ctx.zones[x][z] = new Zone();
@@ -1287,26 +1307,18 @@ public class ZoneRenderer implements Renderer {
 		plugin.backbufferCmd.EndTimer(Timer.SWAP_BUFFERS);
 		plugin.backbufferCmd.EndTimer(Timer.RENDER_FRAME);
 
-		plugin.backbufferCmd.submit();
-
-		try {
-			drawManager.processDrawComplete(plugin::screenshot);
-		} catch (RuntimeException ex) {
-			// this is always fatal
-			if (!plugin.canvas.isValid()) {
-				// this might be AWT shutting down on VM shutdown, ignore it
-				return;
-			}
-
-			log.error("Unable to swap buffers:", ex);
-		}
-
-		glBindFramebuffer(GL_FRAMEBUFFER, plugin.awtContext.getFramebuffer(false));
-
 		frameTimer.end(Timer.DRAW_FRAME);
+		plugin.renderThread.submit(plugin.backbufferCmd, this::onBackBufferSwapCompleted);
+
+		if(client.getGameState().getState() < GameState.LOGGED_IN.getState() || root.sceneContext == null) {
+			plugin.renderThread.waitForRenderingCompleted();
+		}
+	}
+
+	public void onBackBufferSwapCompleted() {
 		frameTimer.endFrameAndReset();
-//		frameModelInfoMap.clear();
-		checkGLErrors();
+
+		plugin.backbufferCmd.reset();
 	}
 
 	@Subscribe
@@ -1330,6 +1342,8 @@ public class ZoneRenderer implements Renderer {
 	public void reloadScene() {
 		if (client.getGameState().getState() < GameState.LOGGED_IN.getState() || root.sceneContext == null)
 			return;
+
+		plugin.renderThread.waitForRenderingCompleted();
 
 		proceduralGenerator.generateSceneData(root.sceneContext);
 		for (int i = 0; i < NUM_ZONES; i++)
@@ -1498,6 +1512,8 @@ public class ZoneRenderer implements Renderer {
 		CountDownLatch latch = new CountDownLatch(1);
 		clientThread.invoke(() ->
 		{
+			plugin.renderThread.waitForRenderingCompleted();
+
 			for (int x = 0; x < EXTENDED_SCENE_SIZE >> 3; ++x) {
 				for (int z = 0; z < EXTENDED_SCENE_SIZE >> 3; ++z) {
 					Zone zone = newZones[x][z];
@@ -1638,6 +1654,8 @@ public class ZoneRenderer implements Renderer {
 		CountDownLatch latch = new CountDownLatch(1);
 		clientThread.invoke(() ->
 		{
+			plugin.renderThread.waitForRenderingCompleted();
+
 			for (int x = 0; x < ctx.sizeX; ++x) {
 				for (int z = 0; z < ctx.sizeZ; ++z) {
 					Zone zone = ctx.zones[x][z];
