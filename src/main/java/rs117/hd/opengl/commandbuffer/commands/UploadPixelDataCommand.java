@@ -1,6 +1,7 @@
 package rs117.hd.opengl.commandbuffer.commands;
 
 import java.nio.ByteBuffer;
+import java.util.concurrent.Semaphore;
 import rs117.hd.opengl.commandbuffer.BaseCommand;
 
 import static org.lwjgl.opengl.GL11C.GL_TEXTURE_2D;
@@ -23,6 +24,7 @@ public class UploadPixelDataCommand extends BaseCommand {
 	public int width;
 	public int height;
 	public int[] data;
+	public Semaphore copySema;
 
 	@Override
 	protected void doWrite() {
@@ -32,6 +34,10 @@ public class UploadPixelDataCommand extends BaseCommand {
 		write32(width);
 		write32(height);
 		writeObject(data);
+		if(copySema != null) {
+			writeFlag(true);
+			writeObject(copySema);
+		}
 		data = null;
 	}
 
@@ -43,6 +49,9 @@ public class UploadPixelDataCommand extends BaseCommand {
 		width = read32();
 		height = read32();
 		data = readObject();
+		if(readFlag()) {
+			copySema = readObject();
+		}
 	}
 
 	@Override
@@ -52,7 +61,7 @@ public class UploadPixelDataCommand extends BaseCommand {
 
 		if (mappedBuffer != null) {
 			mappedBuffer.asIntBuffer().put(data, 0, width * height);
-			data = null;
+			if(copySema != null) copySema.release();
 
 			glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
 			glActiveTexture(texUnit);

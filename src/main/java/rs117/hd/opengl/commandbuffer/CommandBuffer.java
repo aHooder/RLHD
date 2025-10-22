@@ -1,6 +1,7 @@
 package rs117.hd.opengl.commandbuffer;
 
 import java.util.Arrays;
+import java.util.concurrent.Semaphore;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.rlawt.AWTContext;
 import rs117.hd.HdPlugin;
@@ -21,6 +22,7 @@ import rs117.hd.opengl.commandbuffer.commands.MultiDrawArraysCommand;
 import rs117.hd.opengl.commandbuffer.commands.SetShaderUniformCommand;
 import rs117.hd.opengl.commandbuffer.commands.SetUniformBufferPropertyCommand;
 import rs117.hd.opengl.commandbuffer.commands.ShaderProgramCommand;
+import rs117.hd.opengl.commandbuffer.commands.SignalCommand;
 import rs117.hd.opengl.commandbuffer.commands.SwapBuffersCommand;
 import rs117.hd.opengl.commandbuffer.commands.ToggleCommand;
 import rs117.hd.opengl.commandbuffer.commands.UploadPixelDataCommand;
@@ -69,6 +71,7 @@ public final class CommandBuffer {
 	private final ExecuteCommandBufferCommand EXECUTE_COMMAND_BUFFER_COMMAND = REGISTER_COMMAND(ExecuteCommandBufferCommand::new);
 	private final SwapBuffersCommand SWAP_BUFFER_COMMAND = REGISTER_COMMAND(SwapBuffersCommand::new);
 	private final FrameTimerCommand FRAME_TIMER_COMMAND = REGISTER_COMMAND(FrameTimerCommand::new);
+	private final SignalCommand SIGNAL_COMMAND = REGISTER_COMMAND(SignalCommand::new);
 
 	interface ICreateCommand<T extends BaseCommand> { T construct(); }
 
@@ -173,6 +176,18 @@ public final class CommandBuffer {
 		UPLOAD_PIXEL_DATA_COMMAND.width = width;
 		UPLOAD_PIXEL_DATA_COMMAND.height = height;
 		UPLOAD_PIXEL_DATA_COMMAND.data = data;
+		UPLOAD_PIXEL_DATA_COMMAND.copySema = null;
+		UPLOAD_PIXEL_DATA_COMMAND.write();
+	}
+
+	public void UploadPixelData(int texUnit, int tex, int pbo, int width, int height, int[] data, Semaphore copySema) {
+		UPLOAD_PIXEL_DATA_COMMAND.texUnit = texUnit;
+		UPLOAD_PIXEL_DATA_COMMAND.tex = tex;
+		UPLOAD_PIXEL_DATA_COMMAND.pbo = pbo;
+		UPLOAD_PIXEL_DATA_COMMAND.width = width;
+		UPLOAD_PIXEL_DATA_COMMAND.height = height;
+		UPLOAD_PIXEL_DATA_COMMAND.data = data;
+		UPLOAD_PIXEL_DATA_COMMAND.copySema = copySema;
 		UPLOAD_PIXEL_DATA_COMMAND.write();
 	}
 
@@ -283,6 +298,11 @@ public final class CommandBuffer {
 		BLIT_FRAME_BUFFER_COMMAND.dstHeight = dstHeight;
 		BLIT_FRAME_BUFFER_COMMAND.filter = filter;
 		BLIT_FRAME_BUFFER_COMMAND.write();
+	}
+
+	public void Signal(Semaphore semaphore) {
+		SIGNAL_COMMAND.semaphore = semaphore;
+		SIGNAL_COMMAND.write();
 	}
 
 	public void BeginTimer(Timer timer) {

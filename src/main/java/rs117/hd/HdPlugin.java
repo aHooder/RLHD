@@ -45,10 +45,12 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Semaphore;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.swing.SwingUtilities;
 import lombok.Getter;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.events.*;
@@ -318,6 +320,7 @@ public class HdPlugin extends Plugin {
 	private final int[] actualUiResolution = { 0, 0 }; // Includes stretched mode and DPI scaling
 	private int texUi;
 	private int pboUi;
+	private Semaphore uiSemaphore = new Semaphore(1);
 
 	@Nullable
 	public int[] sceneViewport;
@@ -1320,8 +1323,8 @@ public class HdPlugin extends Plugin {
 		});
 	}
 
+	@SneakyThrows
 	public void prepareInterfaceTexture() {
-
 		int[] resolution = {
 			max(1, client.getCanvasWidth()),
 			max(1, client.getCanvasHeight())
@@ -1355,30 +1358,9 @@ public class HdPlugin extends Plugin {
 		final int width = bufferProvider.getWidth();
 		final int height = bufferProvider.getHeight();
 
-		backbufferCmd.UploadPixelData(TEXTURE_UNIT_UI, texUi, pboUi, width, height, pixels);
+		uiSemaphore.tryAcquire(uiSemaphore.availablePermits());
 
-		/*
-		frameTimer.begin(Timer.MAP_UI_BUFFER);
-		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pboUi);
-		ByteBuffer mappedBuffer = glMapBuffer(GL_PIXEL_UNPACK_BUFFER, GL_WRITE_ONLY);
-		frameTimer.end(Timer.MAP_UI_BUFFER);
-		if (mappedBuffer == null) {
-			log.error("Unable to map interface PBO. Skipping UI...");
-		} else if (width > uiResolution[0] || height > uiResolution[1]) {
-			log.error("UI texture resolution mismatch ({}x{} > {}). Skipping UI...", width, height, uiResolution);
-		} else {
-			frameTimer.begin(Timer.COPY_UI);
-			mappedBuffer.asIntBuffer().put(pixels, 0, width * height);
-			frameTimer.end(Timer.COPY_UI);
-
-			frameTimer.begin(Timer.UPLOAD_UI);
-			glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
-			glActiveTexture(TEXTURE_UNIT_UI);
-			glBindTexture(GL_TEXTURE_2D, texUi);
-			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, 0);
-			frameTimer.end(Timer.UPLOAD_UI);
-		}
-		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);*/
+		backbufferCmd.UploadPixelData(TEXTURE_UNIT_UI, texUi, pboUi, width, height, pixels, uiSemaphore);
 	}
 
 	public void drawUi(int overlayColor) {
@@ -1797,12 +1779,19 @@ public class HdPlugin extends Plugin {
 		return config.expandedMapLoadingChunks();
 	}
 
+	@SneakyThrows
 	@Subscribe(priority = -1) // Run after the low detail plugin
 	public void onBeforeRender(BeforeRender beforeRender) {
 		SKIP_GL_ERROR_CHECKS = !log.isDebugEnabled() || developerTools.isFrameTimingsOverlayEnabled();
 
+		// Wait for UI Copy to finish
+		frameTimer.begin(Timer.COPY_UI);
+		uiSemaphore.acquire();
+		frameTimer.end(Timer.COPY_UI);
+
 		if (client.getScene() == null)
 			return;
+
 		// The game runs significantly slower with lower planes in Chambers of Xeric
 		client.getScene().setMinLevel(isInChambersOfXeric ? client.getPlane() : client.getScene().getMinLevel());
 	}
