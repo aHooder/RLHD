@@ -1801,8 +1801,6 @@ public class HdPlugin extends Plugin {
 	public void onBeforeRender(BeforeRender beforeRender) {
 		SKIP_GL_ERROR_CHECKS = !log.isDebugEnabled() || developerTools.isFrameTimingsOverlayEnabled();
 
-		renderThread.waitForRenderingCompleted();
-
 		if (client.getScene() == null)
 			return;
 		// The game runs significantly slower with lower planes in Chambers of Xeric

@@ -46,60 +46,48 @@ public final class CommandBuffer {
 	}
 
 	private int COMMAND_COUNT = 0;
-	private final BaseCommand[] REGISTERED_COMMANDS = {
-		(DRAW_ARRAYS_COMMAND = REGISTER_COMMAND(DrawArraysCommand::new)),
-		(DRAW_ELEMENTS_COMMAND = REGISTER_COMMAND(DrawElementsCommand::new)),
-		(MULTI_DRAW_ARRAYS_COMMAND = REGISTER_COMMAND(MultiDrawArraysCommand::new)),
-		(BIND_FRAMEBUFFER_COMMAND = REGISTER_COMMAND(BindFrameBufferCommand::new)),
-		(VIEWPORT_COMMAND = REGISTER_COMMAND(ViewportCommand::new)),
-		(CLEAR_COMMAND = REGISTER_COMMAND(ClearCommand::new)),
-		(TOGGLE_COMMAND = REGISTER_COMMAND(ToggleCommand::new)),
-		(SHADER_PROGRAM_COMMAND = REGISTER_COMMAND(ShaderProgramCommand::new)),
-		(COLOR_MASK_COMMAND = REGISTER_COMMAND(ColorMaskCommand::new)),
-		(DEPTH_FUNC_COMMAND = REGISTER_COMMAND(DepthFuncCommand::new)),
-		(DEPTH_MASK_COMMAND = REGISTER_COMMAND(DepthMaskCommand::new)),
-		(BLENDED_FUNC_COMMAND = REGISTER_COMMAND(BlendFuncCommand::new)),
-		(BIND_ELEMENTS_ARRAY_COMMAND = REGISTER_COMMAND(BindElementsArrayCommand::new)),
-		(BIND_VERTEX_ARRAY_COMMAND = REGISTER_COMMAND(BindVertexArrayCommand::new)),
-		(BLIT_FRAME_BUFFER_COMMAND = REGISTER_COMMAND(BlitFrameBufferCommand::new)),
-		(SET_UNIFORM_BUFFER_PROPERTY_COMMAND = REGISTER_COMMAND(SetUniformBufferPropertyCommand::new)),
-		(SET_SHADER_PROPERTY_COMMAND = REGISTER_COMMAND(SetShaderUniformCommand::new)),
-		(UPLOAD_PIXEL_DATA_COMMAND = REGISTER_COMMAND(UploadPixelDataCommand::new)),
-		(EXECUTE_COMMAND_BUFFER_COMMAND = REGISTER_COMMAND(ExecuteCommandBufferCommand::new)),
-		(SWAP_BUFFER_COMMAND = REGISTER_COMMAND(SwapBuffersCommand::new)),
-		(FRAME_TIMER_COMMAND = REGISTER_COMMAND(FrameTimerCommand::new)),
-	};
+	private final BaseCommand[] REGISTERED_COMMANDS = new BaseCommand[100];
 
-	private final DrawArraysCommand DRAW_ARRAYS_COMMAND;
-	private final DrawElementsCommand DRAW_ELEMENTS_COMMAND;
-	private final MultiDrawArraysCommand MULTI_DRAW_ARRAYS_COMMAND;
-	private final ToggleCommand TOGGLE_COMMAND;
-	private final BindFrameBufferCommand BIND_FRAMEBUFFER_COMMAND;
-	private final ViewportCommand VIEWPORT_COMMAND;
-	private final ClearCommand CLEAR_COMMAND;
-	private final ColorMaskCommand COLOR_MASK_COMMAND;
-	private final DepthFuncCommand DEPTH_FUNC_COMMAND;
-	private final DepthMaskCommand DEPTH_MASK_COMMAND;
-	private final BlendFuncCommand BLENDED_FUNC_COMMAND;
-	private final BindElementsArrayCommand BIND_ELEMENTS_ARRAY_COMMAND;
-	private final BindVertexArrayCommand BIND_VERTEX_ARRAY_COMMAND;
-	private final BlitFrameBufferCommand BLIT_FRAME_BUFFER_COMMAND;
-	private final SetUniformBufferPropertyCommand SET_UNIFORM_BUFFER_PROPERTY_COMMAND;
-	private final SetShaderUniformCommand SET_SHADER_PROPERTY_COMMAND;
-	private final ShaderProgramCommand SHADER_PROGRAM_COMMAND;
-	private final UploadPixelDataCommand UPLOAD_PIXEL_DATA_COMMAND;
-	private final ExecuteCommandBufferCommand EXECUTE_COMMAND_BUFFER_COMMAND;
-	private final SwapBuffersCommand SWAP_BUFFER_COMMAND;
-	private final FrameTimerCommand FRAME_TIMER_COMMAND;
+	private final DrawArraysCommand DRAW_ARRAYS_COMMAND = REGISTER_COMMAND(DrawArraysCommand::new);
+	private final DrawElementsCommand DRAW_ELEMENTS_COMMAND = REGISTER_COMMAND(DrawElementsCommand::new);
+	private final MultiDrawArraysCommand MULTI_DRAW_ARRAYS_COMMAND = REGISTER_COMMAND(MultiDrawArraysCommand::new);
+	private final ToggleCommand TOGGLE_COMMAND = REGISTER_COMMAND(ToggleCommand::new);
+	private final BindFrameBufferCommand BIND_FRAMEBUFFER_COMMAND = REGISTER_COMMAND(BindFrameBufferCommand::new);
+	private final ViewportCommand VIEWPORT_COMMAND = REGISTER_COMMAND(ViewportCommand::new);
+	private final ClearCommand CLEAR_COMMAND = REGISTER_COMMAND(ClearCommand::new);
+	private final ColorMaskCommand COLOR_MASK_COMMAND = REGISTER_COMMAND(ColorMaskCommand::new);
+	private final DepthFuncCommand DEPTH_FUNC_COMMAND = REGISTER_COMMAND(DepthFuncCommand::new);
+	private final DepthMaskCommand DEPTH_MASK_COMMAND = REGISTER_COMMAND(DepthMaskCommand::new);
+	private final BlendFuncCommand BLENDED_FUNC_COMMAND = REGISTER_COMMAND(BlendFuncCommand::new);
+	private final BindElementsArrayCommand BIND_ELEMENTS_ARRAY_COMMAND = REGISTER_COMMAND(BindElementsArrayCommand::new);
+	private final BindVertexArrayCommand BIND_VERTEX_ARRAY_COMMAND = REGISTER_COMMAND(BindVertexArrayCommand::new);
+	private final BlitFrameBufferCommand BLIT_FRAME_BUFFER_COMMAND = REGISTER_COMMAND(BlitFrameBufferCommand::new);
+	private final SetUniformBufferPropertyCommand SET_UNIFORM_BUFFER_PROPERTY_COMMAND = REGISTER_COMMAND(SetUniformBufferPropertyCommand::new);
+	private final SetShaderUniformCommand SET_SHADER_PROPERTY_COMMAND = REGISTER_COMMAND(SetShaderUniformCommand::new);
+	private final ShaderProgramCommand SHADER_PROGRAM_COMMAND = REGISTER_COMMAND(ShaderProgramCommand::new);
+	private final UploadPixelDataCommand UPLOAD_PIXEL_DATA_COMMAND = REGISTER_COMMAND(UploadPixelDataCommand::new);
+	private final ExecuteCommandBufferCommand EXECUTE_COMMAND_BUFFER_COMMAND = REGISTER_COMMAND(ExecuteCommandBufferCommand::new);
+	private final SwapBuffersCommand SWAP_BUFFER_COMMAND = REGISTER_COMMAND(SwapBuffersCommand::new);
+	private final FrameTimerCommand FRAME_TIMER_COMMAND = REGISTER_COMMAND(FrameTimerCommand::new);
 
 	interface ICreateCommand<T extends BaseCommand> { T construct(); }
 
 	private <T extends BaseCommand> T REGISTER_COMMAND(ICreateCommand<T> createCommand) {
-		T newCommand = createCommand.construct();
-		newCommand.id = COMMAND_COUNT;
-		newCommand.owner = this;
-		COMMAND_COUNT++;
-		return newCommand;
+		{
+			T ExecutorCommand = createCommand.construct();
+			ExecutorCommand.id = COMMAND_COUNT;
+			ExecutorCommand.owner = this;
+
+			REGISTERED_COMMANDS[COMMAND_COUNT] = ExecutorCommand;
+		}
+
+		{
+			T WriterCommand = createCommand.construct();
+			WriterCommand.id = COMMAND_COUNT;
+			WriterCommand.owner = this;
+			COMMAND_COUNT++;
+			return WriterCommand;
+		}
 	}
 
 	private long[] cmd = new long[1 << 20]; // ~1 million calls
@@ -179,7 +167,6 @@ public final class CommandBuffer {
 	}
 
 	public void UploadPixelData(int texUnit, int tex, int pbo, int width, int height, int[] data) {
-		assert UPLOAD_PIXEL_DATA_COMMAND.data == null;
 		UPLOAD_PIXEL_DATA_COMMAND.texUnit = texUnit;
 		UPLOAD_PIXEL_DATA_COMMAND.tex = tex;
 		UPLOAD_PIXEL_DATA_COMMAND.pbo = pbo;
