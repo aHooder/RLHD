@@ -345,6 +345,8 @@ public class ZoneRenderer implements Renderer {
 		this.maxLevel = maxLevel;
 		this.hideRoofIds = hideRoofIds;
 
+		plugin.renderThread.waitForRenderingCompleted();
+
 		if (scene.getWorldViewId() == WorldView.TOPLEVEL) {
 			preSceneDrawTopLevel(scene, cameraX, cameraY, cameraZ, cameraPitch, cameraYaw);
 		} else {
@@ -361,8 +363,6 @@ public class ZoneRenderer implements Renderer {
 		Scene scene,
 		float cameraX, float cameraY, float cameraZ, float cameraPitch, float cameraYaw
 	) {
-		plugin.renderThread.waitForRenderingCompleted();
-
 		scene.setDrawDistance(plugin.getDrawDistance());
 		plugin.updateSceneFbo();
 
@@ -758,6 +758,9 @@ public class ZoneRenderer implements Renderer {
 	@Override
 	public void postSceneDraw(Scene scene) {
 		log.trace("postSceneDraw({})", scene);
+
+		plugin.renderThread.waitForRenderingCompleted();
+
 		if (scene.getWorldViewId() == WorldView.TOPLEVEL) {
 			postDrawTopLevel();
 		} else {
@@ -773,8 +776,6 @@ public class ZoneRenderer implements Renderer {
 		sceneFboValid = true;
 
 		vaoA.unmap();
-
-		plugin.renderThread.waitForRenderingCompleted();
 
 		// Scene draw state to apply before all recorded commands
 		if (eboAlphaStaging.position() > 0) {

@@ -25,6 +25,7 @@ public class UploadPixelDataCommand extends BaseCommand {
 	public int height;
 	public int[] data;
 	public Semaphore copySema;
+	private ByteBuffer mappedBuffer = null;
 
 	@Override
 	protected void doWrite() {
@@ -57,7 +58,7 @@ public class UploadPixelDataCommand extends BaseCommand {
 	@Override
 	protected void execute() {
 		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo);
-		ByteBuffer mappedBuffer = glMapBuffer(GL_PIXEL_UNPACK_BUFFER, GL_WRITE_ONLY);
+		mappedBuffer = glMapBuffer(GL_PIXEL_UNPACK_BUFFER, GL_WRITE_ONLY, mappedBuffer);
 
 		if (mappedBuffer != null) {
 			mappedBuffer.asIntBuffer().put(data, 0, width * height);

@@ -69,7 +69,6 @@ public final class AWTContextWrapper {
 				.append(action);
 
 			ownershipLog.add(sb.toString());
-			log.debug("Context Ownership: {}", sb);
 
 			sb.setLength(0);
 		}

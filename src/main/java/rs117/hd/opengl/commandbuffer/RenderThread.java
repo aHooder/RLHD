@@ -14,7 +14,7 @@ import rs117.hd.overlays.Timer;
 
 @Slf4j
 public final class RenderThread implements Runnable {
-	private static final boolean VALIDATE = false;
+	private static final boolean VALIDATE = log.isDebugEnabled();
 
 	private static final RenderTask POISON_PILL = new RenderTask();
 	private static final ArrayDeque<RenderTask> TASK_BIN = new ArrayDeque<>();
