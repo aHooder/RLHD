@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.callback.ClientThread;
 import org.lwjgl.opengl.*;
 import rs117.hd.HdPlugin;
+import rs117.hd.opengl.commandbuffer.RenderThread;
 
 import static org.lwjgl.opengl.GL33C.*;
 
@@ -20,6 +21,9 @@ public class FrameTimer {
 
 	@Inject
 	private ClientThread clientThread;
+
+	@Inject
+	private RenderThread renderThread;
 
 	@Inject
 	private HdPlugin plugin;
@@ -46,7 +50,7 @@ public class FrameTimer {
 
 	private void initialize() {
 		clientThread.invoke(() -> {
-			plugin.renderThread.waitForRenderingCompleted();
+			renderThread.waitForRenderingCompleted();
 
 			int[] queryNames = new int[NUM_GPU_TIMERS * 2];
 			glGenQueries(queryNames);
@@ -133,8 +137,10 @@ public class FrameTimer {
 			return;
 
 		if (timer.isGpuTimer) {
-			if (activeTimers[timer.ordinal()])
-				throw new UnsupportedOperationException("Cumulative GPU timing isn't supported");
+			if (activeTimers[timer.ordinal()]) {
+				log.warn("Cumulative GPU timing isn't supported");
+				return;
+			}
 			glQueryCounter(gpuQueries[timer.ordinal() * 2], GL_TIMESTAMP);
 		} else if (!activeTimers[timer.ordinal()]) {
 			cumulativeError += errorCompensation + 1 >> 1;

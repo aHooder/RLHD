@@ -7,15 +7,16 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import javax.inject.Inject;
+import javax.inject.Singleton;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import net.runelite.rlawt.AWTContext;
 import rs117.hd.overlays.FrameTimer;
 import rs117.hd.overlays.Timer;
 
 @Slf4j
+@Singleton
 public final class RenderThread implements Runnable {
-	private static final boolean VALIDATE = log.isDebugEnabled();
-
 	private static final RenderTask POISON_PILL = new RenderTask();
 	private static final ArrayDeque<RenderTask> TASK_BIN = new ArrayDeque<>();
 
@@ -25,18 +26,26 @@ public final class RenderThread implements Runnable {
 	private final AtomicInteger pendingCount = new AtomicInteger(0);
 	private final Object completionLock = new Object();
 	private final AtomicBoolean running = new AtomicBoolean(true);
+	private Thread thread;
 
-	private final FrameTimer timer;
-	private final AWTContextWrapper contextWrapper;
-	private final Thread thread;
+	@Inject
+	private FrameTimer timer;
 
-	public RenderThread(FrameTimer timer, AWTContext context) {
-		this.timer = timer;
-		this.contextWrapper = new AWTContextWrapper(context, VALIDATE);
-		this.thread = new Thread(this, "HD-RenderThread");
-		this.thread.setPriority(Thread.MAX_PRIORITY);
-		this.thread.setDaemon(true);
-		this.thread.start();
+	private Thread clientThread;
+
+	@Inject
+	private AWTContextWrapper contextWrapper;
+
+	@Inject
+	private CommandBufferPool pool;
+
+	public void initialize() {
+		clientThread = Thread.currentThread();
+
+		thread = new Thread(this, "HD-RenderThread");
+		thread.setPriority(Thread.MAX_PRIORITY);
+		thread.setDaemon(true);
+		thread.start();
 	}
 
 	public void submit(CommandBuffer buffer) {
@@ -49,8 +58,9 @@ public final class RenderThread implements Runnable {
 
 		pendingCount.incrementAndGet();
 
-		if (contextWrapper.getOwner() == AWTContextWrapper.Owner.CLIENT)
+		if (contextWrapper.getOwner() == AWTContextWrapper.Owner.CLIENT && Thread.currentThread() == clientThread) {
 			contextWrapper.detachCurrent("detached for render submit");
+		}
 
 		RenderTask newTask = TASK_BIN.poll();
 		if (newTask == null) {
@@ -63,10 +73,18 @@ public final class RenderThread implements Runnable {
 		queue.add(newTask);
 	}
 
+	@SneakyThrows
 	public void waitForRenderingCompleted() {
+		if(pendingCount.get() == 0 && completedTasks.isEmpty() && contextWrapper.getOwner() == AWTContextWrapper.Owner.CLIENT) {
+			return;
+		}
+
 		synchronized (completionLock) {
 			try {
 				while (pendingCount.get() > 0) {
+					if (contextWrapper.getOwner() == AWTContextWrapper.Owner.CLIENT && Thread.currentThread() == clientThread)
+						contextWrapper.detachCurrent("waiting for render completion");
+
 					timer.begin(Timer.RENDER_THREAD_COMPLETION);
 					completionLock.wait();
 					timer.end(Timer.RENDER_THREAD_COMPLETION);
@@ -76,7 +94,10 @@ public final class RenderThread implements Runnable {
 				return;
 			}
 
-			contextWrapper.makeCurrent(AWTContextWrapper.Owner.CLIENT);
+			if (contextWrapper.getOwner() != AWTContextWrapper.Owner.CLIENT && Thread.currentThread() == clientThread) {
+				contextWrapper.awaitOwnership(AWTContextWrapper.Owner.NONE);
+				contextWrapper.makeCurrent(AWTContextWrapper.Owner.CLIENT);
+			}
 
 			synchronized (completedTasks) {
 				for (RenderTask task : completedTasks) {
@@ -86,6 +107,10 @@ public final class RenderThread implements Runnable {
 						} catch (Throwable t) {
 							log.warn("Exception in render completion callback", t);
 						}
+					}
+
+					if(task.buffer.pooled) {
+						pool.release(task.buffer);
 					}
 
 					task.buffer = null;
@@ -98,6 +123,7 @@ public final class RenderThread implements Runnable {
 		}
 	}
 
+	@SneakyThrows
 	@Override
 	public void run() {
 		log.debug("RenderThread started!");
@@ -119,10 +145,13 @@ public final class RenderThread implements Runnable {
 				continue;
 			}
 
-			contextWrapper.makeCurrent(AWTContextWrapper.Owner.RENDER_THREAD);
+			if (contextWrapper.getOwner() != AWTContextWrapper.Owner.RENDER_THREAD) {
+				contextWrapper.awaitOwnership(AWTContextWrapper.Owner.NONE);
+				contextWrapper.makeCurrent(AWTContextWrapper.Owner.RENDER_THREAD);
+			}
 
 			try {
-				task.buffer.submit();
+				task.buffer.execute();
 			} catch (Throwable t) {
 				log.error("Error during CommandBuffer execution", t);
 			} finally {
@@ -160,6 +189,7 @@ public final class RenderThread implements Runnable {
 				Thread.currentThread().interrupt();
 			}
 		}
+		thread = null;
 	}
 
 	private static class RenderTask {

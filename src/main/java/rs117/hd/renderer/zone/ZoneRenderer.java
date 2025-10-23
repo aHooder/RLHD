@@ -32,7 +32,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.CountDownLatch;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
@@ -48,7 +47,10 @@ import rs117.hd.HdPlugin;
 import rs117.hd.HdPluginConfig;
 import rs117.hd.config.ColorFilter;
 import rs117.hd.config.DynamicLights;
+import rs117.hd.opengl.commandbuffer.AWTContextWrapper;
 import rs117.hd.opengl.commandbuffer.CommandBuffer;
+import rs117.hd.opengl.commandbuffer.CommandBufferPool;
+import rs117.hd.opengl.commandbuffer.RenderThread;
 import rs117.hd.opengl.shader.SceneShaderProgram;
 import rs117.hd.opengl.shader.ShaderException;
 import rs117.hd.opengl.shader.ShaderIncludes;
@@ -103,7 +105,16 @@ public class ZoneRenderer implements Renderer {
 
 	@Inject
 	private ClientThread clientThread;
+	
+	@Inject
+	private RenderThread renderThread;
 
+	@Inject
+	private AWTContextWrapper awtContextWrapper;
+	
+	@Inject
+	private CommandBufferPool commandBufferPool;
+	
 	@Inject
 	private DrawManager drawManager;
 
@@ -152,10 +163,7 @@ public class ZoneRenderer implements Renderer {
 	private int minLevel, level, maxLevel;
 	private Set<Integer> hideRoofIds;
 
-	private final CommandBuffer scenePassCmd = new CommandBuffer().SetExecutionTimer(Timer.SCENE_COMMAND_BUFFER_EXECUTE);
 	private final CommandBuffer sceneDrawCmd = new CommandBuffer();
-
-	private final CommandBuffer directionalPassCmd = new CommandBuffer().SetExecutionTimer(Timer.SHADOW_COMMAND_BUFFER_EXECUTE);
 	private final CommandBuffer directionalDrawCmd = new CommandBuffer();
 
 	private VAO.VAOList vaoO;
@@ -271,7 +279,7 @@ public class ZoneRenderer implements Renderer {
 
 	@Override
 	public void waitUntilIdle() {
-		plugin.renderThread.waitForRenderingCompleted();
+		renderThread.waitForRenderingCompleted();
 		glFinish();
 	}
 
@@ -345,8 +353,6 @@ public class ZoneRenderer implements Renderer {
 		this.maxLevel = maxLevel;
 		this.hideRoofIds = hideRoofIds;
 
-		plugin.renderThread.waitForRenderingCompleted();
-
 		if (scene.getWorldViewId() == WorldView.TOPLEVEL) {
 			preSceneDrawTopLevel(scene, cameraX, cameraY, cameraZ, cameraPitch, cameraYaw);
 		} else {
@@ -363,6 +369,8 @@ public class ZoneRenderer implements Renderer {
 		Scene scene,
 		float cameraX, float cameraY, float cameraZ, float cameraPitch, float cameraYaw
 	) {
+		renderThread.waitForRenderingCompleted();
+
 		scene.setDrawDistance(plugin.getDrawDistance());
 		plugin.updateSceneFbo();
 
@@ -745,7 +753,6 @@ public class ZoneRenderer implements Renderer {
 		eboAlphaStaging.clear();
 
 		// Reset Command Buffers
-		plugin.backbufferCmd.reset();
 		sceneDrawCmd.reset();
 		directionalDrawCmd.reset();
 
@@ -758,9 +765,6 @@ public class ZoneRenderer implements Renderer {
 	@Override
 	public void postSceneDraw(Scene scene) {
 		log.trace("postSceneDraw({})", scene);
-
-		plugin.renderThread.waitForRenderingCompleted();
-
 		if (scene.getWorldViewId() == WorldView.TOPLEVEL) {
 			postDrawTopLevel();
 		} else {
@@ -784,43 +788,40 @@ public class ZoneRenderer implements Renderer {
 			glBufferData(GL_ELEMENT_ARRAY_BUFFER, eboAlphaStaging.getBuffer(), GL_STREAM_DRAW);
 		}
 
-		directionalPassCmd.reset();
-		scenePassCmd.reset();
+		CommandBuffer cmd = commandBufferPool.acquire();
 
 		if (plugin.configShadowsEnabled &&
 			plugin.fboShadowMap != 0 &&
 			environmentManager.currentDirectionalStrength > 0
 		) {
 			// Render to the shadow depth map
-			directionalPassCmd.BeginTimer(Timer.RENDER_FRAME);
-			directionalPassCmd.BeginTimer(Timer.RENDER_SHADOWS);
-			directionalPassCmd.Viewport(0, 0, plugin.shadowMapResolution, plugin.shadowMapResolution);
-			directionalPassCmd.BindFrameBuffer(GL_FRAMEBUFFER, plugin.fboShadowMap);
-			directionalPassCmd.ClearDepth(1.0f);
+			cmd.BeginTimer(Timer.RENDER_FRAME);
+			cmd.BeginTimer(Timer.RENDER_SHADOWS);
+			cmd.Viewport(0, 0, plugin.shadowMapResolution, plugin.shadowMapResolution);
+			cmd.BindFrameBuffer(GL_FRAMEBUFFER, plugin.fboShadowMap);
+			cmd.ClearDepth(1.0f);
 
-			directionalPassCmd.Enable(GL_DEPTH_TEST);
-			directionalPassCmd.Disable(GL_CULL_FACE);
-			directionalPassCmd.SetDepthFunc(GL_LEQUAL);
+			cmd.Enable(GL_DEPTH_TEST);
+			cmd.Disable(GL_CULL_FACE);
+			cmd.SetDepthFunc(GL_LEQUAL);
 
-			directionalPassCmd.SetShaderProgram(plugin.shadowProgram);
+			cmd.SetShaderProgram(plugin.shadowProgram);
 
-			directionalPassCmd.ExecuteCommandBuffer(directionalDrawCmd);
+			cmd.ExecuteCommandBuffer(directionalDrawCmd);
 
-			directionalPassCmd.Disable(GL_DEPTH_TEST);
+			cmd.Disable(GL_DEPTH_TEST);
 
-			directionalPassCmd.EndTimer(Timer.RENDER_SHADOWS);
-
-			plugin.renderThread.submit(directionalPassCmd);
+			cmd.EndTimer(Timer.RENDER_SHADOWS);
 		} else {
-			scenePassCmd.BeginTimer(Timer.RENDER_FRAME);
+			cmd.BeginTimer(Timer.RENDER_FRAME);
 		}
 
-		scenePassCmd.BeginTimer(Timer.RENDER_SCENE);
-		scenePassCmd.SetShaderProgram(sceneProgram);
+		cmd.BeginTimer(Timer.RENDER_SCENE);
+		cmd.SetShaderProgram(sceneProgram);
 
-		scenePassCmd.BindFrameBuffer(GL_DRAW_FRAMEBUFFER, plugin.fboScene);
-		scenePassCmd.Toggle(GL_MULTISAMPLE, plugin.msaaSamples > 1);
-		scenePassCmd.Viewport(0, 0, plugin.sceneResolution[0], plugin.sceneResolution[1]);
+		cmd.BindFrameBuffer(GL_DRAW_FRAMEBUFFER, plugin.fboScene);
+		cmd.Toggle(GL_MULTISAMPLE, plugin.msaaSamples > 1);
+		cmd.Viewport(0, 0, plugin.sceneResolution[0], plugin.sceneResolution[1]);
 
 		float[] fogColor = ColorUtils.linearToSrgb(environmentManager.currentFogColor);
 		float[] gammaCorrectedFogColor = pow(fogColor, plugin.getGammaCorrection());
@@ -831,26 +832,26 @@ public class ZoneRenderer implements Renderer {
 			1f
 		);
 
-		scenePassCmd.BeginTimer(Timer.CLEAR_SCENE);
-		scenePassCmd.ClearColorAndDepth(gammaCorrectedFogColor[0], gammaCorrectedFogColor[1], gammaCorrectedFogColor[2], 1f, 0.0f);
-		scenePassCmd.EndTimer(Timer.CLEAR_SCENE);
+		cmd.BeginTimer(Timer.CLEAR_SCENE);
+		cmd.ClearColorAndDepth(gammaCorrectedFogColor[0], gammaCorrectedFogColor[1], gammaCorrectedFogColor[2], 1f, 0.0f);
+		cmd.EndTimer(Timer.CLEAR_SCENE);
 
-		scenePassCmd.Enable(GL_CULL_FACE);
-		scenePassCmd.Enable(GL_DEPTH_TEST);
-		scenePassCmd.SetDepthFunc(GL_GREATER);
+		cmd.Enable(GL_CULL_FACE);
+		cmd.Enable(GL_DEPTH_TEST);
+		cmd.SetDepthFunc(GL_GREATER);
 
-		scenePassCmd.Enable(GL_BLEND);
-		scenePassCmd.BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
+		cmd.Enable(GL_BLEND);
+		cmd.BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
 
-		scenePassCmd.ExecuteCommandBuffer(sceneDrawCmd);
+		cmd.ExecuteCommandBuffer(sceneDrawCmd);
 
-		scenePassCmd.Disable(GL_CULL_FACE);
-		scenePassCmd.Disable(GL_DEPTH_TEST);
-		scenePassCmd.Disable(GL_BLEND);
+		cmd.Disable(GL_CULL_FACE);
+		cmd.Disable(GL_DEPTH_TEST);
+		cmd.Disable(GL_BLEND);
 
-		scenePassCmd.EndTimer(Timer.RENDER_SCENE);
+		cmd.EndTimer(Timer.RENDER_SCENE);
 
-		plugin.renderThread.submit(scenePassCmd);
+		renderThread.submit(cmd);
 
 		frameTimer.end(Timer.DRAW_SCENE);
 
@@ -891,8 +892,6 @@ public class ZoneRenderer implements Renderer {
 		if (!z.initialized || z.sizeO == 0)
 			return;
 
-		plugin.renderThread.waitForRenderingCompleted();
-
 		int offset = ctx.sceneContext.sceneOffset >> 3;
 		if (z.inSceneFrustum) {
 			sceneDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, uboWorldViews.getIndex(scene));
@@ -927,8 +926,6 @@ public class ZoneRenderer implements Renderer {
 		Zone z = ctx.zones[zx][zz];
 		if (!z.initialized)
 			return;
-
-		plugin.renderThread.waitForRenderingCompleted();
 
 		boolean hasAlpha = z.sizeA != 0 || !z.alphaModels.isEmpty();
 		boolean renderWater = z.inSceneFrustum && level == 0 && z.hasWater;
@@ -990,8 +987,6 @@ public class ZoneRenderer implements Renderer {
 		WorldViewContext ctx = context(scene);
 		if (ctx == null)
 			return;
-
-		plugin.renderThread.waitForRenderingCompleted();
 
 		switch (pass) {
 			case DrawCallbacks.PASS_OPAQUE:
@@ -1064,8 +1059,6 @@ public class ZoneRenderer implements Renderer {
 		if (modelOverride.hide)
 			return;
 
-		plugin.renderThread.waitForRenderingCompleted();
-
 		int preOrientation = HDUtils.getModelPreOrientation(HDUtils.getObjectConfig(tileObject));
 
 		byte[] transparencies = m.getFaceTransparencies();
@@ -1118,8 +1111,6 @@ public class ZoneRenderer implements Renderer {
 		ModelOverride modelOverride = modelOverrideManager.getOverride(uuid, worldPos);
 		if (modelOverride.hide)
 			return;
-
-		plugin.renderThread.waitForRenderingCompleted();
 
 		int preOrientation = HDUtils.getModelPreOrientation(gameObject.getConfig());
 
@@ -1233,7 +1224,7 @@ public class ZoneRenderer implements Renderer {
 				if (!zone.invalidate)
 					continue;
 
-				plugin.renderThread.waitForRenderingCompleted();
+				renderThread.waitForRenderingCompleted();
 
 				assert zone.initialized;
 				zone.free();
@@ -1289,37 +1280,32 @@ public class ZoneRenderer implements Renderer {
 			return;
 		}
 
+		CommandBuffer cmd = commandBufferPool.acquire();
 		if (sceneFboValid && plugin.sceneResolution != null && plugin.sceneViewport != null) {
-			plugin.backbufferCmd.BlitFramebuffer(
-				plugin.fboScene, plugin.fboSceneResolve, plugin.awtContext.getFramebuffer(false),
+			cmd.BlitFramebuffer(
+				plugin.fboScene, plugin.fboSceneResolve, awtContextWrapper.getBackBuffer(),
 				plugin.sceneResolution[0], plugin.sceneResolution[1],
 				plugin.sceneViewport[0], plugin.sceneViewport[1],
 				plugin.sceneViewport[2], plugin.sceneViewport[3],
 				config.sceneScalingMode().glFilter);
 		} else {
-			plugin.backbufferCmd.BindFrameBuffer(GL_FRAMEBUFFER, plugin.awtContext.getFramebuffer(false));
-			plugin.backbufferCmd.ClearColor(0, 0, 0, 1);
+			cmd.BindFrameBuffer(GL_FRAMEBUFFER, awtContextWrapper.getBackBuffer());
+			cmd.ClearColor(0, 0, 0, 1);
 		}
 
-		plugin.drawUi(overlayColor);
+		plugin.drawUi(overlayColor, cmd);
 
-		plugin.backbufferCmd.BeginTimer(Timer.SWAP_BUFFERS);
-		plugin.backbufferCmd.SwapBuffers(plugin.awtContext);
-		plugin.backbufferCmd.EndTimer(Timer.SWAP_BUFFERS);
-		plugin.backbufferCmd.EndTimer(Timer.RENDER_FRAME);
+		cmd.BeginTimer(Timer.SWAP_BUFFERS);
+		cmd.SwapBuffers(awtContextWrapper.getContext());
+		cmd.EndTimer(Timer.SWAP_BUFFERS);
+		cmd.EndTimer(Timer.RENDER_FRAME);
 
 		frameTimer.end(Timer.DRAW_FRAME);
-		plugin.renderThread.submit(plugin.backbufferCmd, this::onBackBufferSwapCompleted);
-
-		if(client.getGameState().getState() < GameState.LOGGED_IN.getState() || root.sceneContext == null) {
-			plugin.renderThread.waitForRenderingCompleted();
-		}
+		renderThread.submit(cmd, this::onBackBufferSwapCompleted);
 	}
 
 	public void onBackBufferSwapCompleted() {
 		frameTimer.endFrameAndReset();
-
-		plugin.backbufferCmd.reset();
 	}
 
 	@Subscribe
@@ -1343,8 +1329,6 @@ public class ZoneRenderer implements Renderer {
 	public void reloadScene() {
 		if (client.getGameState().getState() < GameState.LOGGED_IN.getState() || root.sceneContext == null)
 			return;
-
-		plugin.renderThread.waitForRenderingCompleted();
 
 		proceduralGenerator.generateSceneData(root.sceneContext);
 		for (int i = 0; i < NUM_ZONES; i++)
@@ -1510,11 +1494,8 @@ public class ZoneRenderer implements Renderer {
 		);
 
 		// allocate buffers for zones which require upload
-		CountDownLatch latch = new CountDownLatch(1);
-		clientThread.invoke(() ->
-		{
-			plugin.renderThread.waitForRenderingCompleted();
-
+		CommandBuffer cmd = commandBufferPool.acquire();
+		cmd.Callback(() -> {
 			for (int x = 0; x < EXTENDED_SCENE_SIZE >> 3; ++x) {
 				for (int z = 0; z < EXTENDED_SCENE_SIZE >> 3; ++z) {
 					Zone zone = newZones[x][z];
@@ -1541,14 +1522,9 @@ public class ZoneRenderer implements Renderer {
 					zone.initialize(o, a, eboAlpha);
 				}
 			}
-
-			latch.countDown();
 		});
-		try {
-			latch.await();
-		} catch (InterruptedException e) {
-			throw new RuntimeException(e);
-		}
+		renderThread.submit(cmd);
+		renderThread.waitForRenderingCompleted();
 
 		// upload zones
 		sw = Stopwatch.createStarted();
@@ -1652,11 +1628,9 @@ public class ZoneRenderer implements Renderer {
 				sceneUploader.zoneSize(sceneContext, ctx.zones[x][z], x, z);
 
 		// allocate buffers for zones which require upload
-		CountDownLatch latch = new CountDownLatch(1);
-		clientThread.invoke(() ->
+		CommandBuffer cmd = commandBufferPool.acquire();
+		cmd.Callback(() ->
 		{
-			plugin.renderThread.waitForRenderingCompleted();
-
 			for (int x = 0; x < ctx.sizeX; ++x) {
 				for (int z = 0; z < ctx.sizeZ; ++z) {
 					Zone zone = ctx.zones[x][z];
@@ -1679,14 +1653,9 @@ public class ZoneRenderer implements Renderer {
 					zone.initialize(o, a, eboAlpha);
 				}
 			}
-
-			latch.countDown();
 		});
-		try {
-			latch.await();
-		} catch (InterruptedException e) {
-			throw new RuntimeException(e);
-		}
+		renderThread.submit(cmd);
+		renderThread.waitForRenderingCompleted();
 
 		for (int x = 0; x < ctx.sizeX; ++x)
 			for (int z = 0; z < ctx.sizeZ; ++z)
@@ -1710,6 +1679,9 @@ public class ZoneRenderer implements Renderer {
 	@Override
 	public void swapScene(Scene scene) {
 		log.trace("swapScene({})", scene);
+
+		renderThread.waitForRenderingCompleted();
+
 		if (scene.getWorldViewId() > -1) {
 			swapSub(scene);
 			return;
@@ -1727,6 +1699,7 @@ public class ZoneRenderer implements Renderer {
 //			if (nextSceneContext == null)
 				return; // Return early if scene loading failed
 		}
+
 
 		lightManager.loadSceneLights(nextSceneContext, root.sceneContext);
 		fishingSpotReplacer.despawnRuneLiteObjects();

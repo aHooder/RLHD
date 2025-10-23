@@ -35,8 +35,8 @@ public class UploadPixelDataCommand extends BaseCommand {
 		write32(width);
 		write32(height);
 		writeObject(data);
+		writeFlag(copySema != null);
 		if(copySema != null) {
-			writeFlag(true);
 			writeObject(copySema);
 		}
 		data = null;

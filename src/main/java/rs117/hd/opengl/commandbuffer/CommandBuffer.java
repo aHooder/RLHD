@@ -10,6 +10,7 @@ import rs117.hd.opengl.commandbuffer.commands.BindFrameBufferCommand;
 import rs117.hd.opengl.commandbuffer.commands.BindVertexArrayCommand;
 import rs117.hd.opengl.commandbuffer.commands.BlendFuncCommand;
 import rs117.hd.opengl.commandbuffer.commands.BlitFrameBufferCommand;
+import rs117.hd.opengl.commandbuffer.commands.CallbackCommand;
 import rs117.hd.opengl.commandbuffer.commands.ClearCommand;
 import rs117.hd.opengl.commandbuffer.commands.ColorMaskCommand;
 import rs117.hd.opengl.commandbuffer.commands.DepthFuncCommand;
@@ -71,6 +72,7 @@ public final class CommandBuffer {
 	private final ExecuteCommandBufferCommand EXECUTE_COMMAND_BUFFER_COMMAND = REGISTER_COMMAND(ExecuteCommandBufferCommand::new);
 	private final SwapBuffersCommand SWAP_BUFFER_COMMAND = REGISTER_COMMAND(SwapBuffersCommand::new);
 	private final FrameTimerCommand FRAME_TIMER_COMMAND = REGISTER_COMMAND(FrameTimerCommand::new);
+	private final CallbackCommand CALLBACK_COMMAND = REGISTER_COMMAND(CallbackCommand::new);
 	private final SignalCommand SIGNAL_COMMAND = REGISTER_COMMAND(SignalCommand::new);
 
 	interface ICreateCommand<T extends BaseCommand> { T construct(); }
@@ -93,7 +95,7 @@ public final class CommandBuffer {
 		}
 	}
 
-	private long[] cmd = new long[1 << 20]; // ~1 million calls
+	private long[] cmd = new long[1000];
 
 	private final UniformBuffer<?>[] pendingUBOUploads = new UniformBuffer[100];
 	private int pendingUBOUploadsCount = 0;
@@ -106,6 +108,8 @@ public final class CommandBuffer {
 
 	private int readHead = 0;
 	private int readBitHead = 0;
+
+	protected boolean pooled;
 
 	private Timer executionTimer = null;
 
@@ -300,6 +304,11 @@ public final class CommandBuffer {
 		BLIT_FRAME_BUFFER_COMMAND.write();
 	}
 
+	public void Callback(CallbackCommand.ICallback callback) {
+		CALLBACK_COMMAND.callback = callback;
+		CALLBACK_COMMAND.write();
+	}
+
 	public void Signal(Semaphore semaphore) {
 		SIGNAL_COMMAND.semaphore = semaphore;
 		SIGNAL_COMMAND.write();
@@ -351,7 +360,7 @@ public final class CommandBuffer {
 		}
 	}
 
-	public void submit() {
+	public void execute() {
 		readHead = 0;
 		readBitHead = 0;
 

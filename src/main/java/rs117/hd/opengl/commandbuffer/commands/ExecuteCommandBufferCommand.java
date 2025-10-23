@@ -19,7 +19,7 @@ public class ExecuteCommandBufferCommand extends BaseCommand {
 
 	@Override
 	protected void execute() {
-		cmd.submit();
+		cmd.execute();
 	}
 
 	@Override
