@@ -1,5 +1,6 @@
 package rs117.hd.opengl.commandbuffer.commands;
 
+import org.lwjgl.system.MemoryStack;
 import rs117.hd.opengl.commandbuffer.BaseCommand;
 
 import static org.lwjgl.opengl.GL15.GL_ELEMENT_ARRAY_BUFFER;
@@ -16,12 +17,12 @@ public final class BindElementsArrayCommand extends BaseCommand {
 	}
 
 	@Override
-	protected void doRead() {
+	protected void doRead(MemoryStack stack) {
 		ebo = read32();
 	}
 
 	@Override
-	public void execute() {
+	public void execute(MemoryStack stack) {
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
 	}
 

@@ -162,9 +162,10 @@ public class ZoneRenderer implements Renderer {
 
 	private int minLevel, level, maxLevel;
 	private Set<Integer> hideRoofIds;
+	private boolean isDrawingScene;
 
-	private final CommandBuffer sceneDrawCmd = new CommandBuffer();
-	private final CommandBuffer directionalDrawCmd = new CommandBuffer();
+	private final CommandBuffer zoneDrawCallBuffer = new CommandBuffer();
+	private final CommandBuffer zoneShadowDrawCallBuffer = new CommandBuffer();
 
 	private VAO.VAOList vaoO;
 	private VAO.VAOList vaoA;
@@ -360,8 +361,8 @@ public class ZoneRenderer implements Renderer {
 			vaoO.addRange(topLevel);
 			vaoPO.addRange(topLevel);
 			vaoPOShadow.addRange(topLevel);
-			sceneDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, uboWorldViews.getIndex(scene));
-			directionalDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, uboWorldViews.getIndex(scene));
+			zoneDrawCallBuffer.SetUniformProperty(uboCommandBuffer.worldViewIndex, uboWorldViews.getIndex(scene));
+			zoneShadowDrawCallBuffer.SetUniformProperty(uboCommandBuffer.worldViewIndex, uboWorldViews.getIndex(scene));
 		}
 	}
 
@@ -370,6 +371,7 @@ public class ZoneRenderer implements Renderer {
 		float cameraX, float cameraY, float cameraZ, float cameraPitch, float cameraYaw
 	) {
 		renderThread.waitForRenderingCompleted();
+		isDrawingScene = true;
 
 		scene.setDrawDistance(plugin.getDrawDistance());
 		plugin.updateSceneFbo();
@@ -753,11 +755,11 @@ public class ZoneRenderer implements Renderer {
 		eboAlphaStaging.clear();
 
 		// Reset Command Buffers
-		sceneDrawCmd.reset();
-		directionalDrawCmd.reset();
+		zoneDrawCallBuffer.reset();
+		zoneShadowDrawCallBuffer.reset();
 
-		sceneDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, uboWorldViews.getIndex(null));
-		directionalDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, uboWorldViews.getIndex(null));
+		zoneDrawCallBuffer.SetUniformProperty(uboCommandBuffer.worldViewIndex, uboWorldViews.getIndex(null));
+		zoneShadowDrawCallBuffer.SetUniformProperty(uboCommandBuffer.worldViewIndex, uboWorldViews.getIndex(null));
 
 		checkGLErrors();
 	}
@@ -768,8 +770,8 @@ public class ZoneRenderer implements Renderer {
 		if (scene.getWorldViewId() == WorldView.TOPLEVEL) {
 			postDrawTopLevel();
 		} else {
-			sceneDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, uboWorldViews.getIndex(null));
-			directionalDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, uboWorldViews.getIndex(null));
+			zoneDrawCallBuffer.SetUniformProperty(uboCommandBuffer.worldViewIndex, uboWorldViews.getIndex(null));
+			zoneShadowDrawCallBuffer.SetUniformProperty(uboCommandBuffer.worldViewIndex, uboWorldViews.getIndex(null));
 		}
 	}
 
@@ -807,7 +809,7 @@ public class ZoneRenderer implements Renderer {
 
 			cmd.SetShaderProgram(plugin.shadowProgram);
 
-			cmd.ExecuteCommandBuffer(directionalDrawCmd);
+			cmd.ExecuteCommandBuffer(zoneShadowDrawCallBuffer);
 
 			cmd.Disable(GL_DEPTH_TEST);
 
@@ -843,7 +845,7 @@ public class ZoneRenderer implements Renderer {
 		cmd.Enable(GL_BLEND);
 		cmd.BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
 
-		cmd.ExecuteCommandBuffer(sceneDrawCmd);
+		cmd.ExecuteCommandBuffer(zoneDrawCallBuffer);
 
 		cmd.Disable(GL_CULL_FACE);
 		cmd.Disable(GL_DEPTH_TEST);
@@ -894,15 +896,15 @@ public class ZoneRenderer implements Renderer {
 
 		int offset = ctx.sceneContext.sceneOffset >> 3;
 		if (z.inSceneFrustum) {
-			sceneDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, uboWorldViews.getIndex(scene));
-			z.renderOpaque(uboCommandBuffer, sceneDrawCmd, zx - offset, zz - offset, minLevel, level, maxLevel, hideRoofIds);
+			zoneDrawCallBuffer.SetUniformProperty(uboCommandBuffer.worldViewIndex, uboWorldViews.getIndex(scene));
+			z.renderOpaque(uboCommandBuffer, zoneDrawCallBuffer, zx - offset, zz - offset, minLevel, level, maxLevel, hideRoofIds);
 		}
 
 		if (z.inShadowFrustum) {
-			directionalDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, uboWorldViews.getIndex(scene));
+			zoneShadowDrawCallBuffer.SetUniformProperty(uboCommandBuffer.worldViewIndex, uboWorldViews.getIndex(scene));
 			z.renderOpaque(
 				uboCommandBuffer,
-				directionalDrawCmd,
+				zoneShadowDrawCallBuffer,
 				zx - offset,
 				zz - offset,
 				minLevel,
@@ -931,11 +933,11 @@ public class ZoneRenderer implements Renderer {
 		boolean renderWater = z.inSceneFrustum && level == 0 && z.hasWater;
 
 		if (renderWater || hasAlpha)
-			sceneDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, uboWorldViews.getIndex(scene));
+			zoneDrawCallBuffer.SetUniformProperty(uboCommandBuffer.worldViewIndex, uboWorldViews.getIndex(scene));
 
 		int offset = ctx.sceneContext.sceneOffset >> 3;
 		if (renderWater)
-			z.renderOpaqueLevel(uboCommandBuffer, sceneDrawCmd, zx - offset, zz - offset, Zone.LEVEL_WATER_SURFACE);
+			z.renderOpaqueLevel(uboCommandBuffer, zoneDrawCallBuffer, zx - offset, zz - offset, Zone.LEVEL_WATER_SURFACE);
 
 		if (!hasAlpha)
 			return;
@@ -948,7 +950,7 @@ public class ZoneRenderer implements Renderer {
 		if (z.inSceneFrustum) {
 			z.renderAlpha(
 				uboCommandBuffer,
-				sceneDrawCmd,
+				zoneDrawCallBuffer,
 				zx - offset,
 				zz - offset,
 				minLevel,
@@ -962,10 +964,10 @@ public class ZoneRenderer implements Renderer {
 		}
 
 		if (z.inShadowFrustum) {
-			directionalDrawCmd.SetUniformProperty(uboCommandBuffer.worldViewIndex, uboWorldViews.getIndex(scene));
+			zoneShadowDrawCallBuffer.SetUniformProperty(uboCommandBuffer.worldViewIndex, uboWorldViews.getIndex(scene));
 			z.renderAlpha(
 				uboCommandBuffer,
-				directionalDrawCmd,
+				zoneShadowDrawCallBuffer,
 				zx - offset,
 				zz - offset,
 				minLevel,
@@ -995,31 +997,31 @@ public class ZoneRenderer implements Renderer {
 				vaoPOShadow.addRange(scene);
 
 				if (scene.getWorldViewId() == -1) {
-					sceneDrawCmd.SetUniformProperty(uboCommandBuffer.sceneBase, 0, 0, 0);
-					directionalDrawCmd.SetUniformProperty(uboCommandBuffer.sceneBase, 0, 0, 0);
+					zoneDrawCallBuffer.SetUniformProperty(uboCommandBuffer.sceneBase, 0, 0, 0);
+					zoneShadowDrawCallBuffer.SetUniformProperty(uboCommandBuffer.sceneBase, 0, 0, 0);
 
 					// Draw opaque
 					vaoO.unmap();
-					vaoO.drawAll(this, sceneDrawCmd);
-					vaoO.drawAll(this, directionalDrawCmd);
+					vaoO.drawAll(this, zoneDrawCallBuffer);
+					vaoO.drawAll(this, zoneShadowDrawCallBuffer);
 					vaoO.resetAll();
 
 					vaoPO.unmap();
 
 					// Draw player shadows
 					vaoPOShadow.unmap();
-					vaoPOShadow.drawAll(this, directionalDrawCmd);
+					vaoPOShadow.drawAll(this, zoneShadowDrawCallBuffer);
 					vaoPOShadow.resetAll();
 
 					// Draw players opaque, without depth writes
-					sceneDrawCmd.DepthMask(false);
-					vaoPO.drawAll(this, sceneDrawCmd);
-					sceneDrawCmd.DepthMask(true);
+					zoneDrawCallBuffer.DepthMask(false);
+					vaoPO.drawAll(this, zoneDrawCallBuffer);
+					zoneDrawCallBuffer.DepthMask(true);
 
 					// Draw players opaque, writing only depth
-					sceneDrawCmd.ColorMask(false, false, false, false);
-					vaoPO.drawAll(this, sceneDrawCmd);
-					sceneDrawCmd.ColorMask(true, true, true, true);
+					zoneDrawCallBuffer.ColorMask(false, false, false, false);
+					vaoPO.drawAll(this, zoneDrawCallBuffer);
+					zoneDrawCallBuffer.ColorMask(true, true, true, true);
 
 					vaoPO.resetAll();
 				}
@@ -1270,6 +1272,10 @@ public class ZoneRenderer implements Renderer {
 			return;
 		}
 
+		if(!isDrawingScene) {
+			renderThread.waitForRenderingCompleted();
+		}
+
 		try {
 			plugin.prepareInterfaceTexture();
 		} catch (Exception ex) {
@@ -1306,6 +1312,7 @@ public class ZoneRenderer implements Renderer {
 
 	public void onBackBufferSwapCompleted() {
 		frameTimer.endFrameAndReset();
+		isDrawingScene = false;
 	}
 
 	@Subscribe

@@ -1,5 +1,6 @@
 package rs117.hd.opengl.commandbuffer.commands;
 
+import org.lwjgl.system.MemoryStack;
 import rs117.hd.opengl.commandbuffer.BaseCommand;
 
 public class CallbackCommand extends BaseCommand {
@@ -15,12 +16,12 @@ public class CallbackCommand extends BaseCommand {
 	}
 
 	@Override
-	protected void doRead() {
+	protected void doRead(MemoryStack stack) {
 		callback = readObject();
 	}
 
 	@Override
-	public void execute() {
+	public void execute(MemoryStack stack) {
 		callback.run();
 	}
 

@@ -45,6 +45,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.LockSupport;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.swing.SwingUtilities;
@@ -56,6 +57,7 @@ import net.runelite.api.events.*;
 import net.runelite.api.hooks.*;
 import net.runelite.client.RuneLite;
 import net.runelite.client.callback.ClientThread;
+import net.runelite.client.callback.Hooks;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.eventbus.Subscribe;
@@ -293,6 +295,9 @@ public class HdPlugin extends Plugin {
 	private CommandBufferPool commandBufferPool;
 
 	@Inject
+	private Hooks hooks;
+
+	@Inject
 	public HDVariables vars;
 
 	public Renderer renderer;
@@ -326,8 +331,9 @@ public class HdPlugin extends Plugin {
 	private final int[] actualUiResolution = { 0, 0 }; // Includes stretched mode and DPI scaling
 	private int texUi;
 	private int pboUi;
-	private int[] stagingUIPixels;
-	private final AtomicBoolean copyInFlight = new AtomicBoolean(false);
+	private boolean uploadInFlight = false;
+	private final AtomicBoolean stageTrigger = new AtomicBoolean(false);
+	private final AtomicBoolean stageComplete = new AtomicBoolean(false);
 
 	@Nullable
 	public int[] sceneViewport;
@@ -599,6 +605,8 @@ public class HdPlugin extends Plugin {
 				gammaCalibrationOverlay.initialize();
 				npcDisplacementCache.initialize();
 
+				hooks.registerRenderableDrawListener(this::onDraw);
+
 				isActive = true;
 				hasLoggedIn = client.getGameState().getState() > GameState.LOGGING_IN.getState();
 				redrawPreviousFrame = false;
@@ -619,6 +627,21 @@ public class HdPlugin extends Plugin {
 			}
 			return true;
 		});
+	}
+
+	@SneakyThrows
+	private boolean onDraw(Renderable renderable, boolean drawingUI) {
+		if (uploadInFlight) {
+			frameTimer.begin(Timer.COPY_UI);
+
+			stageTrigger.set(true);
+			while (!stageComplete.get()) {
+				LockSupport.parkNanos(100000);
+			}
+			frameTimer.end(Timer.COPY_UI);
+			uploadInFlight = false;
+		}
+		return true;
 	}
 
 	@Override
@@ -1030,8 +1053,6 @@ public class HdPlugin extends Plugin {
 	public void updateTiledLightingFbo() {
 		assert configTiledLighting;
 
-		renderer.waitUntilIdle();
-
 		int[] newResolution = max(ivec(1), round(divide(vec(sceneResolution), TILED_LIGHTING_TILE_SIZE)));
 		int newLayerCount = configDynamicLights.getTiledLightingLayers();
 		if (Arrays.equals(newResolution, tiledLightingResolution) && tiledLightingLayerCount == newLayerCount)
@@ -1346,18 +1367,14 @@ public class HdPlugin extends Plugin {
 		final int width = bufferProvider.getWidth();
 		final int height = bufferProvider.getHeight();
 
-		if(stagingUIPixels == null || stagingUIPixels.length < width * height) {
-			stagingUIPixels = new int[width * height];
-		}
-
-		copyInFlight.set(true);
+		uploadInFlight = true;
+		stageTrigger.set(false);
+		stageComplete.set(false);
 
 		CommandBuffer cmd = commandBufferPool.acquire();
-		cmd.Callback(() -> {
-			System.arraycopy(pixels, 0, stagingUIPixels, 0, width * height);
-			copyInFlight.set(false);
-		});
-		cmd.UploadPixelData(TEXTURE_UNIT_UI, texUi, pboUi, width, height, stagingUIPixels);
+		cmd.BeginTimer(Timer.UPLOAD_UI);
+		cmd.UploadPixelData(TEXTURE_UNIT_UI, texUi, pboUi, width, height, pixels, stageTrigger, stageComplete);
+		cmd.EndTimer(Timer.UPLOAD_UI);
 		if(renderer instanceof ZoneRenderer) {
 			renderThread.submit(cmd);
 		} else {
@@ -1787,17 +1804,6 @@ public class HdPlugin extends Plugin {
 	public void onBeforeRender(BeforeRender beforeRender) {
 		SKIP_GL_ERROR_CHECKS = !log.isDebugEnabled() || developerTools.isFrameTimingsOverlayEnabled();
 
-		frameTimer.begin(Timer.COPY_UI);
-		long wait = 1000;
-		while (copyInFlight.get()) {
-			Thread.sleep(1);
-			wait -= 1;
-			if(wait <= 0) {
-				break;
-			}
-		}
-		frameTimer.end(Timer.COPY_UI);
-
 		if (client.getScene() == null)
 			return;
 
@@ -1808,7 +1814,6 @@ public class HdPlugin extends Plugin {
 	@Subscribe
 	public void onClientTick(ClientTick clientTick) {
 		elapsedClientTime += 1 / 50f;
-
 
 		if (!enableFreezeFrame && skipScene != client.getScene())
 			redrawPreviousFrame = false;

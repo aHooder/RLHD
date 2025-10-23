@@ -1,5 +1,6 @@
 package rs117.hd.opengl.commandbuffer.commands;
 
+import org.lwjgl.system.MemoryStack;
 import rs117.hd.opengl.commandbuffer.BaseCommand;
 
 import static org.lwjgl.opengl.GL30C.glBindFramebuffer;
@@ -17,13 +18,13 @@ public class BindFrameBufferCommand extends BaseCommand {
 	}
 
 	@Override
-	protected void doRead() {
+	protected void doRead(MemoryStack stack) {
 		target = read32();
 		fbo = read32();
 	}
 
 	@Override
-	protected void execute() { glBindFramebuffer(target, fbo); }
+	protected void execute(MemoryStack stack) { glBindFramebuffer(target, fbo); }
 
 	@Override
 	protected void print(StringBuilder sb) {

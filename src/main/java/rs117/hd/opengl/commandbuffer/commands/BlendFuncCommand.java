@@ -1,5 +1,6 @@
 package rs117.hd.opengl.commandbuffer.commands;
 
+import org.lwjgl.system.MemoryStack;
 import rs117.hd.opengl.commandbuffer.BaseCommand;
 
 import static org.lwjgl.opengl.GL14C.glBlendFuncSeparate;
@@ -21,7 +22,7 @@ public class BlendFuncCommand extends BaseCommand  {
 	}
 
 	@Override
-	protected void doRead() {
+	protected void doRead(MemoryStack stack) {
 		sfactorRGB = read32();
 		dfactorRGB = read32();
 		sfactorAlpha = read32();
@@ -29,7 +30,7 @@ public class BlendFuncCommand extends BaseCommand  {
 	}
 
 	@Override
-	protected void execute() {
+	protected void execute(MemoryStack stack) {
 		glBlendFuncSeparate(sfactorRGB, dfactorRGB, sfactorAlpha, dfactorAlpha);
 	}
 

@@ -1,5 +1,6 @@
 package rs117.hd.opengl.commandbuffer.commands;
 
+import org.lwjgl.system.MemoryStack;
 import rs117.hd.opengl.commandbuffer.BaseCommand;
 
 import static org.lwjgl.opengl.GL11.GL_UNSIGNED_INT;
@@ -20,14 +21,14 @@ public final class DrawElementsCommand extends BaseCommand {
 	}
 
 	@Override
-	public void doRead() {
+	public void doRead(MemoryStack stack) {
 		mode = read8();
 		vertexCount = read32();
 		bytesOffset = read64();
 	}
 
 	@Override
-	public void execute() {
+	public void execute(MemoryStack stack) {
 		glDrawElements(mode, vertexCount, GL_UNSIGNED_INT, bytesOffset);
 	}
 

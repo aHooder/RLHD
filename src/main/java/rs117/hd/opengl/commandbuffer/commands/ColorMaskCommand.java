@@ -1,5 +1,6 @@
 package rs117.hd.opengl.commandbuffer.commands;
 
+import org.lwjgl.system.MemoryStack;
 import rs117.hd.opengl.commandbuffer.BaseCommand;
 
 import static org.lwjgl.opengl.GL11.glColorMask;
@@ -21,7 +22,7 @@ public final class ColorMaskCommand extends BaseCommand {
 	}
 
 	@Override
-	protected void doRead() {
+	protected void doRead(MemoryStack stack) {
 		red   = readFlag();
 		green = readFlag();
 		blue  = readFlag();
@@ -29,7 +30,7 @@ public final class ColorMaskCommand extends BaseCommand {
 	}
 
 	@Override
-	public void execute() { glColorMask(red, green, blue, alpha); }
+	public void execute(MemoryStack stack) { glColorMask(red, green, blue, alpha); }
 
 	@Override
 	public void print(StringBuilder sb) {

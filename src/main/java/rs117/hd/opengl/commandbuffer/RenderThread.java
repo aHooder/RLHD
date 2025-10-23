@@ -11,12 +11,15 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.lwjgl.system.MemoryStack;
 import rs117.hd.overlays.FrameTimer;
 import rs117.hd.overlays.Timer;
 
 @Slf4j
 @Singleton
 public final class RenderThread implements Runnable {
+	public static final int RENDER_THREAD_STACK_SIZE = 10 * 1024 * 1024; // 10 MB
+
 	private static final RenderTask POISON_PILL = new RenderTask();
 	private static final ArrayDeque<RenderTask> TASK_BIN = new ArrayDeque<>();
 
@@ -133,34 +136,38 @@ public final class RenderThread implements Runnable {
 	public void run() {
 		log.debug("RenderThread started!");
 
-		while (running.get()) {
-			RenderTask task;
-			try {
-				task = queue.take();
-			} catch (InterruptedException e) {
-				Thread.currentThread().interrupt();
-				break;
-			}
+		try(MemoryStack stack = MemoryStack.create(RENDER_THREAD_STACK_SIZE)) {
+			while (running.get()) {
+				RenderTask task;
+				try {
+					task = queue.take();
+				} catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+					break;
+				}
 
-			if (task == POISON_PILL)
-				break;
+				if (task == POISON_PILL)
+					break;
 
-			if (task.buffer == null) {
-				taskCompleted(task);
-				continue;
-			}
+				if (task.buffer == null) {
+					taskCompleted(task);
+					continue;
+				}
 
-			if (contextWrapper.getOwner() != AWTContextWrapper.Owner.RENDER_THREAD) {
-				contextWrapper.awaitOwnership(AWTContextWrapper.Owner.NONE);
-				contextWrapper.makeCurrent(AWTContextWrapper.Owner.RENDER_THREAD);
-			}
+				if (contextWrapper.getOwner() != AWTContextWrapper.Owner.RENDER_THREAD) {
+					contextWrapper.awaitOwnership(AWTContextWrapper.Owner.NONE);
+					contextWrapper.makeCurrent(AWTContextWrapper.Owner.RENDER_THREAD);
+				}
 
-			try {
-				task.buffer.execute();
-			} catch (Throwable t) {
-				log.error("Error during CommandBuffer execution", t);
-			} finally {
-				taskCompleted(task);
+				try {
+					stack.push();
+					task.buffer.execute(stack);
+					stack.pop();
+				} catch (Throwable t) {
+					log.error("Error during CommandBuffer execution", t);
+				} finally {
+					taskCompleted(task);
+				}
 			}
 		}
 

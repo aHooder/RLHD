@@ -1,6 +1,7 @@
 package rs117.hd.opengl.commandbuffer.commands;
 
 import net.runelite.rlawt.AWTContext;
+import org.lwjgl.system.MemoryStack;
 import rs117.hd.opengl.commandbuffer.BaseCommand;
 
 public class SwapBuffersCommand extends BaseCommand {
@@ -13,12 +14,12 @@ public class SwapBuffersCommand extends BaseCommand {
 	}
 
 	@Override
-	protected void doRead() {
+	protected void doRead(MemoryStack stack) {
 		awtContext = readObject();
 	}
 
 	@Override
-	protected void execute() {
+	protected void execute(MemoryStack stack) {
 		awtContext.swapBuffers();
 	}
 

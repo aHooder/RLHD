@@ -1,5 +1,6 @@
 package rs117.hd.opengl.commandbuffer.commands;
 
+import org.lwjgl.system.MemoryStack;
 import rs117.hd.opengl.commandbuffer.BaseCommand;
 
 import static org.lwjgl.opengl.GL11C.glDepthFunc;
@@ -14,10 +15,10 @@ public class DepthFuncCommand extends BaseCommand {
 	protected void doWrite() { write32(mode); }
 
 	@Override
-	protected void doRead() { mode = read32(); }
+	protected void doRead(MemoryStack stack) { mode = read32(); }
 
 	@Override
-	protected void execute() { glDepthFunc(mode); }
+	protected void execute(MemoryStack stack) { glDepthFunc(mode); }
 
 	@Override
 	protected void print(StringBuilder sb) {

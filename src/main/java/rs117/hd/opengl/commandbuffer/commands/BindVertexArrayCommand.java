@@ -1,5 +1,6 @@
 package rs117.hd.opengl.commandbuffer.commands;
 
+import org.lwjgl.system.MemoryStack;
 import rs117.hd.opengl.commandbuffer.BaseCommand;
 
 import static org.lwjgl.opengl.GL30.glBindVertexArray;
@@ -15,12 +16,12 @@ public final class BindVertexArrayCommand extends BaseCommand {
 	}
 
 	@Override
-	protected void doRead() {
+	protected void doRead(MemoryStack stack) {
 		vao = read32();
 	}
 
 	@Override
-	public void execute() {
+	public void execute(MemoryStack stack) {
 		glBindVertexArray(vao);
 	}
 

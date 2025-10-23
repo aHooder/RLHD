@@ -1,5 +1,6 @@
 package rs117.hd.opengl.commandbuffer.commands;
 
+import org.lwjgl.system.MemoryStack;
 import rs117.hd.opengl.commandbuffer.BaseCommand;
 
 import static org.lwjgl.opengl.GL11.glDisable;
@@ -18,13 +19,13 @@ public final class ToggleCommand extends BaseCommand {
 	}
 
 	@Override
-	public void doRead() {
+	public void doRead(MemoryStack stack) {
 		capability = read32();
 		state = readFlag();
 	}
 
 	@Override
-	public void execute() {
+	public void execute(MemoryStack stack) {
 		if (state) {
 			glEnable(capability);
 		} else {

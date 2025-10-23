@@ -1,5 +1,6 @@
 package rs117.hd.opengl.commandbuffer.commands;
 
+import org.lwjgl.system.MemoryStack;
 import rs117.hd.opengl.commandbuffer.BaseCommand;
 import rs117.hd.opengl.shader.ShaderProgram;
 
@@ -14,12 +15,12 @@ public class ShaderProgramCommand extends BaseCommand {
 	}
 
 	@Override
-	protected void doRead() {
+	protected void doRead(MemoryStack stack) {
 		program = readObject();
 	}
 
 	@Override
-	protected void execute() {
+	protected void execute(MemoryStack stack) {
 		program.use();
 	}
 

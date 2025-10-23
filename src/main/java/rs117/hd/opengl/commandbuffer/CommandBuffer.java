@@ -2,8 +2,10 @@ package rs117.hd.opengl.commandbuffer;
 
 import java.util.Arrays;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.rlawt.AWTContext;
+import org.lwjgl.system.MemoryStack;
 import rs117.hd.HdPlugin;
 import rs117.hd.opengl.commandbuffer.commands.BindElementsArrayCommand;
 import rs117.hd.opengl.commandbuffer.commands.BindFrameBufferCommand;
@@ -180,18 +182,20 @@ public final class CommandBuffer {
 		UPLOAD_PIXEL_DATA_COMMAND.width = width;
 		UPLOAD_PIXEL_DATA_COMMAND.height = height;
 		UPLOAD_PIXEL_DATA_COMMAND.data = data;
-		UPLOAD_PIXEL_DATA_COMMAND.copySema = null;
+		UPLOAD_PIXEL_DATA_COMMAND.stageData = null;
+		UPLOAD_PIXEL_DATA_COMMAND.stageComplete = null;
 		UPLOAD_PIXEL_DATA_COMMAND.write();
 	}
 
-	public void UploadPixelData(int texUnit, int tex, int pbo, int width, int height, int[] data, Semaphore copySema) {
+	public void UploadPixelData(int texUnit, int tex, int pbo, int width, int height, int[] data, AtomicBoolean stageData, AtomicBoolean stageComplete) {
 		UPLOAD_PIXEL_DATA_COMMAND.texUnit = texUnit;
 		UPLOAD_PIXEL_DATA_COMMAND.tex = tex;
 		UPLOAD_PIXEL_DATA_COMMAND.pbo = pbo;
 		UPLOAD_PIXEL_DATA_COMMAND.width = width;
 		UPLOAD_PIXEL_DATA_COMMAND.height = height;
 		UPLOAD_PIXEL_DATA_COMMAND.data = data;
-		UPLOAD_PIXEL_DATA_COMMAND.copySema = copySema;
+		UPLOAD_PIXEL_DATA_COMMAND.stageData = stageData;
+		UPLOAD_PIXEL_DATA_COMMAND.stageComplete = stageComplete;
 		UPLOAD_PIXEL_DATA_COMMAND.write();
 	}
 
@@ -349,18 +353,26 @@ public final class CommandBuffer {
 		readHead = 0;
 		readBitHead = 0;
 
-		while (readHead < writeHead || (readHead == writeHead && readBitHead < writeBitHead)) {
-			int type = (int) readBits(8);
-			assert type < REGISTERED_COMMANDS.length : "Unknown Command Type";
+		try (MemoryStack stack = MemoryStack.stackPush()){
+			while (readHead < writeHead || (readHead == writeHead && readBitHead < writeBitHead)) {
+				int type = (int) readBits(8);
+				assert type < REGISTERED_COMMANDS.length : "Unknown Command Type";
 
-			BaseCommand command = REGISTERED_COMMANDS[type];
-			command.doRead();
-			command.print(sb);
-			sb.append('\n');
+				BaseCommand command = REGISTERED_COMMANDS[type];
+				command.doRead(stack);
+				command.print(sb);
+				sb.append('\n');
+			}
 		}
 	}
 
 	public void execute() {
+		try(MemoryStack stack = MemoryStack.stackPush()) {
+			execute(stack);
+		}
+	}
+
+	public void execute(MemoryStack stack) {
 		readHead = 0;
 		readBitHead = 0;
 
@@ -388,11 +400,13 @@ public final class CommandBuffer {
 				pendingUBOUploadsCount = 0;
 			}
 
+			stack.push();
 			readTimestamp = System.nanoTime();
-			command.doRead();
+			command.doRead(stack);
 			readElapsed += System.nanoTime() - readTimestamp;
 
-			command.execute();
+			command.execute(stack);
+			stack.pop();
 
 			if(command.isGLCommand() && HdPlugin.checkGLErrors(command.getName())) {
 				//StringBuilder sb = new StringBuilder();

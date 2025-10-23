@@ -1,5 +1,6 @@
 package rs117.hd.opengl.commandbuffer.commands;
 
+import org.lwjgl.system.MemoryStack;
 import rs117.hd.opengl.commandbuffer.BaseCommand;
 import rs117.hd.opengl.commandbuffer.CommandBuffer;
 
@@ -13,13 +14,13 @@ public class ExecuteCommandBufferCommand extends BaseCommand {
 	}
 
 	@Override
-	protected void doRead() {
+	protected void doRead(MemoryStack stack) {
 		cmd = readObject();
 	}
 
 	@Override
-	protected void execute() {
-		cmd.execute();
+	protected void execute(MemoryStack stack) {
+		cmd.execute(stack);
 	}
 
 	@Override

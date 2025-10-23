@@ -1,5 +1,6 @@
 package rs117.hd.opengl.commandbuffer.commands;
 
+import org.lwjgl.system.MemoryStack;
 import rs117.hd.opengl.commandbuffer.BaseCommand;
 import rs117.hd.opengl.uniforms.UniformBuffer;
 
@@ -36,7 +37,7 @@ public class SetUniformBufferPropertyCommand extends BaseCommand {
 	}
 
 	@Override
-	protected void doRead() {
+	protected void doRead(MemoryStack stack) {
 		property = readObject();
 		isFloat = readFlag();
 		stagingSize = read32();
@@ -58,7 +59,7 @@ public class SetUniformBufferPropertyCommand extends BaseCommand {
 	}
 
 	@Override
-	protected void execute() {
+	protected void execute(MemoryStack stack) {
 		if(isFloat) {
 			switch (stagingSize) {
 				case 1:

@@ -1,5 +1,6 @@
 package rs117.hd.opengl.commandbuffer.commands;
 
+import org.lwjgl.system.MemoryStack;
 import rs117.hd.opengl.commandbuffer.BaseCommand;
 import rs117.hd.opengl.shader.ShaderProgram;
 
@@ -34,7 +35,7 @@ public class SetShaderUniformCommand extends BaseCommand {
 	}
 
 	@Override
-	protected void doRead() {
+	protected void doRead(MemoryStack stack) {
 		property = readObject();
 		isFloat = readFlag();
 		stagingSize = read32();
@@ -56,7 +57,7 @@ public class SetShaderUniformCommand extends BaseCommand {
 	}
 
 	@Override
-	protected void execute() {
+	protected void execute(MemoryStack stack) {
 		if(isFloat) {
 			if (property instanceof ShaderProgram.Uniform1f) {
 				((ShaderProgram.Uniform1f) property).set(stagingFloatValues[0]);

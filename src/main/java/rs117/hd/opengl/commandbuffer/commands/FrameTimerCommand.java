@@ -1,5 +1,6 @@
 package rs117.hd.opengl.commandbuffer.commands;
 
+import org.lwjgl.system.MemoryStack;
 import rs117.hd.opengl.commandbuffer.BaseCommand;
 import rs117.hd.overlays.FrameTimer;
 import rs117.hd.overlays.Timer;
@@ -15,13 +16,13 @@ public class FrameTimerCommand extends BaseCommand {
 	}
 
 	@Override
-	protected void doRead() {
+	protected void doRead(MemoryStack stack) {
 		timer = Timer.TIMERS[read32()];
 		begin = readFlag();
 	}
 
 	@Override
-	protected void execute() {
+	protected void execute(MemoryStack stack) {
 		if(begin) {
 			FrameTimer.getInstance().begin(timer);
 		} else {

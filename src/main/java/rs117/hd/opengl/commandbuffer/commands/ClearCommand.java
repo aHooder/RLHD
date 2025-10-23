@@ -1,5 +1,6 @@
 package rs117.hd.opengl.commandbuffer.commands;
 
+import org.lwjgl.system.MemoryStack;
 import rs117.hd.opengl.commandbuffer.BaseCommand;
 
 import static org.lwjgl.opengl.GL11.GL_COLOR_BUFFER_BIT;
@@ -38,7 +39,7 @@ public class ClearCommand extends BaseCommand {
 	}
 
 	@Override
-	protected void doRead() {
+	protected void doRead(MemoryStack stack) {
 		clearColor = readFlag();
 
 		if(clearColor) {
@@ -55,7 +56,7 @@ public class ClearCommand extends BaseCommand {
 	}
 
 	@Override
-	protected void execute() {
+	protected void execute(MemoryStack stack) {
 		if(clearColor) {
 			glClearColor(red, green, blue, alpha);
 		}

@@ -1,5 +1,6 @@
 package rs117.hd.opengl.commandbuffer.commands;
 
+import org.lwjgl.system.MemoryStack;
 import rs117.hd.opengl.commandbuffer.BaseCommand;
 
 import static org.lwjgl.opengl.GL11.GL_COLOR_BUFFER_BIT;
@@ -27,7 +28,7 @@ public class BlitFrameBufferCommand extends BaseCommand {
 	public BlitFrameBufferCommand() { super(false, true); }
 
 	@Override
-	protected void execute() {
+	protected void execute(MemoryStack stack) {
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, srcFbo);
 
 		if (resolveFbo != 0) {
@@ -66,7 +67,7 @@ public class BlitFrameBufferCommand extends BaseCommand {
 	}
 
 	@Override
-	protected void doRead() {
+	protected void doRead(MemoryStack stack) {
 		srcFbo = read32();
 		resolveFbo = read32();
 		dstFbo = read32();

@@ -1,7 +1,7 @@
 package rs117.hd.opengl.commandbuffer.commands;
 
 import java.nio.IntBuffer;
-import org.lwjgl.system.MemoryUtil;
+import org.lwjgl.system.MemoryStack;
 import rs117.hd.opengl.commandbuffer.BaseCommand;
 
 import static org.lwjgl.opengl.GL14.glMultiDrawArrays;
@@ -11,8 +11,8 @@ public final class MultiDrawArraysCommand extends BaseCommand {
 	public int[] offsets;
 	public int[] counts;
 
-	public IntBuffer offsetsBuffer;
-	public IntBuffer countsBuffer;
+	private IntBuffer offsetsBuffer;
+	private IntBuffer countsBuffer;
 
 	public MultiDrawArraysCommand() { super(true); }
 
@@ -32,20 +32,12 @@ public final class MultiDrawArraysCommand extends BaseCommand {
 	}
 
 	@Override
-	public void doRead() {
+	public void doRead(MemoryStack stack) {
 		mode = read8();
 
 		int length = read32();
-		if(offsetsBuffer == null || offsetsBuffer.capacity() < length) {
-			if(offsetsBuffer != null) MemoryUtil.memFree(offsetsBuffer);
-			if(countsBuffer != null)  MemoryUtil.memFree(countsBuffer);
-
-			offsetsBuffer = MemoryUtil.memAllocInt(length);
-			countsBuffer  = MemoryUtil.memAllocInt(length);
-		} else {
-			offsetsBuffer.clear();
-			countsBuffer.clear();
-		}
+		offsetsBuffer = stack.callocInt(length);
+		countsBuffer = stack.callocInt(length);
 
 		for(int i = 0; i < length; i++) {
 			offsetsBuffer.put(read32());
@@ -57,7 +49,11 @@ public final class MultiDrawArraysCommand extends BaseCommand {
 	}
 
 	@Override
-	public void execute() { glMultiDrawArrays(mode, offsetsBuffer, countsBuffer); }
+	public void execute(MemoryStack stack) {
+		glMultiDrawArrays(mode, offsetsBuffer, countsBuffer);
+		offsetsBuffer = null; // TODO: Kinda need a clear function?
+		countsBuffer  = null;
+	}
 
 	@Override
 	public void print(StringBuilder sb) {

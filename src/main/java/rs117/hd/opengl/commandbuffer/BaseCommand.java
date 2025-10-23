@@ -2,6 +2,7 @@ package rs117.hd.opengl.commandbuffer;
 
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import org.lwjgl.system.MemoryStack;
 import rs117.hd.opengl.uniforms.UniformBuffer;
 
 @Slf4j
@@ -30,7 +31,7 @@ public abstract class BaseCommand {
 
 	protected BaseCommand() { this(false, false); }
 
-	protected abstract void execute();
+	protected abstract void execute(MemoryStack stack);
 	protected abstract void print(StringBuilder sb);
 
 	protected final void write() {
@@ -39,7 +40,7 @@ public abstract class BaseCommand {
 	}
 
 	protected abstract void doWrite();
-	protected abstract void doRead();
+	protected abstract void doRead(MemoryStack stack);
 
 	protected final void markUniformBufferDirty(UniformBuffer buffer) { owner.markUniformBufferDirty(buffer); }
 

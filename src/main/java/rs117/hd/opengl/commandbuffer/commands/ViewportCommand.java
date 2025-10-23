@@ -1,5 +1,6 @@
 package rs117.hd.opengl.commandbuffer.commands;
 
+import org.lwjgl.system.MemoryStack;
 import rs117.hd.opengl.commandbuffer.BaseCommand;
 
 import static org.lwjgl.opengl.GL11C.glViewport;
@@ -21,7 +22,7 @@ public class ViewportCommand extends BaseCommand {
 	}
 
 	@Override
-	protected void doRead() {
+	protected void doRead(MemoryStack stack) {
 		x = read32();
 		y = read32();
 		width = read32();
@@ -29,7 +30,7 @@ public class ViewportCommand extends BaseCommand {
 	}
 
 	@Override
-	protected void execute() { glViewport(x, y, width, height); }
+	protected void execute(MemoryStack stack) { glViewport(x, y, width, height); }
 
 	@Override
 	protected void print(StringBuilder sb) {

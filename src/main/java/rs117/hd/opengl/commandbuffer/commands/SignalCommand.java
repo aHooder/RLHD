@@ -1,6 +1,7 @@
 package rs117.hd.opengl.commandbuffer.commands;
 
 import java.util.concurrent.Semaphore;
+import org.lwjgl.system.MemoryStack;
 import rs117.hd.opengl.commandbuffer.BaseCommand;
 
 public class SignalCommand extends BaseCommand {
@@ -13,12 +14,12 @@ public class SignalCommand extends BaseCommand {
 	}
 
 	@Override
-	protected void doRead() {
+	protected void doRead(MemoryStack stack) {
 		semaphore = readObject();
 	}
 
 	@Override
-	protected void execute() {
+	protected void execute(MemoryStack stack) {
 		semaphore.release();
 	}
 

@@ -1,5 +1,6 @@
 package rs117.hd.opengl.commandbuffer.commands;
 
+import org.lwjgl.system.MemoryStack;
 import rs117.hd.opengl.commandbuffer.BaseCommand;
 
 import static org.lwjgl.opengl.GL11.glDepthMask;
@@ -17,12 +18,12 @@ public final class DepthMaskCommand extends BaseCommand {
 	}
 
 	@Override
-	protected void doRead() {
+	protected void doRead(MemoryStack stack) {
 		flag = readFlag();
 	}
 
 	@Override
-	public void execute() {
+	public void execute(MemoryStack stack) {
 		if(SKIP_DEPTH_MASKING)
 			return;
 		glDepthMask(flag);
