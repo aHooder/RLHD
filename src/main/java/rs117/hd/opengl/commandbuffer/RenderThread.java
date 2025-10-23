@@ -101,10 +101,7 @@ public final class RenderThread implements Runnable {
 			}
 
 			if(isClientThread) {
-				if (contextWrapper.getOwner() != AWTContextWrapper.Owner.CLIENT) {
-					contextWrapper.awaitOwnership(AWTContextWrapper.Owner.NONE);
-					contextWrapper.makeCurrent(AWTContextWrapper.Owner.CLIENT);
-				}
+				contextWrapper.makeCurrent(AWTContextWrapper.Owner.CLIENT);
 
 				synchronized (completedTasks) {
 					for (RenderTask task : completedTasks) {
@@ -154,10 +151,7 @@ public final class RenderThread implements Runnable {
 					continue;
 				}
 
-				if (contextWrapper.getOwner() != AWTContextWrapper.Owner.RENDER_THREAD) {
-					contextWrapper.awaitOwnership(AWTContextWrapper.Owner.NONE);
-					contextWrapper.makeCurrent(AWTContextWrapper.Owner.RENDER_THREAD);
-				}
+				contextWrapper.makeCurrent(AWTContextWrapper.Owner.RENDER_THREAD);
 
 				try {
 					stack.push();

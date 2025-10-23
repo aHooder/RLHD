@@ -70,28 +70,37 @@ public final class AWTContextWrapper {
 
 	public int getBackBuffer() { return context.getFramebuffer(false); }
 
-	public synchronized Owner getOwner() {
-		return currentOwner;
-	}
+	public Owner getOwner() { return currentOwner; }
 
-	public synchronized void makeCurrent(Owner newOwner) {
+	public void makeCurrent(Owner newOwner) {
 		if (currentOwner == newOwner)
 			return;
 
-		try {
-			context.makeCurrent();
-			if(newOwner == Owner.RENDER_THREAD && HdPlugin.GL_RENDER_THREAD_CAPS == null){
-				HdPlugin.GL_RENDER_THREAD_CAPS = GL.createCapabilities();
+		synchronized (ownershipLock) {
+			while (currentOwner != Owner.NONE) {
+				try {
+					ownershipLock.wait();
+				} catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+					return;
+				}
 			}
-			updateOwner(newOwner, "makeCurrent");
-		} catch (Exception e) {
-			printOwnershipLog();
-			log.error("Failed to make OpenGL context current for {}", newOwner, e);
-			throw new RuntimeException(e);
+
+			try {
+				context.makeCurrent();
+				if(newOwner == Owner.RENDER_THREAD && HdPlugin.GL_RENDER_THREAD_CAPS == null){
+					HdPlugin.GL_RENDER_THREAD_CAPS = GL.createCapabilities();
+				}
+				updateOwner(newOwner, "makeCurrent");
+			} catch (Exception e) {
+				printOwnershipLog();
+				log.error("Failed to make OpenGL context current for {}", newOwner, e);
+				throw new RuntimeException(e);
+			}
 		}
 	}
 
-	public synchronized void detachCurrent(String reason) {
+	public void detachCurrent(String reason) {
 		try {
 			context.detachCurrent();
 			updateOwner(Owner.NONE, reason);
@@ -99,19 +108,6 @@ public final class AWTContextWrapper {
 			printOwnershipLog();
 			log.error("Failed to detach OpenGL context: " + reason, e);
 			throw new RuntimeException(e);
-		}
-	}
-
-	public void awaitOwnership(Owner desiredOwner) {
-		synchronized (ownershipLock) {
-			while (currentOwner != desiredOwner) {
-				try {
-					ownershipLock.wait(1);
-				} catch (InterruptedException e) {
-					Thread.currentThread().interrupt();
-					return;
-				}
-			}
 		}
 	}
 
