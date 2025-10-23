@@ -79,10 +79,11 @@ public final class RenderThread implements Runnable {
 			return;
 		}
 
+		boolean isClientThread = Thread.currentThread() == clientThread;
 		synchronized (completionLock) {
 			try {
 				while (pendingCount.get() > 0) {
-					if (contextWrapper.getOwner() == AWTContextWrapper.Owner.CLIENT && Thread.currentThread() == clientThread)
+					if (contextWrapper.getOwner() == AWTContextWrapper.Owner.CLIENT && isClientThread)
 						contextWrapper.detachCurrent("waiting for render completion");
 
 					timer.begin(Timer.RENDER_THREAD_COMPLETION);
@@ -94,31 +95,33 @@ public final class RenderThread implements Runnable {
 				return;
 			}
 
-			if (contextWrapper.getOwner() != AWTContextWrapper.Owner.CLIENT && Thread.currentThread() == clientThread) {
-				contextWrapper.awaitOwnership(AWTContextWrapper.Owner.NONE);
-				contextWrapper.makeCurrent(AWTContextWrapper.Owner.CLIENT);
-			}
-
-			synchronized (completedTasks) {
-				for (RenderTask task : completedTasks) {
-					if (task.callback != null) {
-						try {
-							task.callback.run();
-						} catch (Throwable t) {
-							log.warn("Exception in render completion callback", t);
-						}
-					}
-
-					if(task.buffer.pooled) {
-						pool.release(task.buffer);
-					}
-
-					task.buffer = null;
-					task.callback = null;
-
-					TASK_BIN.add(task);
+			if(isClientThread) {
+				if (contextWrapper.getOwner() != AWTContextWrapper.Owner.CLIENT) {
+					contextWrapper.awaitOwnership(AWTContextWrapper.Owner.NONE);
+					contextWrapper.makeCurrent(AWTContextWrapper.Owner.CLIENT);
 				}
-				completedTasks.clear();
+
+				synchronized (completedTasks) {
+					for (RenderTask task : completedTasks) {
+						if (task.callback != null) {
+							try {
+								task.callback.run();
+							} catch (Throwable t) {
+								log.warn("Exception in render completion callback", t);
+							}
+						}
+
+						if (task.buffer.pooled) {
+							pool.release(task.buffer);
+						}
+
+						task.buffer = null;
+						task.callback = null;
+
+						TASK_BIN.add(task);
+					}
+					completedTasks.clear();
+				}
 			}
 		}
 	}
