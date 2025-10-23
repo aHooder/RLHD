@@ -12,6 +12,7 @@ import javax.inject.Singleton;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.lwjgl.system.MemoryStack;
+import rs117.hd.HdPlugin;
 import rs117.hd.overlays.FrameTimer;
 import rs117.hd.overlays.Timer;
 
@@ -30,6 +31,9 @@ public final class RenderThread implements Runnable {
 	private final Object completionLock = new Object();
 	private final AtomicBoolean running = new AtomicBoolean(false);
 	private Thread thread;
+
+	@Inject
+	private HdPlugin plugin;
 
 	@Inject
 	private FrameTimer timer;
@@ -57,9 +61,26 @@ public final class RenderThread implements Runnable {
 		submit(buffer, null);
 	}
 
+	public void submit(CommandBuffer buffer, boolean forceThread) {
+		submit(buffer, null, forceThread);
+	}
+
+
 	public void submit(CommandBuffer buffer, Runnable onComplete) {
+		submit(buffer, onComplete, false);
+	}
+
+	public void submit(CommandBuffer buffer, Runnable onComplete, boolean forceThread) {
 		if (buffer == null)
 			throw new IllegalArgumentException("CommandBuffer cannot be null");
+
+		if(!plugin.configRenderThread && !forceThread) {
+			buffer.execute();
+			if (onComplete != null) {
+				onComplete.run();
+			}
+			return;
+		}
 
 		pendingCount.incrementAndGet();
 

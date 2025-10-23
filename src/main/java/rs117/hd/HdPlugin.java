@@ -382,6 +382,7 @@ public class HdPlugin extends Plugin {
 	public boolean configCharacterDisplacement;
 	public boolean configTiledLighting;
 	public boolean configTiledLightingImageLoadStore;
+	public boolean configRenderThread;
 	public DynamicLights configDynamicLights;
 	public ShadowMode configShadowMode;
 	public SeasonalTheme configSeasonalTheme;
@@ -1496,6 +1497,7 @@ public class HdPlugin extends Plugin {
 		configDynamicLights = config.dynamicLights();
 		configTiledLighting = config.tiledLighting();
 		configTiledLightingImageLoadStore = config.tiledLightingImageLoadStore();
+		configRenderThread = config.renderThread();
 		configExpandShadowDraw = config.expandShadowDraw();
 		configUseFasterModelHashing = config.fasterModelHashing();
 		configUndoVanillaShading = config.shadingMode() != ShadingMode.VANILLA;

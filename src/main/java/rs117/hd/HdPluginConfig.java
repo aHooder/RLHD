@@ -245,7 +245,7 @@ public interface HdPluginConfig extends Config
 	)
 	@Range(
 		min = 0,
-		max = 999
+		max = 2000
 	)
 	default int fpsTarget()
 	{
@@ -1106,6 +1106,17 @@ public interface HdPluginConfig extends Config
 		section = experimentalSettings
 	)
 	default boolean tiledLightingImageLoadStore() {
+		return true;
+	}
+
+	String KEY_RENDER_THREAD = "experimentalRenderThread";
+	@ConfigItem(
+		keyName = KEY_RENDER_THREAD,
+		name = "Render Thread",
+		description = "Its a Render Thread...",
+		section = experimentalSettings
+	)
+	default boolean renderThread() {
 		return true;
 	}
 

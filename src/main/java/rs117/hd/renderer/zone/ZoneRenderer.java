@@ -1530,7 +1530,7 @@ public class ZoneRenderer implements Renderer {
 				}
 			}
 		});
-		renderThread.submit(cmd);
+		renderThread.submit(cmd, true);
 		renderThread.waitForRenderingCompleted();
 
 		// upload zones
@@ -1661,7 +1661,7 @@ public class ZoneRenderer implements Renderer {
 				}
 			}
 		});
-		renderThread.submit(cmd);
+		renderThread.submit(cmd, true);
 		renderThread.waitForRenderingCompleted();
 
 		for (int x = 0; x < ctx.sizeX; ++x)
