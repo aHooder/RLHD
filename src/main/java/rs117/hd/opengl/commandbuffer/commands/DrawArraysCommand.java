@@ -34,7 +34,7 @@ public final class DrawArraysCommand extends BaseCommand {
 		sb.append(mode);
 		sb.append(", ");
 		sb.append(vertexCount);
-		sb.append(", GL_UNSIGNED_INT, ");
+		sb.append(", ");
 		sb.append(offset);
 		sb.append(");");
 	}

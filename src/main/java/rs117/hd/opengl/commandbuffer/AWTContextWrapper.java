@@ -35,7 +35,7 @@ public final class AWTContextWrapper {
 	@Getter
 	private Canvas canvas;
 
-	public boolean initalize() {
+	public boolean initialize() {
 		AWTContext.loadNatives();
 		canvas = client.getCanvas();
 

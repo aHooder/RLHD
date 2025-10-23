@@ -40,8 +40,8 @@ public final class MultiDrawArraysCommand extends BaseCommand {
 			if(offsetsBuffer != null) MemoryUtil.memFree(offsetsBuffer);
 			if(countsBuffer != null)  MemoryUtil.memFree(countsBuffer);
 
-			offsetsBuffer = MemoryUtil.memAllocInt(length * 2);
-			countsBuffer  = MemoryUtil.memAllocInt(length * 2);
+			offsetsBuffer = MemoryUtil.memAllocInt(length);
+			countsBuffer  = MemoryUtil.memAllocInt(length);
 		} else {
 			offsetsBuffer.clear();
 			countsBuffer.clear();

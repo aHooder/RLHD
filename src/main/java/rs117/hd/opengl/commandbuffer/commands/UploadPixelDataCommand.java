@@ -68,6 +68,8 @@ public class UploadPixelDataCommand extends BaseCommand {
 			glActiveTexture(texUnit);
 			glBindTexture(GL_TEXTURE_2D, tex);
 			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, 0);
+		} else {
+			if(copySema != null) copySema.release();
 		}
 		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 	}

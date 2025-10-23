@@ -454,7 +454,7 @@ public class HdPlugin extends Plugin {
 				lastFrameTimeMillis = 0;
 				lastFrameClientTime = 0;
 
-				if(!awtContextWrapper.initalize())
+				if(!awtContextWrapper.initialize())
 					return false;
 
 				// lwjgl defaults to lwjgl- + user.name, but this breaks if the username would cause an invalid path
