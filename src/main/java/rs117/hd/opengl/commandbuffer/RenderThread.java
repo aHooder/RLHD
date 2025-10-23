@@ -25,7 +25,7 @@ public final class RenderThread implements Runnable {
 
 	private final AtomicInteger pendingCount = new AtomicInteger(0);
 	private final Object completionLock = new Object();
-	private final AtomicBoolean running = new AtomicBoolean(true);
+	private final AtomicBoolean running = new AtomicBoolean(false);
 	private Thread thread;
 
 	@Inject
@@ -41,6 +41,8 @@ public final class RenderThread implements Runnable {
 
 	public void initialize() {
 		clientThread = Thread.currentThread();
+
+		running.set(true);
 
 		thread = new Thread(this, "HD-RenderThread");
 		thread.setPriority(Thread.MAX_PRIORITY);

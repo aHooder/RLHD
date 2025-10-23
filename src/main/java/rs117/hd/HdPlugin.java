@@ -327,7 +327,7 @@ public class HdPlugin extends Plugin {
 	private int texUi;
 	private int pboUi;
 	private int[] stagingUIPixels;
-	private AtomicBoolean copyInFlight = new AtomicBoolean(false);
+	private final AtomicBoolean copyInFlight = new AtomicBoolean(false);
 
 	@Nullable
 	public int[] sceneViewport;
@@ -673,6 +673,9 @@ public class HdPlugin extends Plugin {
 
 			renderThread.shutdown();
 			awtContextWrapper.shutdown();
+
+			GL_CAPS = null;
+			GL_RENDER_THREAD_CAPS = null;
 
 			if (debugCallback != null)
 				debugCallback.free();
@@ -1785,8 +1788,13 @@ public class HdPlugin extends Plugin {
 		SKIP_GL_ERROR_CHECKS = !log.isDebugEnabled() || developerTools.isFrameTimingsOverlayEnabled();
 
 		frameTimer.begin(Timer.COPY_UI);
+		long wait = 1000;
 		while (copyInFlight.get()) {
 			Thread.sleep(1);
+			wait -= 1;
+			if(wait <= 0) {
+				break;
+			}
 		}
 		frameTimer.end(Timer.COPY_UI);
 
