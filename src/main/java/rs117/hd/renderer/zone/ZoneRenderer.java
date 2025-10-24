@@ -1064,8 +1064,6 @@ public class ZoneRenderer implements Renderer {
 		if (ctx == null)
 			return;
 
-		renderThread.waitForRenderingCompleted();
-
 		int uuid = ModelHash.generateUuid(client, tileObject.getHash(), r);
 		int[] worldPos = ctx.sceneContext.localToWorld(tileObject.getLocalLocation(), tileObject.getPlane());
 		ModelOverride modelOverride = modelOverrideManager.getOverride(uuid, worldPos);
@@ -1088,6 +1086,8 @@ public class ZoneRenderer implements Renderer {
 				}
 			}
 		}
+
+		renderThread.waitForRenderingCompleted();
 
 		int size = m.getFaceCount() * 3 * VAO.VERT_SIZE;
 		if (!hasAlpha) {
@@ -1118,14 +1118,14 @@ public class ZoneRenderer implements Renderer {
 		if (ctx == null)
 			return;
 
-		renderThread.waitForRenderingCompleted();
-
 		Renderable renderable = gameObject.getRenderable();
 		int uuid = ModelHash.generateUuid(client, gameObject.getHash(), renderable);
 		int[] worldPos = root.sceneContext.localToWorld(gameObject.getLocalLocation(), gameObject.getPlane());
 		ModelOverride modelOverride = modelOverrideManager.getOverride(uuid, worldPos);
 		if (modelOverride.hide)
 			return;
+
+		renderThread.waitForRenderingCompleted();
 
 		int preOrientation = HDUtils.getModelPreOrientation(gameObject.getConfig());
 
@@ -1324,8 +1324,9 @@ public class ZoneRenderer implements Renderer {
 	}
 
 	public void onBackBufferSwapCompleted() {
-		frameTimer.endFrameAndReset();
 		isDrawingScene = false;
+
+		frameTimer.endFrameAndReset();
 	}
 
 	@Subscribe
