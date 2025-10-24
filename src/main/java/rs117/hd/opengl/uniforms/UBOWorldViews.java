@@ -69,8 +69,6 @@ public class UBOWorldViews extends UniformBuffer<GLBuffer> {
 				);
 			}
 		}
-
-		upload();
 	}
 
 	public int getIndex(@Nullable Scene scene) {

@@ -18,8 +18,10 @@ import rs117.hd.opengl.commandbuffer.commands.ColorMaskCommand;
 import rs117.hd.opengl.commandbuffer.commands.DepthFuncCommand;
 import rs117.hd.opengl.commandbuffer.commands.DepthMaskCommand;
 import rs117.hd.opengl.commandbuffer.commands.DrawArraysCommand;
+import rs117.hd.opengl.commandbuffer.commands.DrawBufferCommand;
 import rs117.hd.opengl.commandbuffer.commands.DrawElementsCommand;
 import rs117.hd.opengl.commandbuffer.commands.ExecuteCommandBufferCommand;
+import rs117.hd.opengl.commandbuffer.commands.FrameBufferLayerCommand;
 import rs117.hd.opengl.commandbuffer.commands.FrameTimerCommand;
 import rs117.hd.opengl.commandbuffer.commands.MultiDrawArraysCommand;
 import rs117.hd.opengl.commandbuffer.commands.SetShaderUniformCommand;
@@ -29,6 +31,7 @@ import rs117.hd.opengl.commandbuffer.commands.SignalCommand;
 import rs117.hd.opengl.commandbuffer.commands.SwapBuffersCommand;
 import rs117.hd.opengl.commandbuffer.commands.ToggleCommand;
 import rs117.hd.opengl.commandbuffer.commands.UploadPixelDataCommand;
+import rs117.hd.opengl.commandbuffer.commands.UploadUniformBufferCommand;
 import rs117.hd.opengl.commandbuffer.commands.ViewportCommand;
 import rs117.hd.opengl.shader.ShaderProgram;
 import rs117.hd.opengl.uniforms.UniformBuffer;
@@ -75,7 +78,10 @@ public final class CommandBuffer {
 	private final SwapBuffersCommand SWAP_BUFFER_COMMAND = REGISTER_COMMAND(SwapBuffersCommand::new);
 	private final FrameTimerCommand FRAME_TIMER_COMMAND = REGISTER_COMMAND(FrameTimerCommand::new);
 	private final CallbackCommand CALLBACK_COMMAND = REGISTER_COMMAND(CallbackCommand::new);
-	private final SignalCommand SIGNAL_COMMAND = REGISTER_COMMAND(SignalCommand::new);
+	private final SignalCommand SIGNAL_COMMAND = REGISTER_COMMAND(SignalCommand::new);;
+	private final UploadUniformBufferCommand UPLOAD_UNIFORM_BUFFER_COMMAND = REGISTER_COMMAND(UploadUniformBufferCommand::new);
+	private final DrawBufferCommand DRAW_BUFFER_COMMAND = REGISTER_COMMAND(DrawBufferCommand::new);
+	private final FrameBufferLayerCommand FRAME_BUFFER_LAYER_COMMAND = REGISTER_COMMAND(FrameBufferLayerCommand::new);
 
 	interface ICreateCommand<T extends BaseCommand> { T construct(); }
 
@@ -146,6 +152,19 @@ public final class CommandBuffer {
 		SET_SHADER_PROPERTY_COMMAND.floatValues = values;
 		SET_SHADER_PROPERTY_COMMAND.isFloat = true;
 		SET_SHADER_PROPERTY_COMMAND.write();
+	}
+
+	public void FrameBufferLayer(int attachment, int texId, int level, int layer) {
+		FRAME_BUFFER_LAYER_COMMAND.attachment = attachment;
+		FRAME_BUFFER_LAYER_COMMAND.texId = texId;
+		FRAME_BUFFER_LAYER_COMMAND.level = level;
+		FRAME_BUFFER_LAYER_COMMAND.layer = layer;
+		FRAME_BUFFER_LAYER_COMMAND.write();
+	}
+
+	public void DrawBuffers(int... drawBuffers) {
+		DRAW_BUFFER_COMMAND.drawBuffers = drawBuffers;
+		DRAW_BUFFER_COMMAND.write();
 	}
 
 	public void BindVertexArray(int vao) {
@@ -318,6 +337,11 @@ public final class CommandBuffer {
 		SIGNAL_COMMAND.write();
 	}
 
+	public void UploadUniformBuffer(UniformBuffer<?> buffer) {
+		UPLOAD_UNIFORM_BUFFER_COMMAND.buffer = buffer;
+		UPLOAD_UNIFORM_BUFFER_COMMAND.write();
+	}
+
 	public void BeginTimer(Timer timer) {
 		FRAME_TIMER_COMMAND.timer = timer;
 		FRAME_TIMER_COMMAND.begin = true;
@@ -390,15 +414,8 @@ public final class CommandBuffer {
 
 			BaseCommand command = REGISTERED_COMMANDS[type];
 
-			if (command.isDrawCall()) {
-				for(int i = 0; i < pendingUBOUploadsCount; i++) {
-					if(pendingUBOUploads[i].isDirty()) {
-						pendingUBOUploads[i].upload();
-						pendingUBOUploads[i] = null;
-					}
-				}
-				pendingUBOUploadsCount = 0;
-			}
+			if (command.isDrawCall())
+				uploadPendingUniformBuffers();
 
 			stack.push();
 			readTimestamp = System.nanoTime();
@@ -415,10 +432,23 @@ public final class CommandBuffer {
 				//break;
 			}
 		}
+
+		uploadPendingUniformBuffers();
+
 		if(executionTimer != null) {
 			FrameTimer.getInstance().add(executionTimer, System.nanoTime() - executeTimestamp);
 		}
 		FrameTimer.getInstance().add(Timer.COMMAND_BUFFER_READ, readElapsed);
+	}
+
+	private void uploadPendingUniformBuffers() {
+		for(int i = 0; i < pendingUBOUploadsCount; i++) {
+			if(pendingUBOUploads[i].isDirty()) {
+				pendingUBOUploads[i].upload();
+				pendingUBOUploads[i] = null;
+			}
+		}
+		pendingUBOUploadsCount = 0;
 	}
 
 	protected void markUniformBufferDirty(UniformBuffer<?> buffer) {

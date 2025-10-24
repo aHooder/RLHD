@@ -1059,6 +1059,7 @@ public class HdPlugin extends Plugin {
 		if (Arrays.equals(newResolution, tiledLightingResolution) && tiledLightingLayerCount == newLayerCount)
 			return;
 
+		renderThread.waitForRenderingCompleted();
 		destroyTiledLightingFbo();
 
 		tiledLightingResolution = newResolution;
@@ -1142,7 +1143,7 @@ public class HdPlugin extends Plugin {
 		if (Arrays.equals(sceneViewport, viewport))
 			return;
 
-		renderer.waitUntilIdle();
+		renderThread.waitForRenderingCompleted();
 
 		destroySceneFbo();
 		sceneViewport = viewport;

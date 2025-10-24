@@ -370,7 +370,6 @@ public class ZoneRenderer implements Renderer {
 		Scene scene,
 		float cameraX, float cameraY, float cameraZ, float cameraPitch, float cameraYaw
 	) {
-		renderThread.waitForRenderingCompleted();
 		isDrawingScene = true;
 
 		scene.setDrawDistance(plugin.getDrawDistance());
@@ -378,6 +377,8 @@ public class ZoneRenderer implements Renderer {
 
 		if (root.sceneContext == null || plugin.sceneViewport == null)
 			return;
+
+		CommandBuffer cmd = commandBufferPool.acquire();
 
 		frameTimer.begin(Timer.DRAW_FRAME);
 		frameTimer.begin(Timer.DRAW_SCENE);
@@ -569,7 +570,7 @@ public class ZoneRenderer implements Renderer {
 				plugin.uboGlobal.projectionMatrix.set(plugin.viewProjMatrix);
 				plugin.uboGlobal.invProjectionMatrix.set(plugin.invViewProjMatrix);
 				plugin.uboGlobal.pointLightsCount.set(root.sceneContext.numVisibleLights);
-				plugin.uboGlobal.upload();
+				cmd.UploadUniformBuffer(plugin.uboGlobal);
 			}
 		}
 
@@ -603,10 +604,10 @@ public class ZoneRenderer implements Renderer {
 					plugin.uboLightsCulling.setLight(i, lightPosition, lightColor);
 				}
 			}
-
-			plugin.uboLights.upload();
-			plugin.uboLightsCulling.upload();
 			frameTimer.end(Timer.UPDATE_LIGHTS);
+
+			cmd.UploadUniformBuffer(plugin.uboLights);
+			cmd.UploadUniformBuffer(plugin.uboLightsCulling);
 
 			// Perform tiled lighting culling before the compute memory barrier, so it's performed asynchronously
 			if (plugin.configTiledLighting) {
@@ -614,28 +615,28 @@ public class ZoneRenderer implements Renderer {
 				assert plugin.fboTiledLighting != 0;
 
 				frameTimer.begin(Timer.DRAW_TILED_LIGHTING);
-				frameTimer.begin(Timer.RENDER_TILED_LIGHTING);
+				cmd.BeginTimer(Timer.RENDER_TILED_LIGHTING);
 
-				glViewport(0, 0, plugin.tiledLightingResolution[0], plugin.tiledLightingResolution[1]);
-				glBindFramebuffer(GL_FRAMEBUFFER, plugin.fboTiledLighting);
+				cmd.Viewport(0, 0, plugin.tiledLightingResolution[0], plugin.tiledLightingResolution[1]);
+				cmd.BindFrameBuffer(GL_FRAMEBUFFER, plugin.fboTiledLighting);
 
-				glBindVertexArray(plugin.vaoTri);
+				cmd.BindVertexArray(plugin.vaoTri);
 
 				if (plugin.tiledLightingImageStoreProgram.isValid()) {
-					plugin.tiledLightingImageStoreProgram.use();
-					glDrawBuffer(GL_NONE);
-					glDrawArrays(GL_TRIANGLES, 0, 3);
+					cmd.SetShaderProgram(plugin.tiledLightingImageStoreProgram);
+					cmd.DrawBuffers(GL_NONE);
+					cmd.DrawArrays(GL_TRIANGLES, 0, 3);
 				} else {
-					glDrawBuffer(GL_COLOR_ATTACHMENT0);
+					cmd.DrawBuffers(GL_COLOR_ATTACHMENT0);
 					int layerCount = plugin.configDynamicLights.getTiledLightingLayers();
 					for (int layer = 0; layer < layerCount; layer++) {
-						plugin.tiledLightingShaderPrograms.get(layer).use();
-						glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, plugin.texTiledLighting, 0, layer);
-						glDrawArrays(GL_TRIANGLES, 0, 3);
+						cmd.SetShaderProgram(plugin.tiledLightingShaderPrograms.get(layer));
+						cmd.FrameBufferLayer(GL_COLOR_ATTACHMENT0, plugin.texTiledLighting, 0, layer);
+						cmd.DrawArrays(GL_TRIANGLES, 0, 3);
 					}
 				}
 
-				frameTimer.end(Timer.RENDER_TILED_LIGHTING);
+				cmd.EndTimer(Timer.RENDER_TILED_LIGHTING);
 				frameTimer.end(Timer.DRAW_TILED_LIGHTING);
 			}
 		}
@@ -748,8 +749,12 @@ public class ZoneRenderer implements Renderer {
 			plugin.uboGlobal.colorFilterFade.set(clamp(timeSinceChange / COLOR_FILTER_FADE_DURATION, 0, 1));
 		}
 
-		plugin.uboGlobal.upload();
 		uboWorldViews.update(client);
+
+		cmd.UploadUniformBuffer(plugin.uboGlobal);
+		cmd.UploadUniformBuffer(uboWorldViews);
+
+		renderThread.submit(cmd);
 
 		// Reset buffers for the next frame
 		eboAlphaStaging.clear();
@@ -780,6 +785,8 @@ public class ZoneRenderer implements Renderer {
 			return;
 
 		sceneFboValid = true;
+
+		renderThread.waitForRenderingCompleted();
 
 		vaoA.unmap();
 
@@ -990,6 +997,8 @@ public class ZoneRenderer implements Renderer {
 		if (ctx == null)
 			return;
 
+		renderThread.waitForRenderingCompleted();
+
 		switch (pass) {
 			case DrawCallbacks.PASS_OPAQUE:
 				vaoO.addRange(scene);
@@ -1055,6 +1064,8 @@ public class ZoneRenderer implements Renderer {
 		if (ctx == null)
 			return;
 
+		renderThread.waitForRenderingCompleted();
+
 		int uuid = ModelHash.generateUuid(client, tileObject.getHash(), r);
 		int[] worldPos = ctx.sceneContext.localToWorld(tileObject.getLocalLocation(), tileObject.getPlane());
 		ModelOverride modelOverride = modelOverrideManager.getOverride(uuid, worldPos);
@@ -1106,6 +1117,8 @@ public class ZoneRenderer implements Renderer {
 		WorldViewContext ctx = context(scene);
 		if (ctx == null)
 			return;
+
+		renderThread.waitForRenderingCompleted();
 
 		Renderable renderable = gameObject.getRenderable();
 		int uuid = ModelHash.generateUuid(client, gameObject.getHash(), renderable);
