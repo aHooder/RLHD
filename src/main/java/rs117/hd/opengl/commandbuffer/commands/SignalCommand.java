@@ -1,26 +1,26 @@
 package rs117.hd.opengl.commandbuffer.commands;
 
-import java.util.concurrent.Semaphore;
 import org.lwjgl.system.MemoryStack;
 import rs117.hd.opengl.commandbuffer.BaseCommand;
+import rs117.hd.opengl.commandbuffer.FrameSync;
 
 public class SignalCommand extends BaseCommand {
 
-	public Semaphore semaphore;
+	public FrameSync frameSync;
 
 	@Override
 	protected void doWrite() {
-		writeObject(semaphore);
+		writeObject(frameSync);
 	}
 
 	@Override
 	protected void doRead(MemoryStack stack) {
-		semaphore = readObject();
+		frameSync = readObject();
 	}
 
 	@Override
 	protected void execute(MemoryStack stack) {
-		semaphore.release();
+		frameSync.signalReady();
 	}
 
 	@Override

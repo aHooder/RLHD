@@ -4,7 +4,6 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.LinkedBlockingDeque;
-import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.inject.Inject;
@@ -31,7 +30,7 @@ public final class RenderThread implements Runnable {
 	private final AtomicInteger pendingCount = new AtomicInteger(0);
 	private final Object completionLock = new Object();
 	private final AtomicBoolean running = new AtomicBoolean(false);
-	private final Semaphore invokeOnRenderThreadSemaphore = new Semaphore(0);
+	private final FrameSync invokeOnRenderThreadSync = new FrameSync();
 	private Thread thread;
 	private Thread clientJavaThread;
 
@@ -198,15 +197,13 @@ public final class RenderThread implements Runnable {
 	}
 
 	public void invokeOnRenderThread(CallbackCommand.ICallback callback) {
-		invokeOnRenderThreadSemaphore.drainPermits();
+		invokeOnRenderThreadSync.markInFlight();
 		CommandBuffer cmd = pool.acquire();
 		cmd.highPriority = true;
 		cmd.Callback(callback);
-		cmd.Signal(invokeOnRenderThreadSemaphore);
+		cmd.Signal(invokeOnRenderThreadSync);
 		submit(cmd);
-		if (contextWrapper.getOwner() == AWTContextWrapper.Owner.CLIENT && isClientThread())
-			contextWrapper.detachCurrent("waiting for callback to be invoked on render thread");
-		invokeOnRenderThreadSemaphore.acquireUninterruptibly();
+		invokeOnRenderThreadSync.await();
 	}
 
 	private void taskCompleted(RenderTask task) {

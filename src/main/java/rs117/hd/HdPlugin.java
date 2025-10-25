@@ -1480,15 +1480,6 @@ public class HdPlugin extends Plugin {
 		configSeasonalTheme = config.seasonalTheme();
 		configSeasonalHemisphere = config.seasonalHemisphere();
 
-		var newRenderThread = config.renderThread();
-		if(newRenderThread != configRenderThread) {
-			if(configRenderThread) {
-				renderThread.waitForRenderingCompleted();
-			}
-			configRenderThread = newRenderThread;
-			restartPlugin();
-		}
-
 		var newColorFilter = config.colorFilter();
 		if (newColorFilter != configColorFilter) {
 			configColorFilterPrevious = configColorFilter;

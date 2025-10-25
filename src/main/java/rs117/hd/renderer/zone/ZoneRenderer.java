@@ -1341,7 +1341,7 @@ public class ZoneRenderer implements Renderer {
 		cmd.EndTimer(Timer.SWAP_BUFFERS);
 		cmd.EndTimer(Timer.RENDER_FRAME);
 		cmd.Callback(frameTimer::endFrameAndReset);
-		cmd.Signal(renderingSync.getSema());
+		cmd.Signal(renderingSync);
 
 		renderingSync.markInFlight();
 		renderThread.submit(cmd);

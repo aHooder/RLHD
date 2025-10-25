@@ -83,7 +83,7 @@ public class UploadPixelDataCommand extends BaseCommand {
 			for(int i = 0; i < chunks; i++) {
 				if (frameSync != null && frameSync.isAwaiting()) {
 					stagingData.put(data, offset, remaining);
-					frameSync.getSema().release();
+					frameSync.signalReady();
 
 					stagingData.flip();
 					mappedIntBuffer.put(stagingData);
@@ -97,7 +97,7 @@ public class UploadPixelDataCommand extends BaseCommand {
 			}
 
 			if (frameSync != null) {
-				frameSync.getSema().release();
+				frameSync.signalReady();
 			}
 
 			glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);

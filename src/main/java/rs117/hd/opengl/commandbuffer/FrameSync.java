@@ -1,35 +1,36 @@
 package rs117.hd.opengl.commandbuffer;
 
-import java.util.concurrent.Semaphore;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.LockSupport;
 import lombok.Getter;
-import lombok.SneakyThrows;
 
 public class FrameSync {
 	@Getter
-	private final Semaphore sema = new Semaphore(0);
+	private volatile boolean awaiting = false;
+	private volatile boolean ready = false;
+	private volatile boolean inFlight = false;
 
-	private final AtomicBoolean inFlight = new AtomicBoolean(false);
-	private final AtomicBoolean awaiting = new AtomicBoolean(false);
-
-	public boolean isAwaiting() { return awaiting.get();}
-
-	@SneakyThrows
 	public boolean await() {
-		if(inFlight.get() && !awaiting.get()) {
-			awaiting.set(true);
-			while (!sema.tryAcquire()) {
-				Thread.sleep(1);
+		if (inFlight && !awaiting) {
+			awaiting = true;
+
+			while (!ready) {
+				LockSupport.parkNanos(1);
 			}
-			inFlight.set(false);
+
+			inFlight = false;
 			return true;
 		}
 		return false;
 	}
 
 	public void markInFlight() {
-		awaiting.set(false);
-		inFlight.set(true);
-		sema.drainPermits();
+		awaiting = false;
+		ready = false;
+		inFlight = true;
+	}
+
+	public void signalReady() {
+		ready = true;
 	}
 }
+

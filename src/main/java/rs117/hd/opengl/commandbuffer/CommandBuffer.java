@@ -1,7 +1,6 @@
 package rs117.hd.opengl.commandbuffer;
 
 import java.util.Arrays;
-import java.util.concurrent.Semaphore;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.rlawt.AWTContext;
 import org.lwjgl.system.MemoryStack;
@@ -330,8 +329,8 @@ public final class CommandBuffer {
 		CALLBACK_COMMAND.write();
 	}
 
-	public void Signal(Semaphore semaphore) {
-		SIGNAL_COMMAND.semaphore = semaphore;
+	public void Signal(FrameSync frameSync) {
+		SIGNAL_COMMAND.frameSync = frameSync;
 		SIGNAL_COMMAND.write();
 	}
 
