@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.inject.Inject;
@@ -13,6 +14,7 @@ import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.lwjgl.system.MemoryStack;
 import rs117.hd.HdPlugin;
+import rs117.hd.opengl.commandbuffer.commands.CallbackCommand;
 import rs117.hd.overlays.FrameTimer;
 import rs117.hd.overlays.Timer;
 
@@ -30,6 +32,7 @@ public final class RenderThread implements Runnable {
 	private final AtomicInteger pendingCount = new AtomicInteger(0);
 	private final Object completionLock = new Object();
 	private final AtomicBoolean running = new AtomicBoolean(false);
+	private final Semaphore invokeOnRenderThreadSemaphore = new Semaphore(0);
 	private Thread thread;
 
 	@Inject
@@ -57,18 +60,13 @@ public final class RenderThread implements Runnable {
 		thread.start();
 	}
 
-	public void submit(CommandBuffer buffer) {
-		submit(buffer, null);
-	}
+	public void submit(CommandBuffer buffer) { submit(buffer, null); }
 
 	public void submit(CommandBuffer buffer, boolean forceThread) {
 		submit(buffer, null, forceThread);
 	}
 
-
-	public void submit(CommandBuffer buffer, Runnable onComplete) {
-		submit(buffer, onComplete, false);
-	}
+	public void submit(CommandBuffer buffer, Runnable onComplete) { submit(buffer, onComplete, false); }
 
 	public void submit(CommandBuffer buffer, Runnable onComplete, boolean forceThread) {
 		if (buffer == null)
@@ -76,9 +74,8 @@ public final class RenderThread implements Runnable {
 
 		if(!plugin.configRenderThread && !forceThread) {
 			buffer.execute();
-			if (onComplete != null) {
-				onComplete.run();
-			}
+			if (onComplete != null) onComplete.run();
+			if (buffer.pooled) pool.release(buffer);
 			return;
 		}
 
@@ -99,17 +96,44 @@ public final class RenderThread implements Runnable {
 		queue.add(newTask);
 	}
 
+	private boolean isClientThread() {return Thread.currentThread() == clientThread; }
+
+	public void processCompletedTasks() {
+		if(isClientThread()) {
+			synchronized (completedTasks) {
+				for (RenderTask task : completedTasks) {
+					if (task.callback != null) {
+						try {
+							task.callback.run();
+						} catch (Throwable t) {
+							log.warn("Exception in render completion callback", t);
+						}
+					}
+
+					if (task.buffer.pooled) {
+						pool.release(task.buffer);
+					}
+
+					task.buffer = null;
+					task.callback = null;
+
+					TASK_BIN.add(task);
+				}
+				completedTasks.clear();
+			}
+		}
+	}
+
 	@SneakyThrows
 	public void waitForRenderingCompleted() {
 		if(pendingCount.get() == 0 && completedTasks.isEmpty() && contextWrapper.getOwner() == AWTContextWrapper.Owner.CLIENT) {
 			return;
 		}
 
-		boolean isClientThread = Thread.currentThread() == clientThread;
 		synchronized (completionLock) {
 			try {
 				while (pendingCount.get() > 0) {
-					if (contextWrapper.getOwner() == AWTContextWrapper.Owner.CLIENT && isClientThread)
+					if (contextWrapper.getOwner() == AWTContextWrapper.Owner.CLIENT && isClientThread())
 						contextWrapper.detachCurrent("waiting for render completion");
 
 					timer.begin(Timer.RENDER_THREAD_COMPLETION);
@@ -121,31 +145,10 @@ public final class RenderThread implements Runnable {
 				return;
 			}
 
-			if(isClientThread) {
-				contextWrapper.makeCurrent(AWTContextWrapper.Owner.CLIENT);
+			invokeOnRenderThread(() -> contextWrapper.detachCurrent("detached after render completion"));
+			contextWrapper.makeCurrent(AWTContextWrapper.Owner.CLIENT);
 
-				synchronized (completedTasks) {
-					for (RenderTask task : completedTasks) {
-						if (task.callback != null) {
-							try {
-								task.callback.run();
-							} catch (Throwable t) {
-								log.warn("Exception in render completion callback", t);
-							}
-						}
-
-						if (task.buffer.pooled) {
-							pool.release(task.buffer);
-						}
-
-						task.buffer = null;
-						task.callback = null;
-
-						TASK_BIN.add(task);
-					}
-					completedTasks.clear();
-				}
-			}
+			processCompletedTasks();
 		}
 	}
 
@@ -189,6 +192,17 @@ public final class RenderThread implements Runnable {
 		log.debug("RenderThread stopped!");
 	}
 
+	public void invokeOnRenderThread(CallbackCommand.ICallback callback) {
+		invokeOnRenderThreadSemaphore.drainPermits();
+		CommandBuffer cmd = pool.acquire();
+		cmd.Callback(callback);
+		cmd.Signal(invokeOnRenderThreadSemaphore);
+		submit(cmd);
+		if (contextWrapper.getOwner() == AWTContextWrapper.Owner.CLIENT && isClientThread())
+			contextWrapper.detachCurrent("waiting for callback to be invoked on render thread");
+		invokeOnRenderThreadSemaphore.acquireUninterruptibly();
+	}
+
 	private void taskCompleted(RenderTask task) {
 		synchronized (completedTasks) {
 			completedTasks.add(task);
@@ -196,10 +210,6 @@ public final class RenderThread implements Runnable {
 
 		int remaining = pendingCount.decrementAndGet();
 		if (remaining <= 0) {
-			// Release ownership now that there is no more work pending
-			if (contextWrapper.getOwner() == AWTContextWrapper.Owner.RENDER_THREAD)
-				contextWrapper.detachCurrent("released by render thread");
-
 			pendingCount.set(0);
 			synchronized (completionLock) {
 				completionLock.notifyAll();

@@ -4,9 +4,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import rs117.hd.opengl.commandbuffer.CommandBuffer;
+import rs117.hd.opengl.commandbuffer.RenderThread;
 
 import static org.lwjgl.opengl.GL33C.*;
 
@@ -127,14 +129,14 @@ class VAO {
 		private final List<VAO> vaos = new ArrayList<>();
 		private final int eboAlpha;
 
-		VAO get(int size) {
+		@SneakyThrows
+		VAO get(RenderThread renderThread, int size) {
 			assert size <= VAO_SIZE;
 
 			while (curIdx < vaos.size()) {
 				VAO vao = vaos.get(curIdx);
-				if (!vao.vbo.mapped) {
-					vao.vbo.map();
-				}
+				if (!vao.vbo.mapped)
+					renderThread.invokeOnRenderThread(vao.vbo::map);
 
 				int rem = vao.vbo.vb.remaining() * Integer.BYTES;
 				if (size <= rem) {
@@ -144,11 +146,13 @@ class VAO {
 				curIdx++;
 			}
 
-			VAO vao = new VAO(VAO_SIZE);
-			vao.initialize(eboAlpha);
-			vao.vbo.map();
-			vaos.add(vao);
-			log.debug("Allocated VAO {} request {}", vao.vao, size);
+			final VAO vao = new VAO(VAO_SIZE);
+			renderThread.invokeOnRenderThread(() -> {
+				vao.initialize(eboAlpha);
+				vao.vbo.map();
+				vaos.add(vao);
+				log.debug("Allocated VAO {} request {}", vao.vao, size);
+			});
 			return vao;
 		}
 

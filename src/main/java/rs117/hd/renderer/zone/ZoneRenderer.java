@@ -50,6 +50,7 @@ import rs117.hd.config.DynamicLights;
 import rs117.hd.opengl.commandbuffer.AWTContextWrapper;
 import rs117.hd.opengl.commandbuffer.CommandBuffer;
 import rs117.hd.opengl.commandbuffer.CommandBufferPool;
+import rs117.hd.opengl.commandbuffer.FrameSync;
 import rs117.hd.opengl.commandbuffer.RenderThread;
 import rs117.hd.opengl.shader.SceneShaderProgram;
 import rs117.hd.opengl.shader.ShaderException;
@@ -162,10 +163,11 @@ public class ZoneRenderer implements Renderer {
 
 	private int minLevel, level, maxLevel;
 	private Set<Integer> hideRoofIds;
-	private boolean isDrawingScene;
 
 	private final CommandBuffer zoneDrawCallBuffer = new CommandBuffer();
 	private final CommandBuffer zoneShadowDrawCallBuffer = new CommandBuffer();
+
+	private final FrameSync renderingSync = new FrameSync();
 
 	private VAO.VAOList vaoO;
 	private VAO.VAOList vaoA;
@@ -354,6 +356,10 @@ public class ZoneRenderer implements Renderer {
 		this.maxLevel = maxLevel;
 		this.hideRoofIds = hideRoofIds;
 
+		if(renderingSync.await()) {
+			renderThread.processCompletedTasks();
+		}
+
 		if (scene.getWorldViewId() == WorldView.TOPLEVEL) {
 			preSceneDrawTopLevel(scene, cameraX, cameraY, cameraZ, cameraPitch, cameraYaw);
 		} else {
@@ -370,8 +376,6 @@ public class ZoneRenderer implements Renderer {
 		Scene scene,
 		float cameraX, float cameraY, float cameraZ, float cameraPitch, float cameraYaw
 	) {
-		isDrawingScene = true;
-
 		scene.setDrawDistance(plugin.getDrawDistance());
 		plugin.updateSceneFbo();
 
@@ -786,18 +790,19 @@ public class ZoneRenderer implements Renderer {
 
 		sceneFboValid = true;
 
-		renderThread.waitForRenderingCompleted();
+		renderThread.invokeOnRenderThread(vaoA::unmap);
 
-		vaoA.unmap();
+		CommandBuffer cmd = commandBufferPool.acquire();
 
 		// Scene draw state to apply before all recorded commands
 		if (eboAlphaStaging.position() > 0) {
-			eboAlphaStaging.flip();
-			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, eboAlpha);
-			glBufferData(GL_ELEMENT_ARRAY_BUFFER, eboAlphaStaging.getBuffer(), GL_STREAM_DRAW);
+			cmd.Callback(() -> {
+				eboAlphaStaging.flip();
+				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, eboAlpha);
+				glBufferData(GL_ELEMENT_ARRAY_BUFFER, eboAlphaStaging.getBuffer(), GL_STREAM_DRAW);
+			});
 		}
 
-		CommandBuffer cmd = commandBufferPool.acquire();
 
 		if (plugin.configShadowsEnabled &&
 			plugin.fboShadowMap != 0 &&
@@ -997,8 +1002,6 @@ public class ZoneRenderer implements Renderer {
 		if (ctx == null)
 			return;
 
-		renderThread.waitForRenderingCompleted();
-
 		switch (pass) {
 			case DrawCallbacks.PASS_OPAQUE:
 				vaoO.addRange(scene);
@@ -1010,15 +1013,15 @@ public class ZoneRenderer implements Renderer {
 					zoneShadowDrawCallBuffer.SetUniformProperty(uboCommandBuffer.sceneBase, 0, 0, 0);
 
 					// Draw opaque
-					vaoO.unmap();
+					renderThread.invokeOnRenderThread(vaoO::unmap);
 					vaoO.drawAll(this, zoneDrawCallBuffer);
 					vaoO.drawAll(this, zoneShadowDrawCallBuffer);
 					vaoO.resetAll();
 
-					vaoPO.unmap();
+					renderThread.invokeOnRenderThread(vaoPO::unmap);
 
 					// Draw player shadows
-					vaoPOShadow.unmap();
+					renderThread.invokeOnRenderThread(vaoPOShadow::unmap);
 					vaoPOShadow.drawAll(this, zoneShadowDrawCallBuffer);
 					vaoPOShadow.resetAll();
 
@@ -1087,15 +1090,13 @@ public class ZoneRenderer implements Renderer {
 			}
 		}
 
-		renderThread.waitForRenderingCompleted();
-
 		int size = m.getFaceCount() * 3 * VAO.VERT_SIZE;
 		if (!hasAlpha) {
-			VAO o = vaoO.get(size);
+			VAO o = vaoO.get(renderThread, size);
 			sceneUploader.uploadTempModel(m, modelOverride, preOrientation, orient, x, y, z, o.vbo.vb);
 		} else {
 			m.calculateBoundsCylinder();
-			VAO o = vaoO.get(size), a = vaoA.get(size);
+			VAO o = vaoO.get(renderThread, size), a = vaoA.get(renderThread, size);
 			int start = a.vbo.vb.position();
 			facePrioritySorter.uploadSortedModel(worldProjection, m, modelOverride, preOrientation, orient, x, y, z, o.vbo.vb, a.vbo.vb);
 			int end = a.vbo.vb.position();
@@ -1125,8 +1126,6 @@ public class ZoneRenderer implements Renderer {
 		if (modelOverride.hide)
 			return;
 
-		renderThread.waitForRenderingCompleted();
-
 		int preOrientation = HDUtils.getModelPreOrientation(gameObject.getConfig());
 
 		int size = m.getFaceCount() * 3 * VAO.VERT_SIZE;
@@ -1140,8 +1139,8 @@ public class ZoneRenderer implements Renderer {
 				// opaque player faces have their own vao and are drawn in a separate pass from normal opaque faces
 				// because they are not depth tested. transparent player faces don't need their own vao because normal
 				// transparent faces are already not depth tested
-				VAO o = renderable instanceof Player ? vaoPO.get(size) : vaoO.get(size);
-				VAO a = vaoA.get(size);
+				VAO o = renderable instanceof Player ? vaoPO.get(renderThread, size) : vaoO.get(renderThread, size);
+				VAO a = vaoA.get(renderThread, size);
 
 				int start = a.vbo.vb.position();
 				m.calculateBoundsCylinder();
@@ -1179,7 +1178,7 @@ public class ZoneRenderer implements Renderer {
 			if (zone.inShadowFrustum) {
 				// Since priority sorting of models includes back-face culling,
 				// we need to upload the entire model again for shadows
-				VAO o = vaoPOShadow.get(size);
+				VAO o = vaoPOShadow.get(renderThread, size);
 				sceneUploader.uploadTempModel(
 					m,
 					modelOverride,
@@ -1192,7 +1191,7 @@ public class ZoneRenderer implements Renderer {
 				);
 			}
 		} else {
-			VAO o = vaoO.get(size);
+			VAO o = vaoO.get(renderThread, size);
 			sceneUploader.uploadTempModel(
 				m,
 				modelOverride,
@@ -1233,47 +1232,47 @@ public class ZoneRenderer implements Renderer {
 		if (ctx == null)
 			return;
 
-		for (int x = 0; x < ctx.sizeX; ++x) {
-			for (int z = 0; z < ctx.sizeZ; ++z) {
-				Zone zone = ctx.zones[x][z];
-				if (!zone.invalidate)
-					continue;
+		renderThread.invokeOnRenderThread(() -> {
+			for (int x = 0; x < ctx.sizeX; ++x) {
+				for (int z = 0; z < ctx.sizeZ; ++z) {
+					Zone zone = ctx.zones[x][z];
+					if (!zone.invalidate)
+						continue;
 
-				renderThread.waitForRenderingCompleted();
+					assert zone.initialized;
+					zone.free();
+					zone = ctx.zones[x][z] = new Zone();
 
-				assert zone.initialized;
-				zone.free();
-				zone = ctx.zones[x][z] = new Zone();
+					SceneUploader sceneUploader = injector.getInstance(SceneUploader.class);
+					sceneUploader.zoneSize(ctx.sceneContext, zone, x, z);
 
-				SceneUploader sceneUploader = injector.getInstance(SceneUploader.class);
-				sceneUploader.zoneSize(ctx.sceneContext, zone, x, z);
+					VBO o = null, a = null;
+					int sz = zone.sizeO * Zone.VERT_SIZE * 3;
+					if (sz > 0) {
+						o = new VBO(sz);
+						o.initialize(GL_STATIC_DRAW);
+						o.map();
+					}
 
-				VBO o = null, a = null;
-				int sz = zone.sizeO * Zone.VERT_SIZE * 3;
-				if (sz > 0) {
-					o = new VBO(sz);
-					o.initialize(GL_STATIC_DRAW);
-					o.map();
+					sz = zone.sizeA * Zone.VERT_SIZE * 3;
+					if (sz > 0) {
+						a = new VBO(sz);
+						a.initialize(GL_STATIC_DRAW);
+						a.map();
+					}
+
+					zone.initialize(o, a, eboAlpha);
+
+					sceneUploader.uploadZone(ctx.sceneContext, zone, x, z);
+
+					zone.unmap();
+					zone.initialized = true;
+					zone.dirty = true;
+
+					log.trace("Rebuilt zone wv={} x={} z={}", wv.getId(), x, z);
 				}
-
-				sz = zone.sizeA * Zone.VERT_SIZE * 3;
-				if (sz > 0) {
-					a = new VBO(sz);
-					a.initialize(GL_STATIC_DRAW);
-					a.map();
-				}
-
-				zone.initialize(o, a, eboAlpha);
-
-				sceneUploader.uploadZone(ctx.sceneContext, zone, x, z);
-
-				zone.unmap();
-				zone.initialized = true;
-				zone.dirty = true;
-
-				log.trace("Rebuilt zone wv={} x={} z={}", wv.getId(), x, z);
 			}
-		}
+		});
 	}
 
 	@Override
@@ -1285,8 +1284,8 @@ public class ZoneRenderer implements Renderer {
 			return;
 		}
 
-		if(!isDrawingScene) {
-			renderThread.waitForRenderingCompleted();
+		if(renderingSync.await()) {
+			renderThread.processCompletedTasks();
 		}
 
 		try {
@@ -1318,15 +1317,13 @@ public class ZoneRenderer implements Renderer {
 		cmd.SwapBuffers(awtContextWrapper.getContext());
 		cmd.EndTimer(Timer.SWAP_BUFFERS);
 		cmd.EndTimer(Timer.RENDER_FRAME);
+		cmd.Callback(frameTimer::endFrameAndReset);
+		cmd.Signal(renderingSync.getSema());
+
+		renderingSync.markInFlight();
 
 		frameTimer.end(Timer.DRAW_FRAME);
-		renderThread.submit(cmd, this::onBackBufferSwapCompleted);
-	}
-
-	public void onBackBufferSwapCompleted() {
-		isDrawingScene = false;
-
-		frameTimer.endFrameAndReset();
+		renderThread.submit(cmd);
 	}
 
 	@Subscribe
@@ -1515,8 +1512,7 @@ public class ZoneRenderer implements Renderer {
 		);
 
 		// allocate buffers for zones which require upload
-		CommandBuffer cmd = commandBufferPool.acquire();
-		cmd.Callback(() -> {
+		renderThread.invokeOnRenderThread(() -> {
 			for (int x = 0; x < EXTENDED_SCENE_SIZE >> 3; ++x) {
 				for (int z = 0; z < EXTENDED_SCENE_SIZE >> 3; ++z) {
 					Zone zone = newZones[x][z];
@@ -1544,8 +1540,6 @@ public class ZoneRenderer implements Renderer {
 				}
 			}
 		});
-		renderThread.submit(cmd, true);
-		renderThread.waitForRenderingCompleted();
 
 		// upload zones
 		sw = Stopwatch.createStarted();
@@ -1649,9 +1643,7 @@ public class ZoneRenderer implements Renderer {
 				sceneUploader.zoneSize(sceneContext, ctx.zones[x][z], x, z);
 
 		// allocate buffers for zones which require upload
-		CommandBuffer cmd = commandBufferPool.acquire();
-		cmd.Callback(() ->
-		{
+		renderThread.invokeOnRenderThread(() -> {
 			for (int x = 0; x < ctx.sizeX; ++x) {
 				for (int z = 0; z < ctx.sizeZ; ++z) {
 					Zone zone = ctx.zones[x][z];
@@ -1675,8 +1667,6 @@ public class ZoneRenderer implements Renderer {
 				}
 			}
 		});
-		renderThread.submit(cmd, true);
-		renderThread.waitForRenderingCompleted();
 
 		for (int x = 0; x < ctx.sizeX; ++x)
 			for (int z = 0; z < ctx.sizeZ; ++z)

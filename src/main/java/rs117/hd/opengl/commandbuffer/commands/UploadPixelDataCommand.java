@@ -2,10 +2,10 @@ package rs117.hd.opengl.commandbuffer.commands;
 
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
-import java.util.concurrent.atomic.AtomicBoolean;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
 import rs117.hd.opengl.commandbuffer.BaseCommand;
+import rs117.hd.opengl.commandbuffer.FrameSync;
 
 import static org.lwjgl.opengl.GL11C.GL_TEXTURE_2D;
 import static org.lwjgl.opengl.GL11C.glBindTexture;
@@ -26,8 +26,7 @@ public class UploadPixelDataCommand extends BaseCommand {
 	public int width;
 	public int height;
 	public int[] data;
-	public AtomicBoolean stageData;
-	public AtomicBoolean stageComplete;
+	public FrameSync frameSync;
 
 	private IntBuffer stagingData = null;
 	private ByteBuffer mappedBuffer = null;
@@ -40,10 +39,9 @@ public class UploadPixelDataCommand extends BaseCommand {
 		write32(width);
 		write32(height);
 		writeObject(data);
-		if(stageData != null && stageComplete != null) {
+		if(frameSync != null) {
 			writeFlag(true);
-			writeObject(stageData);
-			writeObject(stageComplete);
+			writeObject(frameSync);
 		} else {
 			writeFlag(false);
 		}
@@ -59,11 +57,9 @@ public class UploadPixelDataCommand extends BaseCommand {
 		height = read32();
 		data = readObject();
 		if(readFlag()) {
-			stageData = readObject();
-			stageComplete = readObject();
+			frameSync = readObject();
 		} else {
-			stageData = null;
-			stageComplete = null;
+			frameSync = null;
 		}
 	}
 
@@ -76,8 +72,7 @@ public class UploadPixelDataCommand extends BaseCommand {
 		if (mappedBuffer != null) {
 			IntBuffer mappedIntBuffer = mappedBuffer.asIntBuffer();
 
-			boolean stagingSupport = stageData != null && stageComplete != null;
-			if(stagingSupport && (stagingData == null || stagingData.capacity() < data.length)) {
+			if(frameSync != null && (stagingData == null || stagingData.capacity() < data.length)) {
 				stagingData = MemoryUtil.memAllocInt(data.length);
 			}
 
@@ -86,9 +81,9 @@ public class UploadPixelDataCommand extends BaseCommand {
 			int chunkSize = remaining / chunks;
 			int offset = 0;
 			for(int i = 0; i < chunks; i++) {
-				if (stagingSupport && stageData.get()) {
+				if (frameSync != null && frameSync.isAwaiting()) {
 					stagingData.put(data, offset, remaining);
-					stageComplete.set(true);
+					frameSync.getSema().release();
 
 					stagingData.flip();
 					mappedIntBuffer.put(stagingData);
@@ -101,8 +96,8 @@ public class UploadPixelDataCommand extends BaseCommand {
 				}
 			}
 
-			if (stagingSupport) {
-				stageComplete.set(true);
+			if (frameSync != null) {
+				frameSync.getSema().release();
 			}
 
 			glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);

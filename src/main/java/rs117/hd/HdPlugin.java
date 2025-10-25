@@ -44,8 +44,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.LockSupport;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.swing.SwingUtilities;
@@ -85,6 +83,7 @@ import rs117.hd.config.VanillaShadowMode;
 import rs117.hd.opengl.commandbuffer.AWTContextWrapper;
 import rs117.hd.opengl.commandbuffer.CommandBuffer;
 import rs117.hd.opengl.commandbuffer.CommandBufferPool;
+import rs117.hd.opengl.commandbuffer.FrameSync;
 import rs117.hd.opengl.commandbuffer.RenderThread;
 import rs117.hd.opengl.shader.ShaderException;
 import rs117.hd.opengl.shader.ShaderIncludes;
@@ -331,9 +330,7 @@ public class HdPlugin extends Plugin {
 	private final int[] actualUiResolution = { 0, 0 }; // Includes stretched mode and DPI scaling
 	private int texUi;
 	private int pboUi;
-	private boolean uploadInFlight = false;
-	private final AtomicBoolean stageTrigger = new AtomicBoolean(false);
-	private final AtomicBoolean stageComplete = new AtomicBoolean(false);
+	private final FrameSync uiUploadSync = new FrameSync();
 
 	@Nullable
 	public int[] sceneViewport;
@@ -606,8 +603,6 @@ public class HdPlugin extends Plugin {
 				gammaCalibrationOverlay.initialize();
 				npcDisplacementCache.initialize();
 
-				hooks.registerRenderableDrawListener(this::onDraw);
-
 				isActive = true;
 				hasLoggedIn = client.getGameState().getState() > GameState.LOGGING_IN.getState();
 				redrawPreviousFrame = false;
@@ -628,21 +623,6 @@ public class HdPlugin extends Plugin {
 			}
 			return true;
 		});
-	}
-
-	@SneakyThrows
-	private boolean onDraw(Renderable renderable, boolean drawingUI) {
-		if (uploadInFlight) {
-			frameTimer.begin(Timer.COPY_UI);
-
-			stageTrigger.set(true);
-			while (!stageComplete.get()) {
-				LockSupport.parkNanos(100000);
-			}
-			frameTimer.end(Timer.COPY_UI);
-			uploadInFlight = false;
-		}
-		return true;
 	}
 
 	@Override
@@ -1369,13 +1349,11 @@ public class HdPlugin extends Plugin {
 		final int width = bufferProvider.getWidth();
 		final int height = bufferProvider.getHeight();
 
-		uploadInFlight = true;
-		stageTrigger.set(false);
-		stageComplete.set(false);
+		uiUploadSync.markInFlight();
 
 		CommandBuffer cmd = commandBufferPool.acquire();
 		cmd.BeginTimer(Timer.UPLOAD_UI);
-		cmd.UploadPixelData(TEXTURE_UNIT_UI, texUi, pboUi, width, height, pixels, stageTrigger, stageComplete);
+		cmd.UploadPixelData(TEXTURE_UNIT_UI, texUi, pboUi, width, height, pixels, uiUploadSync);
 		cmd.EndTimer(Timer.UPLOAD_UI);
 		if(renderer instanceof ZoneRenderer) {
 			renderThread.submit(cmd);
@@ -1806,6 +1784,10 @@ public class HdPlugin extends Plugin {
 	@Subscribe(priority = -1) // Run after the low detail plugin
 	public void onBeforeRender(BeforeRender beforeRender) {
 		SKIP_GL_ERROR_CHECKS = !log.isDebugEnabled() || developerTools.isFrameTimingsOverlayEnabled();
+
+		frameTimer.begin(Timer.COPY_UI);
+		uiUploadSync.await();
+		frameTimer.end(Timer.COPY_UI);
 
 		if (client.getScene() == null)
 			return;

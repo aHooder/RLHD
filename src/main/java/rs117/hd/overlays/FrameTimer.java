@@ -49,9 +49,7 @@ public class FrameTimer {
 	}
 
 	private void initialize() {
-		clientThread.invoke(() -> {
-			renderThread.waitForRenderingCompleted();
-
+		renderThread.invokeOnRenderThread(() -> {
 			int[] queryNames = new int[NUM_GPU_TIMERS * 2];
 			glGenQueries(queryNames);
 			int queryIndex = 0;
@@ -81,7 +79,7 @@ public class FrameTimer {
 	}
 
 	private void destroy() {
-		clientThread.invoke(() -> {
+		renderThread.invokeOnRenderThread(() -> {
 			if (!isActive)
 				return;
 

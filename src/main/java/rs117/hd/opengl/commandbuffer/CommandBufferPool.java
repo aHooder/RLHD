@@ -8,7 +8,13 @@ import lombok.extern.slf4j.Slf4j;
 @Singleton
 public class CommandBufferPool {
 
+	public static CommandBufferPool INSTANCE;
+
 	private final ArrayDeque<CommandBuffer> pool = new ArrayDeque<>();
+
+	public CommandBufferPool() {
+		INSTANCE = this;
+	}
 
 	public CommandBuffer acquire() {
 		if (pool.isEmpty()) {
