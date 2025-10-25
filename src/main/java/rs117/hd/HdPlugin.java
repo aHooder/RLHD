@@ -328,7 +328,8 @@ public class HdPlugin extends Plugin {
 	private int[] uiResolution;
 	private final int[] actualUiResolution = { 0, 0 }; // Includes stretched mode and DPI scaling
 	private int texUi;
-	private int pboUi;
+	private int[] pboUi = new int[2];
+	private int pboUiIdx = 0;
 	private final FrameSync uiUploadSync = new FrameSync();
 
 	@Nullable
@@ -1007,7 +1008,8 @@ public class HdPlugin extends Plugin {
 	}
 
 	private void initializeUiTexture() {
-		pboUi = glGenBuffers();
+		pboUi[0] = glGenBuffers();
+		pboUi[1] = glGenBuffers();
 
 		texUi = glGenTextures();
 		glActiveTexture(TEXTURE_UNIT_UI);
@@ -1021,9 +1023,12 @@ public class HdPlugin extends Plugin {
 	private void destroyUiTexture() {
 		uiResolution = null;
 
-		if (pboUi != 0)
-			glDeleteBuffers(pboUi);
-		pboUi = 0;
+		for(int i = 0; i < pboUi.length; i++) {
+			if (pboUi[i] != 0) {
+				glDeleteBuffers(pboUi[i]);
+				pboUi[i] = 0;
+			}
+		}
 
 		if (texUi != 0)
 			glDeleteTextures(texUi);
@@ -1325,8 +1330,10 @@ public class HdPlugin extends Plugin {
 
 			renderer.waitUntilIdle();
 
-			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pboUi);
-			glBufferData(GL_PIXEL_UNPACK_BUFFER, uiResolution[0] * uiResolution[1] * 4L, GL_STREAM_DRAW);
+			for(int i = 0; i < pboUi.length; i++) {
+				glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pboUi[i]);
+				glBufferData(GL_PIXEL_UNPACK_BUFFER, uiResolution[0] * uiResolution[1] * 4L, GL_STREAM_DRAW);
+			}
 			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 
 			glActiveTexture(TEXTURE_UNIT_UI);
@@ -1352,8 +1359,9 @@ public class HdPlugin extends Plugin {
 
 		CommandBuffer cmd = commandBufferPool.acquire();
 		cmd.BeginTimer(Timer.UPLOAD_UI);
-		cmd.UploadPixelData(TEXTURE_UNIT_UI, texUi, pboUi, width, height, pixels, uiUploadSync);
+		cmd.UploadPixelData(TEXTURE_UNIT_UI, texUi, pboUi[pboUiIdx], width, height, pixels, uiUploadSync);
 		cmd.EndTimer(Timer.UPLOAD_UI);
+		pboUiIdx = (pboUiIdx + 1) % pboUi.length;
 		renderThread.submit(cmd);
 	}
 
