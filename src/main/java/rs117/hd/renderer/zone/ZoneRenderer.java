@@ -370,14 +370,6 @@ public class ZoneRenderer implements Renderer {
 		this.maxLevel = maxLevel;
 		this.hideRoofIds = hideRoofIds;
 
-		if(renderingSync.await()) {
-			renderThread.processCompletedTasks();
-
-			SceneVAOs temp = vaos;
-			vaos = vaos_prev;
-			vaos_prev = temp;
-		}
-
 		if (scene.getWorldViewId() == WorldView.TOPLEVEL) {
 			preSceneDrawTopLevel(scene, cameraX, cameraY, cameraZ, cameraPitch, cameraYaw);
 		} else {
@@ -1250,6 +1242,22 @@ public class ZoneRenderer implements Renderer {
 		if (ctx == null)
 			return;
 
+
+		// Check if any zones need to be invalidated before invoking on the RenderThread
+		boolean needsRebuild = false;
+		for (int x = 0; x < ctx.sizeX; ++x) {
+			for (int z = 0; z < ctx.sizeZ; ++z) {
+				Zone zone = ctx.zones[x][z];
+				if (zone.invalidate) {
+					needsRebuild = true;
+					break;
+				}
+			}
+		}
+
+		if(!needsRebuild)
+			return;
+
 		renderThread.invokeOnRenderThread(() -> {
 			for (int x = 0; x < ctx.sizeX; ++x) {
 				for (int z = 0; z < ctx.sizeZ; ++z) {
@@ -1296,14 +1304,18 @@ public class ZoneRenderer implements Renderer {
 	@Override
 	public void draw(int overlayColor) {
 		log.trace("draw(overlaySrgba={})", overlayColor);
-		final GameState gameState = client.getGameState();
-		if (gameState == GameState.STARTING) {
-			frameTimer.end(Timer.DRAW_FRAME);
-			return;
-		}
+		frameTimer.end(Timer.DRAW_FRAME);
 
-		if(renderingSync.await()) {
-			renderThread.processCompletedTasks();
+		if(!renderingSync.isAwaiting()) {
+			long time = System.nanoTime();
+			if (renderingSync.await()) {
+				renderThread.processCompletedTasks();
+
+				SceneVAOs temp = vaos;
+				vaos = vaos_prev;
+				vaos_prev = temp;
+			}
+			frameTimer.add(Timer.FRAME_SYNC, System.nanoTime() - time);
 		}
 
 		try {
@@ -1339,8 +1351,6 @@ public class ZoneRenderer implements Renderer {
 		cmd.Signal(renderingSync.getSema());
 
 		renderingSync.markInFlight();
-
-		frameTimer.end(Timer.DRAW_FRAME);
 		renderThread.submit(cmd);
 	}
 

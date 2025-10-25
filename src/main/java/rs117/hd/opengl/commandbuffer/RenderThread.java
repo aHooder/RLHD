@@ -11,11 +11,11 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import net.runelite.client.callback.ClientThread;
 import org.lwjgl.system.MemoryStack;
 import rs117.hd.HdPlugin;
 import rs117.hd.opengl.commandbuffer.commands.CallbackCommand;
 import rs117.hd.overlays.FrameTimer;
-import rs117.hd.overlays.Timer;
 
 @Slf4j
 @Singleton
@@ -33,6 +33,7 @@ public final class RenderThread implements Runnable {
 	private final AtomicBoolean running = new AtomicBoolean(false);
 	private final Semaphore invokeOnRenderThreadSemaphore = new Semaphore(0);
 	private Thread thread;
+	private Thread clientJavaThread;
 
 	@Inject
 	private HdPlugin plugin;
@@ -40,7 +41,8 @@ public final class RenderThread implements Runnable {
 	@Inject
 	private FrameTimer timer;
 
-	private Thread clientThread;
+	@Inject
+	private ClientThread clientThread;
 
 	@Inject
 	private AWTContextWrapper contextWrapper;
@@ -49,7 +51,7 @@ public final class RenderThread implements Runnable {
 	private CommandBufferPool pool;
 
 	public void initialize() {
-		clientThread = Thread.currentThread();
+		clientJavaThread = Thread.currentThread();
 
 		running.set(true);
 
@@ -72,15 +74,23 @@ public final class RenderThread implements Runnable {
 			throw new IllegalArgumentException("CommandBuffer cannot be null");
 
 		if(!plugin.configRenderThread && !forceThread) {
-			buffer.execute();
-			if (onComplete != null) onComplete.run();
-			if (buffer.pooled) pool.release(buffer);
+			if(isClientThread()) {
+				buffer.execute();
+				if (onComplete != null) onComplete.run();
+				if (buffer.pooled) pool.release(buffer);
+			} else {
+				clientThread.invoke(() -> {
+					buffer.execute();
+					if (onComplete != null) onComplete.run();
+					if (buffer.pooled) pool.release(buffer);
+				});
+			}
 			return;
 		}
 
 		pendingCount.incrementAndGet();
 
-		if (contextWrapper.getOwner() == AWTContextWrapper.Owner.CLIENT && Thread.currentThread() == clientThread) {
+		if (contextWrapper.getOwner() == AWTContextWrapper.Owner.CLIENT && isClientThread()) {
 			contextWrapper.detachCurrent("detached for render submit");
 		}
 
@@ -99,7 +109,7 @@ public final class RenderThread implements Runnable {
 		}
 	}
 
-	private boolean isClientThread() {return Thread.currentThread() == clientThread; }
+	private boolean isClientThread() {return Thread.currentThread() == clientJavaThread; }
 
 	public void processCompletedTasks() {
 		if(isClientThread()) {
@@ -139,9 +149,7 @@ public final class RenderThread implements Runnable {
 					if (contextWrapper.getOwner() == AWTContextWrapper.Owner.CLIENT && isClientThread())
 						contextWrapper.detachCurrent("waiting for render completion");
 
-					timer.begin(Timer.RENDER_THREAD_COMPLETION);
 					completionLock.wait();
-					timer.end(Timer.RENDER_THREAD_COMPLETION);
 				}
 			} catch (InterruptedException e) {
 				Thread.currentThread().interrupt();

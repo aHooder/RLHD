@@ -204,7 +204,7 @@ public class FrameTimer {
 			} else {
 				if (activeTimers[i]) {
 					// End the CPU timer automatically, but warn about it
-					log.warn("Timer {} was never ended", timer);
+					//log.warn("Timer {} was never ended", timer);
 					timings[i] += frameEndNanos;
 				}
 			}
