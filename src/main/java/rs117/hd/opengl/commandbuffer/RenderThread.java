@@ -3,8 +3,7 @@ package rs117.hd.opengl.commandbuffer;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -26,7 +25,7 @@ public final class RenderThread implements Runnable {
 	private static final RenderTask POISON_PILL = new RenderTask();
 	private static final ArrayDeque<RenderTask> TASK_BIN = new ArrayDeque<>();
 
-	private final BlockingQueue<RenderTask> queue = new LinkedBlockingQueue<>();
+	private final LinkedBlockingDeque<RenderTask> queue = new LinkedBlockingDeque<>();
 	private final List<RenderTask> completedTasks = new ArrayList<>();
 
 	private final AtomicInteger pendingCount = new AtomicInteger(0);
@@ -93,7 +92,11 @@ public final class RenderThread implements Runnable {
 		newTask.buffer = buffer;
 		newTask.callback = onComplete;
 
-		queue.add(newTask);
+		if(buffer.highPriority) {
+			queue.addFirst(newTask);
+		} else {
+			queue.addLast(newTask);
+		}
 	}
 
 	private boolean isClientThread() {return Thread.currentThread() == clientThread; }
@@ -195,6 +198,7 @@ public final class RenderThread implements Runnable {
 	public void invokeOnRenderThread(CallbackCommand.ICallback callback) {
 		invokeOnRenderThreadSemaphore.drainPermits();
 		CommandBuffer cmd = pool.acquire();
+		cmd.highPriority = true;
 		cmd.Callback(callback);
 		cmd.Signal(invokeOnRenderThreadSemaphore);
 		submit(cmd);

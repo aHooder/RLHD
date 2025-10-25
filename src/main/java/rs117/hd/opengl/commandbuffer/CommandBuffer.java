@@ -116,6 +116,7 @@ public final class CommandBuffer {
 	private int readHead = 0;
 	private int readBitHead = 0;
 
+	protected boolean highPriority;
 	protected boolean pooled;
 
 	private Timer executionTimer = null;
@@ -548,6 +549,8 @@ public final class CommandBuffer {
 	}
 
 	public void reset() {
+		highPriority = false;
+
 		writeHead = 0;
 		writeBitHead = 0;
 
@@ -555,10 +558,14 @@ public final class CommandBuffer {
 		readBitHead = 0;
 
 		// Objects need to be cleared to avoid holding onto a reference and preventing garbage collection
-		Arrays.fill(objects, 0, objectCount, null);
-		objectCount = 0;
+		if(objectCount > 0 ) {
+			Arrays.fill(objects, 0, objectCount, null);
+			objectCount = 0;
+		}
 
-		Arrays.fill(pendingUBOUploads, 0, pendingUBOUploadsCount, null);
-		pendingUBOUploadsCount = 0;
+		if(pendingUBOUploadsCount > 0) {
+			Arrays.fill(pendingUBOUploads, 0, pendingUBOUploadsCount, null);
+			pendingUBOUploadsCount = 0;
+		}
 	}
 }
