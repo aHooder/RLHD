@@ -1008,8 +1008,8 @@ public class HdPlugin extends Plugin {
 	}
 
 	private void initializeUiTexture() {
-		pboUi[0] = glGenBuffers();
-		pboUi[1] = glGenBuffers();
+		for(int i = 0; i < pboUi.length; i++)
+			pboUi[i] = glGenBuffers();
 
 		texUi = glGenTextures();
 		glActiveTexture(TEXTURE_UNIT_UI);
@@ -1328,17 +1328,17 @@ public class HdPlugin extends Plugin {
 		if (resize) {
 			uiResolution = resolution;
 
-			renderer.waitUntilIdle();
+			renderThread.invokeOnRenderThread(() -> {
+				for(int i = 0; i < pboUi.length; i++) {
+					glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pboUi[i]);
+					glBufferData(GL_PIXEL_UNPACK_BUFFER, uiResolution[0] * uiResolution[1] * 4L, GL_STREAM_DRAW);
+				}
+				glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 
-			for(int i = 0; i < pboUi.length; i++) {
-				glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pboUi[i]);
-				glBufferData(GL_PIXEL_UNPACK_BUFFER, uiResolution[0] * uiResolution[1] * 4L, GL_STREAM_DRAW);
-			}
-			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-
-			glActiveTexture(TEXTURE_UNIT_UI);
-			glBindTexture(GL_TEXTURE_2D, texUi);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, uiResolution[0], uiResolution[1], 0, GL_BGRA, GL_UNSIGNED_BYTE, 0);
+				glActiveTexture(TEXTURE_UNIT_UI);
+				glBindTexture(GL_TEXTURE_2D, texUi);
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, uiResolution[0], uiResolution[1], 0, GL_BGRA, GL_UNSIGNED_BYTE, 0);
+			});
 		}
 
 		if (client.isStretchedEnabled()) {

@@ -156,16 +156,20 @@ class VAO {
 			return vao;
 		}
 
-		void unmap() {
-			int sz = 0;
+		void map() {
 			for (VAO vao : vaos) {
-				if (vao.vbo.mapped) {
-					++sz;
-					vao.vbo.unmap();
-				}
+				if (!vao.vbo.mapped)
+					vao.vbo.map();
 			}
+		}
+
+		void unmap() {
+			for (VAO vao : vaos) {
+				if (vao.vbo.mapped)
+					vao.vbo.unmap();
+			}
+			drawCount = curIdx + 1;
 			curIdx = 0;
-			drawCount = sz;
 		}
 
 		void free() {

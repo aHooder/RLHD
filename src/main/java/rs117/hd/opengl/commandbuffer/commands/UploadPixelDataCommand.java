@@ -13,11 +13,12 @@ import static org.lwjgl.opengl.GL11C.glTexSubImage2D;
 import static org.lwjgl.opengl.GL12C.GL_BGRA;
 import static org.lwjgl.opengl.GL12C.GL_UNSIGNED_INT_8_8_8_8_REV;
 import static org.lwjgl.opengl.GL13C.glActiveTexture;
-import static org.lwjgl.opengl.GL15C.GL_WRITE_ONLY;
 import static org.lwjgl.opengl.GL15C.glBindBuffer;
-import static org.lwjgl.opengl.GL15C.glMapBuffer;
 import static org.lwjgl.opengl.GL15C.glUnmapBuffer;
 import static org.lwjgl.opengl.GL21C.GL_PIXEL_UNPACK_BUFFER;
+import static org.lwjgl.opengl.GL30.GL_MAP_UNSYNCHRONIZED_BIT;
+import static org.lwjgl.opengl.GL30.GL_MAP_WRITE_BIT;
+import static org.lwjgl.opengl.GL30.glMapBufferRange;
 
 public class UploadPixelDataCommand extends BaseCommand {
 	public int texUnit;
@@ -67,7 +68,9 @@ public class UploadPixelDataCommand extends BaseCommand {
 	protected void execute(MemoryStack stack) {
 		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo);
 
-		mappedBuffer = glMapBuffer(GL_PIXEL_UNPACK_BUFFER, GL_WRITE_ONLY, (long)(width * height) * Integer.BYTES, mappedBuffer);
+		mappedBuffer = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER,
+			0, ((long) width * height) * Integer.BYTES,
+			GL_MAP_WRITE_BIT | GL_MAP_UNSYNCHRONIZED_BIT, mappedBuffer);
 
 		if (mappedBuffer != null) {
 			IntBuffer mappedIntBuffer = mappedBuffer.asIntBuffer();
@@ -100,9 +103,9 @@ public class UploadPixelDataCommand extends BaseCommand {
 				frameSync.signalReady();
 			}
 
-			glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
 			glActiveTexture(texUnit);
 			glBindTexture(GL_TEXTURE_2D, tex);
+			glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
 			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, 0);
 		}
 		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);

@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.LockSupport;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.SneakyThrows;
@@ -165,6 +166,7 @@ public final class RenderThread implements Runnable {
 			while (running.get()) {
 				RenderTask task;
 				try {
+					while (queue.isEmpty()) LockSupport.parkNanos(1);
 					task = queue.take();
 				} catch (InterruptedException e) {
 					Thread.currentThread().interrupt();

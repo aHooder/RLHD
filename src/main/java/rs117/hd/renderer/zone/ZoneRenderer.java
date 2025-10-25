@@ -167,7 +167,7 @@ public class ZoneRenderer implements Renderer {
 	private final CommandBuffer zoneDrawCallBuffer = new CommandBuffer();
 	private final CommandBuffer zoneShadowDrawCallBuffer = new CommandBuffer();
 
-	private final FrameSync renderingSync = new FrameSync();
+	private final FrameSync mainFrameSync = new FrameSync();
 
 	// TODO: Can we rename these to something more human readable?
 	class SceneVAOs {
@@ -780,6 +780,14 @@ public class ZoneRenderer implements Renderer {
 		zoneDrawCallBuffer.SetUniformProperty(uboCommandBuffer.worldViewIndex, uboWorldViews.getIndex(null));
 		zoneShadowDrawCallBuffer.SetUniformProperty(uboCommandBuffer.worldViewIndex, uboWorldViews.getIndex(null));
 
+		// Map VAO buffers ahead of time to reduce the number of calls to the RenderThread mid-building of CommandBuffer
+		renderThread.invokeOnRenderThread(() -> {
+			vaos.vaoO.map();
+			vaos.vaoA.map();
+			vaos.vaoPO.map();
+			vaos.vaoPOShadow.map();
+		});
+
 		checkGLErrors();
 	}
 
@@ -812,7 +820,6 @@ public class ZoneRenderer implements Renderer {
 				glBufferData(GL_ELEMENT_ARRAY_BUFFER, eboAlphaStaging.getBuffer(), GL_STREAM_DRAW);
 			});
 		}
-
 
 		if (plugin.configShadowsEnabled &&
 			plugin.fboShadowMap != 0 &&
@@ -1016,16 +1023,18 @@ public class ZoneRenderer implements Renderer {
 					zoneDrawCallBuffer.SetUniformProperty(uboCommandBuffer.sceneBase, 0, 0, 0);
 					zoneShadowDrawCallBuffer.SetUniformProperty(uboCommandBuffer.sceneBase, 0, 0, 0);
 
+					renderThread.invokeOnRenderThread(() -> {
+						vaos.vaoO.unmap();
+						vaos.vaoPO.unmap();
+						vaos.vaoPOShadow.unmap();
+					});
+
 					// Draw opaque
-					renderThread.invokeOnRenderThread(vaos.vaoO::unmap);
 					vaos.vaoO.drawAll(this, zoneDrawCallBuffer);
 					vaos.vaoO.drawAll(this, zoneShadowDrawCallBuffer);
 					vaos.vaoO.resetAll();
 
-					renderThread.invokeOnRenderThread(vaos.vaoPO::unmap);
-
 					// Draw player shadows
-					renderThread.invokeOnRenderThread(vaos.vaoPOShadow::unmap);
 					vaos.vaoPOShadow.drawAll(this, zoneShadowDrawCallBuffer);
 					vaos.vaoPOShadow.resetAll();
 
@@ -1299,18 +1308,6 @@ public class ZoneRenderer implements Renderer {
 		log.trace("draw(overlaySrgba={})", overlayColor);
 		frameTimer.end(Timer.DRAW_FRAME);
 
-		if(!renderingSync.isAwaiting()) {
-			long time = System.nanoTime();
-			if (renderingSync.await()) {
-				renderThread.processCompletedTasks();
-
-				SceneVAOs temp = vaos;
-				vaos = vaos_prev;
-				vaos_prev = temp;
-			}
-			frameTimer.add(Timer.FRAME_SYNC, System.nanoTime() - time);
-		}
-
 		try {
 			plugin.prepareInterfaceTexture();
 		} catch (Exception ex) {
@@ -1319,6 +1316,19 @@ public class ZoneRenderer implements Renderer {
 			log.warn("prepareInterfaceTexture exception", ex);
 			plugin.restartPlugin();
 			return;
+		}
+
+		// Before submitting current frame, ensure previous frame has finished executing
+		if(!mainFrameSync.isAwaiting()) {
+			long time = System.nanoTime();
+			if (mainFrameSync.await()) {
+				renderThread.processCompletedTasks();
+
+				SceneVAOs temp = vaos;
+				vaos = vaos_prev;
+				vaos_prev = temp;
+			}
+			frameTimer.add(Timer.FRAME_SYNC, System.nanoTime() - time);
 		}
 
 		CommandBuffer cmd = commandBufferPool.acquire();
@@ -1341,9 +1351,9 @@ public class ZoneRenderer implements Renderer {
 		cmd.EndTimer(Timer.SWAP_BUFFERS);
 		cmd.EndTimer(Timer.RENDER_FRAME);
 		cmd.Callback(frameTimer::endFrameAndReset);
-		cmd.Signal(renderingSync);
+		cmd.Signal(mainFrameSync);
 
-		renderingSync.markInFlight();
+		mainFrameSync.markInFlight();
 		renderThread.submit(cmd);
 	}
 
