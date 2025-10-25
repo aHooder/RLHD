@@ -63,17 +63,11 @@ public final class RenderThread implements Runnable {
 
 	public void submit(CommandBuffer buffer) { submit(buffer, null); }
 
-	public void submit(CommandBuffer buffer, boolean forceThread) {
-		submit(buffer, null, forceThread);
-	}
-
-	public void submit(CommandBuffer buffer, Runnable onComplete) { submit(buffer, onComplete, false); }
-
-	public void submit(CommandBuffer buffer, Runnable onComplete, boolean forceThread) {
+	public void submit(CommandBuffer buffer, Runnable onComplete) {
 		if (buffer == null)
 			throw new IllegalArgumentException("CommandBuffer cannot be null");
 
-		if(!plugin.configRenderThread && !forceThread) {
+		if(!plugin.configRenderThread) {
 			if(isClientThread()) {
 				buffer.execute();
 				if (onComplete != null) onComplete.run();

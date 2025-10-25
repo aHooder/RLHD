@@ -17,8 +17,10 @@ public class FrameSync {
 	@SneakyThrows
 	public boolean await() {
 		if(inFlight.get() && !awaiting.get()) {
-			sema.acquire();
 			awaiting.set(true);
+			while (!sema.tryAcquire()) {
+				Thread.sleep(1);
+			}
 			inFlight.set(false);
 			return true;
 		}

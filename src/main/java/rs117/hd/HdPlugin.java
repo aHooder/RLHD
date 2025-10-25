@@ -100,7 +100,6 @@ import rs117.hd.overlays.ShadowMapOverlay;
 import rs117.hd.overlays.TiledLightingOverlay;
 import rs117.hd.overlays.Timer;
 import rs117.hd.renderer.Renderer;
-import rs117.hd.renderer.zone.ZoneRenderer;
 import rs117.hd.scene.AreaManager;
 import rs117.hd.scene.EnvironmentManager;
 import rs117.hd.scene.FishingSpotReplacer;
@@ -1355,12 +1354,7 @@ public class HdPlugin extends Plugin {
 		cmd.BeginTimer(Timer.UPLOAD_UI);
 		cmd.UploadPixelData(TEXTURE_UNIT_UI, texUi, pboUi, width, height, pixels, uiUploadSync);
 		cmd.EndTimer(Timer.UPLOAD_UI);
-		if(renderer instanceof ZoneRenderer) {
-			renderThread.submit(cmd);
-		} else {
-			cmd.execute();
-			commandBufferPool.release(cmd);
-		}
+		renderThread.submit(cmd);
 	}
 
 	public void drawUi(int overlayColor, CommandBuffer cmd) {
@@ -1485,6 +1479,15 @@ public class HdPlugin extends Plugin {
 		configCharacterDisplacement = config.characterDisplacement();
 		configSeasonalTheme = config.seasonalTheme();
 		configSeasonalHemisphere = config.seasonalHemisphere();
+
+		var newRenderThread = config.renderThread();
+		if(newRenderThread != configRenderThread) {
+			if(configRenderThread) {
+				renderThread.waitForRenderingCompleted();
+			}
+			configRenderThread = newRenderThread;
+			restartPlugin();
+		}
 
 		var newColorFilter = config.colorFilter();
 		if (newColorFilter != configColorFilter) {
@@ -1785,9 +1788,9 @@ public class HdPlugin extends Plugin {
 	public void onBeforeRender(BeforeRender beforeRender) {
 		SKIP_GL_ERROR_CHECKS = !log.isDebugEnabled() || developerTools.isFrameTimingsOverlayEnabled();
 
-		frameTimer.begin(Timer.COPY_UI);
+		long start = System.nanoTime();
 		uiUploadSync.await();
-		frameTimer.end(Timer.COPY_UI);
+		frameTimer.add(Timer.COPY_UI, System.nanoTime() - start);
 
 		if (client.getScene() == null)
 			return;
