@@ -878,8 +878,6 @@ public class ZoneRenderer implements Renderer {
 		renderThread.submit(cmd);
 
 		frameTimer.end(Timer.DRAW_SCENE);
-
-		checkGLErrors();
 	}
 
 	@Override
@@ -935,8 +933,6 @@ public class ZoneRenderer implements Renderer {
 				plugin.configRoofShadows ? Collections.emptySet() : hideRoofIds
 			);
 		}
-
-		checkGLErrors();
 	}
 
 	@Override
@@ -1001,8 +997,6 @@ public class ZoneRenderer implements Renderer {
 				plugin.configRoofShadows ? Collections.emptySet() : hideRoofIds
 			);
 		}
-
-		checkGLErrors();
 	}
 
 	@Override
@@ -1054,7 +1048,6 @@ public class ZoneRenderer implements Renderer {
 						ctx.zones[x][z].removeTemp();
 				break;
 		}
-		checkGLErrors();
 	}
 
 	@Override
