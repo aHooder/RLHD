@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.LockSupport;
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -16,6 +17,7 @@ import org.lwjgl.system.MemoryStack;
 import rs117.hd.HdPlugin;
 import rs117.hd.opengl.commandbuffer.commands.CallbackCommand;
 import rs117.hd.overlays.FrameTimer;
+import rs117.hd.overlays.Timer;
 
 @Slf4j
 @Singleton
@@ -39,7 +41,7 @@ public final class RenderThread implements Runnable {
 	private HdPlugin plugin;
 
 	@Inject
-	private FrameTimer timer;
+	private FrameTimer frameTimer;
 
 	@Inject
 	private ClientThread clientThread;
@@ -101,6 +103,7 @@ public final class RenderThread implements Runnable {
 		} else {
 			queue.addLast(newTask);
 		}
+		LockSupport.unpark(thread);
 	}
 
 	private boolean isClientThread() {return Thread.currentThread() == clientJavaThread; }
@@ -166,7 +169,8 @@ public final class RenderThread implements Runnable {
 			while (running.get()) {
 				RenderTask task;
 				try {
-					while (queue.isEmpty()) LockSupport.parkNanos(1);
+					while (queue.isEmpty())
+						LockSupport.park(10);
 					task = queue.take();
 				} catch (InterruptedException e) {
 					Thread.currentThread().interrupt();
@@ -184,9 +188,11 @@ public final class RenderThread implements Runnable {
 				contextWrapper.makeCurrent(AWTContextWrapper.Owner.RENDER_THREAD);
 
 				try {
+					long timeStamp = System.nanoTime();
 					stack.push();
 					task.buffer.execute(stack);
 					stack.pop();
+					frameTimer.add(Timer.COMMAND_BUFFER_EXECUTE, System.nanoTime() - timeStamp);
 				} catch (Throwable t) {
 					log.error("Error during CommandBuffer execution", t);
 				} finally {
@@ -205,7 +211,9 @@ public final class RenderThread implements Runnable {
 		cmd.Callback(callback);
 		cmd.Signal(invokeOnRenderThreadSync);
 		submit(cmd);
+		long timestamp = System.nanoTime();
 		invokeOnRenderThreadSync.await();
+		frameTimer.add(Timer.INVOKE_ON_RENDER_THREAD, System.nanoTime() - timestamp);
 	}
 
 	private void taskCompleted(RenderTask task) {

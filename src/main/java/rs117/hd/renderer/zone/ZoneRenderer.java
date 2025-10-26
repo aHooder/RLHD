@@ -389,6 +389,21 @@ public class ZoneRenderer implements Renderer {
 		scene.setDrawDistance(plugin.getDrawDistance());
 		plugin.updateSceneFbo();
 
+		// Before submitting current frame, ensure previous frame has finished executing
+		if(!mainFrameSync.isAwaiting()) {
+			long time = System.nanoTime();
+			if (mainFrameSync.await()) {
+				renderThread.processCompletedTasks();
+				frameTimer.add(Timer.FRAME_SYNC, System.nanoTime() - time);
+
+				renderThread.invokeOnRenderThread(frameTimer::endFrameAndReset);
+
+				SceneVAOs temp = vaos;
+				vaos = vaos_prev;
+				vaos_prev = temp;
+			}
+		}
+
 		if (root.sceneContext == null || plugin.sceneViewport == null)
 			return;
 
@@ -786,9 +801,9 @@ public class ZoneRenderer implements Renderer {
 			vaos.vaoA.map();
 			vaos.vaoPO.map();
 			vaos.vaoPOShadow.map();
-		});
 
-		checkGLErrors();
+			checkGLErrors();
+		});
 	}
 
 	@Override
@@ -1318,19 +1333,6 @@ public class ZoneRenderer implements Renderer {
 			return;
 		}
 
-		// Before submitting current frame, ensure previous frame has finished executing
-		if(!mainFrameSync.isAwaiting()) {
-			long time = System.nanoTime();
-			if (mainFrameSync.await()) {
-				renderThread.processCompletedTasks();
-
-				SceneVAOs temp = vaos;
-				vaos = vaos_prev;
-				vaos_prev = temp;
-			}
-			frameTimer.add(Timer.FRAME_SYNC, System.nanoTime() - time);
-		}
-
 		CommandBuffer cmd = commandBufferPool.acquire();
 		if (sceneFboValid && plugin.sceneResolution != null && plugin.sceneViewport != null) {
 			cmd.BlitFramebuffer(
@@ -1350,7 +1352,6 @@ public class ZoneRenderer implements Renderer {
 		cmd.SwapBuffers(awtContextWrapper.getContext());
 		cmd.EndTimer(Timer.SWAP_BUFFERS);
 		cmd.EndTimer(Timer.RENDER_FRAME);
-		cmd.Callback(frameTimer::endFrameAndReset);
 		cmd.Signal(mainFrameSync);
 
 		mainFrameSync.markInFlight();
