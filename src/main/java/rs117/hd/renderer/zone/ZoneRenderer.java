@@ -922,12 +922,12 @@ public class ZoneRenderer implements Renderer {
 			return;
 
 		int offset = ctx.sceneContext.sceneOffset >> 3;
-		if (z.inSceneFrustum) {
+		if (ctx != root || z.inSceneFrustum) {
 			zoneDrawCallBuffer.SetUniformProperty(uboCommandBuffer.worldViewIndex, uboWorldViews.getIndex(scene));
 			z.renderOpaque(uboCommandBuffer, zoneDrawCallBuffer, zx - offset, zz - offset, minLevel, level, maxLevel, hideRoofIds);
 		}
 
-		if (z.inShadowFrustum) {
+		if (ctx != root || z.inShadowFrustum) {
 			zoneShadowDrawCallBuffer.SetUniformProperty(uboCommandBuffer.worldViewIndex, uboWorldViews.getIndex(scene));
 			z.renderOpaque(
 				uboCommandBuffer,
@@ -972,7 +972,7 @@ public class ZoneRenderer implements Renderer {
 			z.multizoneLocs(ctx.sceneContext, zx - offset, zz - offset, sceneCamera, ctx.zones);
 		}
 
-		if (z.inSceneFrustum) {
+		if (ctx != root || z.inSceneFrustum) {
 			z.renderAlpha(
 				uboCommandBuffer,
 				zoneDrawCallBuffer,
@@ -988,7 +988,7 @@ public class ZoneRenderer implements Renderer {
 			);
 		}
 
-		if (z.inShadowFrustum) {
+		if (ctx != root || z.inShadowFrustum) {
 			zoneShadowDrawCallBuffer.SetUniformProperty(uboCommandBuffer.worldViewIndex, uboWorldViews.getIndex(scene));
 			z.renderAlpha(
 				uboCommandBuffer,
@@ -1147,7 +1147,7 @@ public class ZoneRenderer implements Renderer {
 			int zz = (gameObject.getY() >> 10) + offset;
 			Zone zone = ctx.zones[zx][zz];
 
-			if (zone.inSceneFrustum) {
+			if (ctx != root || zone.inSceneFrustum) {
 				// opaque player faces have their own vao and are drawn in a separate pass from normal opaque faces
 				// because they are not depth tested. transparent player faces don't need their own vao because normal
 				// transparent faces are already not depth tested
