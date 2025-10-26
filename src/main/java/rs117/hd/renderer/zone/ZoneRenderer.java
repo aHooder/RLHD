@@ -390,31 +390,6 @@ public class ZoneRenderer implements Renderer {
 		scene.setDrawDistance(plugin.getDrawDistance());
 		plugin.updateSceneFbo();
 
-		// Before submitting current frame, ensure previous frame has finished executing
-		if(!mainFrameSync.isAwaiting()) {
-			long time = System.nanoTime();
-			if (mainFrameSync.await()) {
-				renderThread.processCompletedTasks();
-				frameTimer.add(Timer.FRAME_SYNC, System.nanoTime() - time);
-
-				DrawContext temp = vaos;
-				vaos = vaos_prev;
-				vaos_prev = temp;
-
-				// Map VAO buffers ahead of time to reduce the number of calls to the RenderThread mid-building of CommandBuffer
-				renderThread.invokeOnRenderThread(() -> {
-					frameTimer.endFrameAndReset();
-
-					vaos.vaoO.map();
-					vaos.vaoA.map();
-					vaos.vaoPO.map();
-					vaos.vaoPOShadow.map();
-
-					checkGLErrors();
-				});
-			}
-		}
-
 		if (root.sceneContext == null || plugin.sceneViewport == null)
 			return;
 
@@ -837,6 +812,18 @@ public class ZoneRenderer implements Renderer {
 				eboAlphaStaging.flip();
 				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, eboAlpha);
 				glBufferData(GL_ELEMENT_ARRAY_BUFFER, eboAlphaStaging.getBuffer(), GL_STREAM_DRAW);
+
+				// Prepare for next frame
+				DrawContext temp = vaos;
+				vaos = vaos_prev;
+				vaos_prev = temp;
+
+				vaos.vaoO.map();
+				vaos.vaoA.map();
+				vaos.vaoPO.map();
+				vaos.vaoPOShadow.map();
+
+				checkGLErrors();
 			});
 		}
 
@@ -1354,6 +1341,7 @@ public class ZoneRenderer implements Renderer {
 		cmd.SwapBuffers(awtContextWrapper.getContext());
 		cmd.EndTimer(Timer.SWAP_BUFFERS);
 		cmd.EndTimer(Timer.RENDER_FRAME);
+		cmd.Callback(frameTimer::endFrameAndReset);
 		cmd.Signal(mainFrameSync);
 
 		mainFrameSync.markInFlight();
