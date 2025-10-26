@@ -6,8 +6,6 @@ import java.util.List;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.LockSupport;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.SneakyThrows;
@@ -31,9 +29,9 @@ public final class RenderThread implements Runnable {
 	private final List<RenderTask> completedTasks = new ArrayList<>();
 
 	private final AtomicInteger pendingCount = new AtomicInteger(0);
-	private final Object completionLock = new Object();
 	private final AtomicBoolean running = new AtomicBoolean(false);
 	private final FrameSync invokeOnRenderThreadSync = new FrameSync();
+	private final FrameSync renderCompleteSync = new FrameSync();
 	private Thread thread;
 	private Thread clientJavaThread;
 
@@ -98,12 +96,13 @@ public final class RenderThread implements Runnable {
 		newTask.buffer = buffer;
 		newTask.callback = onComplete;
 
+		renderCompleteSync.markInFlight();
+
 		if(buffer.highPriority) {
 			queue.addFirst(newTask);
 		} else {
 			queue.addLast(newTask);
 		}
-		LockSupport.unpark(thread);
 	}
 
 	private boolean isClientThread() {return Thread.currentThread() == clientJavaThread; }
@@ -136,29 +135,24 @@ public final class RenderThread implements Runnable {
 
 	@SneakyThrows
 	public void waitForRenderingCompleted() {
-		if(pendingCount.get() == 0 && completedTasks.isEmpty() && contextWrapper.getOwner() == AWTContextWrapper.Owner.CLIENT) {
+		if (pendingCount.get() == 0 && completedTasks.isEmpty()
+			&& contextWrapper.getOwner() == AWTContextWrapper.Owner.CLIENT) {
 			return;
 		}
 
-		synchronized (completionLock) {
-			try {
-				while (pendingCount.get() > 0) {
-					if (contextWrapper.getOwner() == AWTContextWrapper.Owner.CLIENT && isClientThread())
-						contextWrapper.detachCurrent("waiting for render completion");
+		while (pendingCount.get() > 0) {
+			if (contextWrapper.getOwner() == AWTContextWrapper.Owner.CLIENT && isClientThread())
+				contextWrapper.detachCurrent("waiting for render completion");
 
-					completionLock.wait();
-				}
-			} catch (InterruptedException e) {
-				Thread.currentThread().interrupt();
-				return;
-			}
-
-			invokeOnRenderThread(() -> contextWrapper.detachCurrent("detached after render completion"));
-			contextWrapper.makeCurrent(AWTContextWrapper.Owner.CLIENT);
-
-			processCompletedTasks();
+			renderCompleteSync.await();
 		}
+
+		invokeOnRenderThread(() -> contextWrapper.detachCurrent("detached after render completion"));
+		contextWrapper.makeCurrent(AWTContextWrapper.Owner.CLIENT);
+
+		processCompletedTasks();
 	}
+
 
 	@SneakyThrows
 	@Override
@@ -169,8 +163,6 @@ public final class RenderThread implements Runnable {
 			while (running.get()) {
 				RenderTask task;
 				try {
-					while (queue.isEmpty())
-						LockSupport.park(10);
 					task = queue.take();
 				} catch (InterruptedException e) {
 					Thread.currentThread().interrupt();
@@ -205,15 +197,15 @@ public final class RenderThread implements Runnable {
 	}
 
 	public void invokeOnRenderThread(CallbackCommand.ICallback callback) {
-		invokeOnRenderThreadSync.markInFlight();
+		long timeStamp = System.nanoTime();
 		CommandBuffer cmd = pool.acquire();
 		cmd.highPriority = true;
 		cmd.Callback(callback);
 		cmd.Signal(invokeOnRenderThreadSync);
+		invokeOnRenderThreadSync.markInFlight();
 		submit(cmd);
-		long timestamp = System.nanoTime();
 		invokeOnRenderThreadSync.await();
-		frameTimer.add(Timer.INVOKE_ON_RENDER_THREAD, System.nanoTime() - timestamp);
+		frameTimer.add(Timer.INVOKE_ON_RENDER_THREAD, System.nanoTime() - timeStamp);
 	}
 
 	private void taskCompleted(RenderTask task) {
@@ -224,9 +216,7 @@ public final class RenderThread implements Runnable {
 		int remaining = pendingCount.decrementAndGet();
 		if (remaining <= 0) {
 			pendingCount.set(0);
-			synchronized (completionLock) {
-				completionLock.notifyAll();
-			}
+			renderCompleteSync.signalReady();
 		}
 	}
 

@@ -5,7 +5,7 @@ import rs117.hd.opengl.commandbuffer.BaseCommand;
 
 import static org.lwjgl.opengl.GL30C.glBindFramebuffer;
 
-public class BindFrameBufferCommand extends BaseCommand {
+public final class BindFrameBufferCommand extends BaseCommand {
 	public int target;
 	public int fbo;
 

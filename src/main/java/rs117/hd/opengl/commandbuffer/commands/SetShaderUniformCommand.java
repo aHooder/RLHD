@@ -4,7 +4,7 @@ import org.lwjgl.system.MemoryStack;
 import rs117.hd.opengl.commandbuffer.BaseCommand;
 import rs117.hd.opengl.shader.ShaderProgram;
 
-public class SetShaderUniformCommand extends BaseCommand {
+public final class SetShaderUniformCommand extends BaseCommand {
 
 	public ShaderProgram.UniformProperty property;
 	public int[] intValues;

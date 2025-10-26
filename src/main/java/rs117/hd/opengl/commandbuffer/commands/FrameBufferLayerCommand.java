@@ -6,7 +6,7 @@ import rs117.hd.opengl.commandbuffer.BaseCommand;
 import static org.lwjgl.opengl.GL30C.GL_FRAMEBUFFER;
 import static org.lwjgl.opengl.GL30C.glFramebufferTextureLayer;
 
-public class FrameBufferLayerCommand extends BaseCommand {
+public final class FrameBufferLayerCommand extends BaseCommand {
 
 	public int attachment;
 	public int texId;

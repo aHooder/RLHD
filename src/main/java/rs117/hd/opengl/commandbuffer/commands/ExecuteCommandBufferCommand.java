@@ -4,7 +4,7 @@ import org.lwjgl.system.MemoryStack;
 import rs117.hd.opengl.commandbuffer.BaseCommand;
 import rs117.hd.opengl.commandbuffer.CommandBuffer;
 
-public class ExecuteCommandBufferCommand extends BaseCommand {
+public final class ExecuteCommandBufferCommand extends BaseCommand {
 
 	public CommandBuffer cmd;
 

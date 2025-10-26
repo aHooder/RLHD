@@ -5,7 +5,7 @@ import rs117.hd.opengl.commandbuffer.BaseCommand;
 
 import static org.lwjgl.opengl.GL11C.glViewport;
 
-public class ViewportCommand extends BaseCommand {
+public final class ViewportCommand extends BaseCommand {
 	public int x;
 	public int y;
 	public int width;

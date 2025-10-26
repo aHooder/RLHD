@@ -4,7 +4,7 @@ import org.lwjgl.system.MemoryStack;
 import rs117.hd.opengl.commandbuffer.BaseCommand;
 import rs117.hd.opengl.uniforms.UniformBuffer;
 
-public class SetUniformBufferPropertyCommand extends BaseCommand {
+public final class SetUniformBufferPropertyCommand extends BaseCommand {
 
 	public UniformBuffer.Property property;
 	public int[] intValues;

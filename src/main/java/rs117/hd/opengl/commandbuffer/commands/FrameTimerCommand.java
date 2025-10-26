@@ -5,7 +5,7 @@ import rs117.hd.opengl.commandbuffer.BaseCommand;
 import rs117.hd.overlays.FrameTimer;
 import rs117.hd.overlays.Timer;
 
-public class FrameTimerCommand extends BaseCommand {
+public final class FrameTimerCommand extends BaseCommand {
 	public Timer timer;
 	public boolean begin;
 

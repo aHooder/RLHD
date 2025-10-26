@@ -9,7 +9,7 @@ import static org.lwjgl.opengl.GL11.glClearColor;
 import static org.lwjgl.opengl.GL11C.GL_DEPTH_BUFFER_BIT;
 import static org.lwjgl.opengl.GL11C.glClearDepth;
 
-public class ClearCommand extends BaseCommand {
+public final class ClearCommand extends BaseCommand {
 	public boolean clearColor;
 	public boolean clearDepth;
 

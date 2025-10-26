@@ -78,8 +78,6 @@ class VAO {
 	int off = 0;
 
 	void addRange(Scene scene) {
-		assert vbo.mapped;
-
 		if (off > 0 && lengths[off - 1] == vbo.vb.position()) {
 			return;
 		}
@@ -96,8 +94,6 @@ class VAO {
 	}
 
 	void draw(ZoneRenderer renderer, CommandBuffer cmd) {
-		assert !vbo.mapped;
-
 		int start = 0;
 		for (int i = 0; i < off; ++i) {
 			int end = lengths[i];
@@ -163,12 +159,15 @@ class VAO {
 			}
 		}
 
+		void setDrawCount() {
+			drawCount = curIdx + 1;
+		}
+
 		void unmap() {
 			for (VAO vao : vaos) {
 				if (vao.vbo.mapped)
 					vao.vbo.unmap();
 			}
-			drawCount = curIdx + 1;
 			curIdx = 0;
 		}
 

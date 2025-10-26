@@ -4,7 +4,7 @@ import org.lwjgl.system.MemoryStack;
 import rs117.hd.opengl.commandbuffer.BaseCommand;
 import rs117.hd.opengl.commandbuffer.FrameSync;
 
-public class SignalCommand extends BaseCommand {
+public final class SignalCommand extends BaseCommand {
 
 	public FrameSync frameSync;
 

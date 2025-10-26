@@ -20,7 +20,7 @@ import static org.lwjgl.opengl.GL30.GL_MAP_UNSYNCHRONIZED_BIT;
 import static org.lwjgl.opengl.GL30.GL_MAP_WRITE_BIT;
 import static org.lwjgl.opengl.GL30.glMapBufferRange;
 
-public class UploadPixelDataCommand extends BaseCommand {
+public final class UploadPixelDataCommand extends BaseCommand {
 	public int texUnit;
 	public int tex;
 	public int pbo;

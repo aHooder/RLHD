@@ -10,7 +10,7 @@ import static org.lwjgl.opengl.GL30.glBindFramebuffer;
 import static org.lwjgl.opengl.GL30.glBlitFramebuffer;
 
 
-public class BlitFrameBufferCommand extends BaseCommand {
+public final class BlitFrameBufferCommand extends BaseCommand {
 	public int srcFbo;
 	public int resolveFbo; // optional intermediate FBO for MSAA resolve
 	public int dstFbo;

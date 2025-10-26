@@ -6,7 +6,7 @@ import rs117.hd.opengl.commandbuffer.BaseCommand;
 
 import static org.lwjgl.opengl.GL20.glDrawBuffers;
 
-public class DrawBufferCommand extends BaseCommand {
+public final class DrawBufferCommand extends BaseCommand {
 
 	public int[] drawBuffers;
 

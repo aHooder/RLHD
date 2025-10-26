@@ -163,6 +163,7 @@ public class ZoneRenderer implements Renderer {
 
 	private int minLevel, level, maxLevel;
 	private Set<Integer> hideRoofIds;
+	private int frameNo;
 
 	private final CommandBuffer zoneDrawCallBuffer = new CommandBuffer();
 	private final CommandBuffer zoneShadowDrawCallBuffer = new CommandBuffer();
@@ -170,7 +171,7 @@ public class ZoneRenderer implements Renderer {
 	private final FrameSync mainFrameSync = new FrameSync();
 
 	// TODO: Can we rename these to something more human readable?
-	class SceneVAOs {
+	class DrawContext {
 		public VAO.VAOList vaoO;
 		public VAO.VAOList vaoA;
 		public VAO.VAOList vaoPO;
@@ -191,7 +192,7 @@ public class ZoneRenderer implements Renderer {
 			vaoO = vaoA = vaoPO = vaoPOShadow = null;
 		}
 	}
-	private SceneVAOs vaos = new SceneVAOs(), vaos_prev = new SceneVAOs();
+	private DrawContext vaos = new DrawContext(), vaos_prev = new DrawContext();
 
 	public static int eboAlpha;
 	public static GpuIntBuffer eboAlphaStaging;
@@ -396,11 +397,21 @@ public class ZoneRenderer implements Renderer {
 				renderThread.processCompletedTasks();
 				frameTimer.add(Timer.FRAME_SYNC, System.nanoTime() - time);
 
-				renderThread.invokeOnRenderThread(frameTimer::endFrameAndReset);
-
-				SceneVAOs temp = vaos;
+				DrawContext temp = vaos;
 				vaos = vaos_prev;
 				vaos_prev = temp;
+
+				// Map VAO buffers ahead of time to reduce the number of calls to the RenderThread mid-building of CommandBuffer
+				renderThread.invokeOnRenderThread(() -> {
+					frameTimer.endFrameAndReset();
+
+					vaos.vaoO.map();
+					vaos.vaoA.map();
+					vaos.vaoPO.map();
+					vaos.vaoPOShadow.map();
+
+					checkGLErrors();
+				});
 			}
 		}
 
@@ -794,16 +805,6 @@ public class ZoneRenderer implements Renderer {
 
 		zoneDrawCallBuffer.SetUniformProperty(uboCommandBuffer.worldViewIndex, uboWorldViews.getIndex(null));
 		zoneShadowDrawCallBuffer.SetUniformProperty(uboCommandBuffer.worldViewIndex, uboWorldViews.getIndex(null));
-
-		// Map VAO buffers ahead of time to reduce the number of calls to the RenderThread mid-building of CommandBuffer
-		renderThread.invokeOnRenderThread(() -> {
-			vaos.vaoO.map();
-			vaos.vaoA.map();
-			vaos.vaoPO.map();
-			vaos.vaoPOShadow.map();
-
-			checkGLErrors();
-		});
 	}
 
 	@Override
@@ -823,13 +824,16 @@ public class ZoneRenderer implements Renderer {
 
 		sceneFboValid = true;
 
-		renderThread.invokeOnRenderThread(vaos.vaoA::unmap);
-
 		CommandBuffer cmd = commandBufferPool.acquire();
 
 		// Scene draw state to apply before all recorded commands
 		if (eboAlphaStaging.position() > 0) {
 			cmd.Callback(() -> {
+				vaos.vaoO.unmap();
+				vaos.vaoPO.unmap();
+				vaos.vaoPOShadow.unmap();
+				vaos.vaoA.unmap();
+
 				eboAlphaStaging.flip();
 				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, eboAlpha);
 				glBufferData(GL_ELEMENT_ARRAY_BUFFER, eboAlphaStaging.getBuffer(), GL_STREAM_DRAW);
@@ -1038,11 +1042,9 @@ public class ZoneRenderer implements Renderer {
 					zoneDrawCallBuffer.SetUniformProperty(uboCommandBuffer.sceneBase, 0, 0, 0);
 					zoneShadowDrawCallBuffer.SetUniformProperty(uboCommandBuffer.sceneBase, 0, 0, 0);
 
-					renderThread.invokeOnRenderThread(() -> {
-						vaos.vaoO.unmap();
-						vaos.vaoPO.unmap();
-						vaos.vaoPOShadow.unmap();
-					});
+					vaos.vaoO.setDrawCount();
+					vaos.vaoPO.setDrawCount();
+					vaos.vaoPOShadow.setDrawCount();
 
 					// Draw opaque
 					vaos.vaoO.drawAll(this, zoneDrawCallBuffer);

@@ -5,7 +5,7 @@ import rs117.hd.opengl.commandbuffer.BaseCommand;
 
 import static org.lwjgl.opengl.GL14C.glBlendFuncSeparate;
 
-public class BlendFuncCommand extends BaseCommand  {
+public final class BlendFuncCommand extends BaseCommand  {
 	public int sfactorRGB;
 	public int dfactorRGB;
 	public int sfactorAlpha;

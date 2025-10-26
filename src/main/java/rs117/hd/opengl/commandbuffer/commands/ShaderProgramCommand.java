@@ -4,7 +4,7 @@ import org.lwjgl.system.MemoryStack;
 import rs117.hd.opengl.commandbuffer.BaseCommand;
 import rs117.hd.opengl.shader.ShaderProgram;
 
-public class ShaderProgramCommand extends BaseCommand {
+public final class ShaderProgramCommand extends BaseCommand {
 	public ShaderProgram program;
 
 	public ShaderProgramCommand() { super(false, true); }

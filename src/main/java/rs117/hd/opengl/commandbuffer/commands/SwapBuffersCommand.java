@@ -4,7 +4,7 @@ import net.runelite.rlawt.AWTContext;
 import org.lwjgl.system.MemoryStack;
 import rs117.hd.opengl.commandbuffer.BaseCommand;
 
-public class SwapBuffersCommand extends BaseCommand {
+public final class SwapBuffersCommand extends BaseCommand {
 
 	public AWTContext awtContext;
 

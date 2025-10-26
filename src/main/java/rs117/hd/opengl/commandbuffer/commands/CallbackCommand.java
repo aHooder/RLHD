@@ -3,7 +3,7 @@ package rs117.hd.opengl.commandbuffer.commands;
 import org.lwjgl.system.MemoryStack;
 import rs117.hd.opengl.commandbuffer.BaseCommand;
 
-public class CallbackCommand extends BaseCommand {
+public final class CallbackCommand extends BaseCommand {
 	public interface ICallback {
 		void run();
 	}

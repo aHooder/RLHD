@@ -8,20 +8,29 @@ public class FrameSync {
 	private volatile boolean awaiting = false;
 	private volatile boolean ready = false;
 	private volatile boolean inFlight = false;
+	private volatile Thread waitingThread;
 
 	public boolean await() {
-		if (inFlight && !awaiting) {
-			awaiting = true;
-
-			while (!ready) {
-				LockSupport.parkNanos(1);
+		if(inFlight) {
+			if (!awaiting) {
+				awaiting = true;
+				waitingThread = Thread.currentThread();
 			}
 
-			inFlight = false;
-			return true;
+			while (!ready) {
+				LockSupport.park(this);
+				if (Thread.interrupted()) {
+					Thread.currentThread().interrupt();
+					break;
+				}
+			}
 		}
-		return false;
+
+		inFlight = false;
+		waitingThread = null;
+		return true;
 	}
+
 
 	public void markInFlight() {
 		awaiting = false;
@@ -31,6 +40,9 @@ public class FrameSync {
 
 	public void signalReady() {
 		ready = true;
+		Thread waiter = waitingThread;
+		if (waiter != null)
+			LockSupport.unpark(waiter);
 	}
 }
 

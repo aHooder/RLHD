@@ -5,7 +5,7 @@ import rs117.hd.opengl.commandbuffer.BaseCommand;
 
 import static org.lwjgl.opengl.GL11C.glDepthFunc;
 
-public class DepthFuncCommand extends BaseCommand {
+public final class DepthFuncCommand extends BaseCommand {
 
 	public int mode;
 
