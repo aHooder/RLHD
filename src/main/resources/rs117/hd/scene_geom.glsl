@@ -34,6 +34,7 @@ layout(triangle_strip, max_vertices = 3) out;
 #define USE_VANILLA_UV_PROJECTION
 #include <utils/uvs.glsl>
 #include <utils/color_utils.glsl>
+#include <utils/misc.glsl>
 
 in vec3 gPosition[3];
 in vec3 gUv[3];
@@ -85,6 +86,19 @@ void main() {
     T = TB[0];
     B = TB[1];
     vec3 N = normalize(cross(triToWorld[0], triToWorld[1]));
+
+    #if UNDO_VANILLA_SHADING && ZONE_RENDERER
+    for(int i = 0; i < 3; i++) {
+        if ((int(vAlphaBiasHsl[i]) >> 20 & 1) == 0) {
+            #if FLAT_SHADING
+                vec3 norm = N;
+            #else
+                vec3 norm = length(gNormal[i]) == 0 ? N : normalize(gNormal[i]);
+            #endif
+            undoVanillaShading(vAlphaBiasHsl[i], norm);
+        }
+    }
+    #endif
 
     for (int i = 0; i < 3; i++) {
         vec4 pos = vec4(gPosition[i], 1);
