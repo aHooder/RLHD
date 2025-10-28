@@ -88,14 +88,17 @@ void main() {
     vec3 N = normalize(cross(triToWorld[0], triToWorld[1]));
 
     #if UNDO_VANILLA_SHADING && ZONE_RENDERER
-    for(int i = 0; i < 3; i++) {
-        if ((int(vAlphaBiasHsl[i]) >> 20 & 1) == 0) {
-            #if FLAT_SHADING
-                vec3 norm = N;
-            #else
-                vec3 norm = length(gNormal[i]) == 0 ? N : normalize(gNormal[i]);
-            #endif
-            undoVanillaShading(vAlphaBiasHsl[i], norm);
+    bool isTerrain = (vTerrainData[0] & 1) != 0; // 1 = 0b1
+    if(!isTerrain) {
+        for(int i = 0; i < 3; i++) {
+            if ((int(vAlphaBiasHsl[i]) >> 20 & 1) == 0) {
+                #if FLAT_SHADING
+                    vec3 norm = N;
+                #else
+                    vec3 norm = length(gNormal[i]) == 0 ? N : normalize(gNormal[i]);
+                #endif
+                undoVanillaShading(vAlphaBiasHsl[i], norm);
+            }
         }
     }
     #endif

@@ -1307,13 +1307,15 @@ class SceneUploader {
 			packedAlphaBiasHsl |= transparencies != null ? (transparencies[face] & 0xff) << 24 : 0;
 			packedAlphaBiasHsl |= bias != null ? (bias[face] & 0xff) << 16 : 0;
 
-			boolean isTextured = faceTextures != null && faceTextures[face] != -1 && !disableTextures;
+			boolean isTextured = faceTextures != null && faceTextures[face] != -1;
 			if (isTextured) {
 				// Without overriding the color for textured faces, vanilla shading remains pretty noticeable even after
 				// the approximate reversal above. Ardougne rooftops is a good example, where vanilla shading results in a
 				// weird-looking tint. The brightness clamp afterward is required to reduce the over-exposure introduced.
 				color1 = color2 = color3 = 90;
+			}
 
+			if(isTextured || !modelOverride.undoVanillaShading) {
 				// Let the shader know vanilla shading reversal should be skipped for this face
 				packedAlphaBiasHsl |= 1 << 20;
 			}
