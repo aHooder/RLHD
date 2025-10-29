@@ -82,6 +82,7 @@ import static net.runelite.api.Constants.SCENE_SIZE;
 import static net.runelite.api.Perspective.*;
 import static org.lwjgl.opengl.GL33C.*;
 import static rs117.hd.HdPlugin.COLOR_FILTER_FADE_DURATION;
+import static rs117.hd.HdPlugin.IS_APPLE;
 import static rs117.hd.HdPlugin.NEAR_PLANE;
 import static rs117.hd.HdPlugin.checkGLErrors;
 import static rs117.hd.utils.Mat4.clipFrustumToDistance;
@@ -210,6 +211,7 @@ public class ZoneRenderer implements Renderer {
 	}
 
 	private boolean sceneFboValid;
+	private boolean deferScenePass;
 
 	private final RenderState renderState = new RenderState();
 	private final UBOCommandBuffer uboCommandBuffer = new UBOCommandBuffer();
@@ -768,6 +770,8 @@ public class ZoneRenderer implements Renderer {
 		if (root.sceneContext == null || plugin.sceneViewport == null)
 			return;
 
+		frameTimer.end(Timer.DRAW_SCENE);
+
 		sceneFboValid = true;
 
 		vaoA.unmap();
@@ -779,6 +783,32 @@ public class ZoneRenderer implements Renderer {
 			glBufferData(GL_ELEMENT_ARRAY_BUFFER, eboAlphaStaging.getBuffer(), GL_STREAM_DRAW);
 		}
 
+		directionalShadowPass();
+
+		if(!IS_APPLE) {
+			scenePass();
+		} else {
+			deferScenePass = true;
+		}
+
+		frameTimer.begin(Timer.RENDER_FRAME);
+
+		// The client only updates animations once per client tick, so we can skip updating geometry buffers,
+		// but the compute shaders should still be executed in case the camera angle has changed.
+		// Technically we could skip compute shaders as well when the camera is unchanged,
+		// but it would only lead to micro stuttering when rotating the camera, compared to no rotation.
+//		if (!plugin.redrawPreviousFrame) {
+//			updateSceneVao(hRenderBufferVertices, hRenderBufferUvs, hRenderBufferNormals);
+//		}
+
+//		frameTimer.begin(Timer.COMPUTE);
+//		plugin.uboCompute.upload();
+//		frameTimer.end(Timer.COMPUTE);
+
+		checkGLErrors();
+	}
+
+	private void directionalShadowPass() {
 		if (plugin.configShadowsEnabled &&
 			plugin.fboShadowMap != 0 &&
 			environmentManager.currentDirectionalStrength > 0
@@ -806,7 +836,9 @@ public class ZoneRenderer implements Renderer {
 
 			frameTimer.end(Timer.RENDER_SHADOWS);
 		}
+	}
 
+	private void scenePass() {
 		sceneProgram.use();
 
 		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, plugin.fboScene);
@@ -844,29 +876,12 @@ public class ZoneRenderer implements Renderer {
 		sceneCmd.execute();
 
 		// TODO: Filler tiles
-
-		frameTimer.end(Timer.DRAW_SCENE);
 		frameTimer.end(Timer.RENDER_SCENE);
-		frameTimer.begin(Timer.RENDER_FRAME);
 
 		// Done rendering the scene
 		glDisable(GL_BLEND);
 		glDisable(GL_CULL_FACE);
 		glDisable(GL_DEPTH_TEST);
-
-		// The client only updates animations once per client tick, so we can skip updating geometry buffers,
-		// but the compute shaders should still be executed in case the camera angle has changed.
-		// Technically we could skip compute shaders as well when the camera is unchanged,
-		// but it would only lead to micro stuttering when rotating the camera, compared to no rotation.
-//		if (!plugin.redrawPreviousFrame) {
-//			updateSceneVao(hRenderBufferVertices, hRenderBufferUvs, hRenderBufferNormals);
-//		}
-
-//		frameTimer.begin(Timer.COMPUTE);
-//		plugin.uboCompute.upload();
-//		frameTimer.end(Timer.COMPUTE);
-
-		checkGLErrors();
 	}
 
 	@Override
@@ -1272,6 +1287,11 @@ public class ZoneRenderer implements Renderer {
 		if (gameState == GameState.STARTING) {
 			frameTimer.end(Timer.DRAW_FRAME);
 			return;
+		}
+
+		if(deferScenePass) {
+			scenePass();
+			deferScenePass = false;
 		}
 
 		try {
