@@ -32,9 +32,11 @@ public class CommandBuffer {
 	@Setter
 	private UBOCommandBuffer uboCommandBuffer;
 
+	@Setter
+	private RenderState renderState;
+
 	private long[] cmd = new long[1 << 20]; // ~1 million calls
 	private int writeHead = 0;
-	private int readHead = 0;
 
 	private void ensureCapacity(int numLongs) {
 		if (writeHead + numLongs >= cmd.length)
@@ -128,7 +130,7 @@ public class CommandBuffer {
 	public void execute() {
 		try (MemoryStack stack = MemoryStack.stackPush()) {
 			IntBuffer offsets = null, counts = null;
-			readHead = 0;
+			int readHead = 0;
 			while (readHead < writeHead) {
 				int type = (int) cmd[readHead++];
 				switch (type) {
@@ -150,7 +152,7 @@ public class CommandBuffer {
 						int state = (int) cmd[readHead++];
 						if (SKIP_DEPTH_MASKING)
 							continue;
-						glDepthMask(state == 1);
+						renderState.depthMask.set(state == 1);
 						break;
 					}
 					case GL_COLOR_MASK_TYPE: {
@@ -158,15 +160,25 @@ public class CommandBuffer {
 						int green = (int) cmd[readHead++];
 						int blue = (int) cmd[readHead++];
 						int alpha = (int) cmd[readHead++];
-						glColorMask(red == 1, green == 1, blue == 1, alpha == 1);
+						renderState.colorMask.set(red == 1, green == 1, blue == 1, alpha == 1);
 						break;
 					}
 					case GL_BIND_VERTEX_ARRAY_TYPE: {
-						glBindVertexArray((int) cmd[readHead++]);
+						renderState.vao.set((int) cmd[readHead++]);
 						break;
 					}
 					case GL_BIND_ELEMENTS_ARRAY_TYPE: {
-						glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, (int) cmd[readHead++]);
+						renderState.ebo.set((int) cmd[readHead++]);
+						break;
+					}
+					case GL_TOGGLE_TYPE: {
+						long packed = cmd[readHead++];
+						int capability = (int) (packed & INT_MASK);
+						if ((packed >> 32) != 0) {
+							renderState.enable.set(capability);
+						} else {
+							renderState.disable.set(capability);
+						}
 						break;
 					}
 					case GL_DRAW_ARRAYS_TYPE: {
@@ -175,7 +187,9 @@ public class CommandBuffer {
 						int count = (int) cmd[readHead++];
 
 						if (uboCommandBuffer != null && uboCommandBuffer.isDirty())
-							uboCommandBuffer.upload();
+							uboCommandBuffer.upload(renderState);
+
+						renderState.apply();
 
 						glDrawArrays(mode, offset, count);
 						break;
@@ -186,7 +200,9 @@ public class CommandBuffer {
 						long byteOffset = cmd[readHead++];
 
 						if (uboCommandBuffer != null && uboCommandBuffer.isDirty())
-							uboCommandBuffer.upload();
+							uboCommandBuffer.upload(renderState);
+
+						renderState.apply();
 
 						glDrawElements(mode, vertexCount, GL_UNSIGNED_INT, byteOffset);
 						break;
@@ -209,7 +225,9 @@ public class CommandBuffer {
 						counts.flip();
 
 						if (uboCommandBuffer != null && uboCommandBuffer.isDirty())
-							uboCommandBuffer.upload();
+							uboCommandBuffer.upload(renderState);
+
+						renderState.apply();
 
 						glMultiDrawArrays(mode, offsets, counts);
 
@@ -217,24 +235,16 @@ public class CommandBuffer {
 						counts.clear();
 						break;
 					}
-					case GL_TOGGLE_TYPE: {
-						long packed = cmd[readHead++];
-						int capability = (int) (packed & INT_MASK);
-						if ((packed >> 32) != 0) {
-							glEnable(capability);
-						} else {
-							glDisable(capability);
-						}
-						break;
-					}
 					default:
 						throw new IllegalArgumentException("Encountered an unknown DrawCall type: " + type);
 				}
 			}
+			renderState.apply();
 		}
 	}
 
 	public void reset() {
 		writeHead = 0;
+		renderState.reset();
 	}
 }

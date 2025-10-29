@@ -74,6 +74,7 @@ import rs117.hd.utils.HDUtils;
 import rs117.hd.utils.Mat4;
 import rs117.hd.utils.ModelHash;
 import rs117.hd.utils.NpcDisplacementCache;
+import rs117.hd.utils.RenderState;
 import rs117.hd.utils.buffer.GpuIntBuffer;
 
 import static net.runelite.api.Constants.*;
@@ -210,6 +211,7 @@ public class ZoneRenderer implements Renderer {
 
 	private boolean sceneFboValid;
 
+	private final RenderState renderState = new RenderState();
 	private final UBOCommandBuffer uboCommandBuffer = new UBOCommandBuffer();
 	public final UBOWorldViews uboWorldViews = new UBOWorldViews(MAX_WORLDVIEWS);
 
@@ -245,7 +247,9 @@ public class ZoneRenderer implements Renderer {
 		uboWorldViews.initialize(UNIFORM_BLOCK_WORLD_VIEWS);
 
 		sceneCmd.setUboCommandBuffer(uboCommandBuffer);
+		sceneCmd.setRenderState(renderState);
 		directionalCmd.setUboCommandBuffer(uboCommandBuffer);
+		directionalCmd.setRenderState(renderState);
 	}
 
 	@Override
