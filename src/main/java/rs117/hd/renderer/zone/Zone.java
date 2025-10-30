@@ -15,9 +15,11 @@ import rs117.hd.scene.SceneContext;
 import rs117.hd.scene.materials.Material;
 import rs117.hd.utils.Camera;
 import rs117.hd.utils.CommandBuffer;
+import rs117.hd.utils.buffer.GpuIntBuffer;
 
 import static net.runelite.api.Perspective.*;
 import static org.lwjgl.opengl.GL33C.*;
+import static rs117.hd.HdPlugin.GL_CAPS;
 import static rs117.hd.HdPlugin.checkGLErrors;
 import static rs117.hd.renderer.zone.FacePrioritySorter.distanceFaceCount;
 import static rs117.hd.renderer.zone.FacePrioritySorter.distanceToFaces;
@@ -191,7 +193,7 @@ class Zone {
 		glDrawLength = Arrays.copyOfRange(drawEnd, 0, drawIdx);
 	}
 
-	void renderOpaque(CommandBuffer cmd, int zx, int zz, int minLevel, int currentLevel, int maxLevel, Set<Integer> hiddenRoofIds) {
+	void renderOpaque(CommandBuffer cmd, int zx, int zz, int minLevel, int currentLevel, int maxLevel, Set<Integer> hiddenRoofIds, GpuIntBuffer indirect) {
 		drawIdx = 0;
 
 		for (int level = minLevel; level <= maxLevel; ++level) {
@@ -234,33 +236,20 @@ class Zone {
 		if (drawIdx == 0)
 			return;
 
-		convertForDraw(VERT_SIZE);
-
-		cmd.BindVertexArray(glVao);
-		if(glDrawOffset.length == 1) {
-			cmd.DrawArrays(GL_TRIANGLES, glDrawOffset[0], glDrawLength[0]);
-		} else {
-			cmd.MultiDrawArrays(GL_TRIANGLES, glDrawOffset, glDrawLength);
-		}
+		lastDrawMode = STATIC_UNSORTED;
+		lastVao = glVao;
+		flush(cmd, indirect);
 	}
 
-	void renderOpaqueLevel(CommandBuffer cmd, int zx, int zz, int level) {
+	void renderOpaqueLevel(CommandBuffer cmd, int zx, int zz, int level, GpuIntBuffer indirect) {
 		drawIdx = 0;
 
-		// draw the specific level
-		pushRange(this.levelOffsets[level - 1], this.levelOffsets[level]);
-
-		if (drawIdx == 0)
+		pushRange(this.levelOffsets[level - 1], this.levelOffsets[level]);if (drawIdx == 0)
 			return;
 
-		convertForDraw(VERT_SIZE);
-
-		cmd.BindVertexArray(glVao);
-		if(glDrawOffset.length == 1) {
-			cmd.DrawArrays(GL_TRIANGLES, glDrawOffset[0], glDrawLength[0]);
-		} else {
-			cmd.MultiDrawArrays(GL_TRIANGLES, glDrawOffset, glDrawLength);
-		}
+		lastDrawMode = STATIC_UNSORTED;
+		lastVao = glVao;
+		flush(cmd, indirect);
 	}
 
 	private static void pushRange(int start, int end) {
@@ -494,7 +483,8 @@ class Zone {
 		int maxLevel,
 		int level,
 		Camera camera,
-		Set<Integer> hiddenRoofIds
+		Set<Integer> hiddenRoofIds,
+		GpuIntBuffer indirect
 	) {
 		if (alphaModels.isEmpty())
 			return;
@@ -518,7 +508,7 @@ class Zone {
 				continue;
 
 			if (lastVao != m.vao || lastzx != (zx - m.zofx) || lastzz != (zz - m.zofz))
-				flush(cmd);
+				flush(cmd, indirect);
 
 			lastVao = m.vao;
 			lastzx = zx - m.zofx;
@@ -609,26 +599,39 @@ class Zone {
 			}
 		}
 
-		flush(cmd);
+		flush(cmd, indirect);
 		cmd.DepthMask(true);
 	}
 
-	private void flush(CommandBuffer cmd) {
+	private void flush(CommandBuffer cmd, GpuIntBuffer indirect) {
 		if (lastDrawMode == STATIC) {
 			if (ZoneRenderer.alphaFaceCount > 0) {
 				int vertexCount = ZoneRenderer.alphaFaceCount * 3;
 				long byteOffset = 4L * (ZoneRenderer.eboAlphaStaging.position() - vertexCount);
 				cmd.BindVertexArray(lastVao);
-				cmd.DrawElements(GL_TRIANGLES, vertexCount, byteOffset); // The EBO is bound by in ZoneRenderer
+				// The EBO & IDO is bound by in ZoneRenderer
+				if(GL_CAPS.GL_ARB_draw_indirect) {
+					cmd.DrawElementsIndirect(GL_TRIANGLES, vertexCount, (int)(byteOffset / 4L), indirect);
+				} else {
+					cmd.DrawElements(GL_TRIANGLES, vertexCount, byteOffset);
+				}
 				ZoneRenderer.alphaFaceCount = 0;
 			}
 		} else if (drawIdx != 0) {
-			convertForDraw(VAO.VERT_SIZE);
+			convertForDraw(lastDrawMode == STATIC_UNSORTED ? VERT_SIZE : VAO.VERT_SIZE);
 			cmd.BindVertexArray(lastVao);
 			if(glDrawOffset.length == 1) {
-				cmd.DrawArrays(GL_TRIANGLES, glDrawOffset[0], glDrawLength[0]);
+				if(GL_CAPS.GL_ARB_draw_indirect) {
+					cmd.DrawArraysIndirect(GL_TRIANGLES, glDrawOffset[0], glDrawLength[0], indirect);
+				} else {
+					cmd.DrawArrays(GL_TRIANGLES, glDrawOffset[0], glDrawLength[0]);
+				}
 			} else {
-				cmd.MultiDrawArrays(GL_TRIANGLES, glDrawOffset, glDrawLength);
+				if(GL_CAPS.GL_ARB_multi_draw_indirect) {
+					cmd.MultiDrawArraysIndirect(GL_TRIANGLES, glDrawOffset, glDrawLength, indirect);
+				} else {
+					cmd.MultiDrawArrays(GL_TRIANGLES, glDrawOffset, glDrawLength);
+				}
 			}
 			drawIdx = 0;
 		}

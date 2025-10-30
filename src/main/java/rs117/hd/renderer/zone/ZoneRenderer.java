@@ -81,6 +81,7 @@ import static net.runelite.api.Constants.*;
 import static net.runelite.api.Constants.SCENE_SIZE;
 import static net.runelite.api.Perspective.*;
 import static org.lwjgl.opengl.GL33C.*;
+import static org.lwjgl.opengl.GL40.GL_DRAW_INDIRECT_BUFFER;
 import static rs117.hd.HdPlugin.COLOR_FILTER_FADE_DURATION;
 import static rs117.hd.HdPlugin.IS_APPLE;
 import static rs117.hd.HdPlugin.NEAR_PLANE;
@@ -161,6 +162,9 @@ public class ZoneRenderer implements Renderer {
 	private VAO.VAOList vaoA;
 	private VAO.VAOList vaoPO;
 	private VAO.VAOList vaoPOShadow;
+
+	public static int indirectDrawCmds;
+	public static GpuIntBuffer indirectDrawCmdsStaging;
 
 	public static int eboAlpha;
 	public static GpuIntBuffer eboAlphaStaging;
@@ -303,6 +307,9 @@ public class ZoneRenderer implements Renderer {
 		eboAlpha = glGenBuffers();
 		eboAlphaStaging = new GpuIntBuffer();
 
+		indirectDrawCmds = glGenBuffers();
+		indirectDrawCmdsStaging = new GpuIntBuffer();
+
 		vaoO = new VAO.VAOList(eboAlpha);
 		vaoA = new VAO.VAOList(eboAlpha);
 		vaoPO = new VAO.VAOList(eboAlpha);
@@ -323,6 +330,14 @@ public class ZoneRenderer implements Renderer {
 		if (eboAlphaStaging != null)
 			eboAlphaStaging.destroy();
 		eboAlphaStaging = null;
+
+		if (indirectDrawCmds != 0)
+			glDeleteBuffers(indirectDrawCmds);
+		indirectDrawCmds = 0;
+
+		if (indirectDrawCmdsStaging != null)
+			indirectDrawCmdsStaging.destroy();
+		indirectDrawCmdsStaging = null;
 	}
 
 	@Override
@@ -748,6 +763,7 @@ public class ZoneRenderer implements Renderer {
 
 		// Reset buffers for the next frame
 		eboAlphaStaging.clear();
+		indirectDrawCmdsStaging.clear();
 		sceneCmd.reset();
 		directionalCmd.reset();
 		renderState.reset();
@@ -778,22 +794,29 @@ public class ZoneRenderer implements Renderer {
 		vaoA.unmap();
 
 		// Scene draw state to apply before all recorded commands
+		frameTimer.begin(Timer.CLICKBOX_CHECK);
 		if (eboAlphaStaging.position() > 0) {
 			eboAlphaStaging.flip();
 			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, eboAlpha);
 			glBufferData(GL_ELEMENT_ARRAY_BUFFER, eboAlphaStaging.getBuffer(), GL_STREAM_DRAW);
 		}
 
+		if(indirectDrawCmdsStaging.position() > 0) {
+			indirectDrawCmdsStaging.flip();
+			glBindBuffer(GL_DRAW_INDIRECT_BUFFER, indirectDrawCmds);
+			glBufferData(GL_DRAW_INDIRECT_BUFFER, indirectDrawCmdsStaging.getBuffer(), GL_STREAM_DRAW);
+		}
+		frameTimer.end(Timer.CLICKBOX_CHECK);
+
 		directionalShadowPass();
 		frameTimer.end(Timer.DRAW_SCENE);
+		frameTimer.begin(Timer.RENDER_FRAME);
 
 		if(!IS_APPLE) {
 			scenePass();
 		} else {
 			deferScenePass = true;
 		}
-
-		frameTimer.begin(Timer.RENDER_FRAME);
 
 		// The client only updates animations once per client tick, so we can skip updating geometry buffers,
 		// but the compute shaders should still be executed in case the camera angle has changed.
@@ -931,7 +954,7 @@ public class ZoneRenderer implements Renderer {
 
 		int offset = ctx.sceneContext.sceneOffset >> 3;
 		if (z.inSceneFrustum) {
-			z.renderOpaque(sceneCmd, zx - offset, zz - offset, minLevel, level, maxLevel, hideRoofIds);
+			z.renderOpaque(sceneCmd, zx - offset, zz - offset, minLevel, level, maxLevel, hideRoofIds, indirectDrawCmdsStaging);
 		}
 
 		if (z.inShadowFrustum) {
@@ -942,7 +965,8 @@ public class ZoneRenderer implements Renderer {
 				minLevel,
 				level,
 				plugin.configRoofShadows ? 3 : maxLevel,
-				plugin.configRoofShadows ? Collections.emptySet() : hideRoofIds
+				plugin.configRoofShadows ? Collections.emptySet() : hideRoofIds,
+				indirectDrawCmdsStaging
 			);
 		}
 
@@ -966,7 +990,7 @@ public class ZoneRenderer implements Renderer {
 
 		int offset = ctx.sceneContext.sceneOffset >> 3;
 		if (renderWater)
-			z.renderOpaqueLevel(sceneCmd, zx - offset, zz - offset, Zone.LEVEL_WATER_SURFACE);
+			z.renderOpaqueLevel(sceneCmd, zx - offset, zz - offset, Zone.LEVEL_WATER_SURFACE, indirectDrawCmdsStaging);
 
 		if (!hasAlpha)
 			return;
@@ -986,7 +1010,8 @@ public class ZoneRenderer implements Renderer {
 				maxLevel,
 				level,
 				sceneCamera,
-				hideRoofIds
+				hideRoofIds,
+				indirectDrawCmdsStaging
 			);
 		}
 
@@ -1000,7 +1025,8 @@ public class ZoneRenderer implements Renderer {
 				plugin.configRoofShadows ? 3 : maxLevel,
 				level,
 				sceneCamera,
-				plugin.configRoofShadows ? Collections.emptySet() : hideRoofIds
+				plugin.configRoofShadows ? Collections.emptySet() : hideRoofIds,
+				indirectDrawCmdsStaging
 			);
 		}
 
@@ -1023,25 +1049,25 @@ public class ZoneRenderer implements Renderer {
 				if (scene.getWorldViewId() == -1) {
 					// Draw opaque
 					vaoO.unmap();
-					vaoO.drawAll(this, sceneCmd);
-					vaoO.drawAll(this, directionalCmd);
+					vaoO.drawAll(this, sceneCmd, indirectDrawCmdsStaging);
+					vaoO.drawAll(this, directionalCmd, indirectDrawCmdsStaging);
 					vaoO.resetAll();
 
 					vaoPO.unmap();
 
 					// Draw player shadows
 					vaoPOShadow.unmap();
-					vaoPOShadow.drawAll(this, directionalCmd);
+					vaoPOShadow.drawAll(this, directionalCmd, indirectDrawCmdsStaging);
 					vaoPOShadow.resetAll();
 
 					// Draw players opaque, without depth writes
 					sceneCmd.DepthMask(false);
-					vaoPO.drawAll(this, sceneCmd);
+					vaoPO.drawAll(this, sceneCmd, indirectDrawCmdsStaging);
 					sceneCmd.DepthMask(true);
 
 					// Draw players opaque, writing only depth
 					sceneCmd.ColorMask(false, false, false, false);
-					vaoPO.drawAll(this, sceneCmd);
+					vaoPO.drawAll(this, sceneCmd, indirectDrawCmdsStaging);
 					sceneCmd.ColorMask(true, true, true, true);
 
 					vaoPO.resetAll();

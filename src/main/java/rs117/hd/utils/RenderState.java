@@ -20,6 +20,7 @@ import static org.lwjgl.opengl.GL30.glBindFramebuffer;
 import static org.lwjgl.opengl.GL30C.glBindVertexArray;
 import static org.lwjgl.opengl.GL30C.glFramebufferTextureLayer;
 import static org.lwjgl.opengl.GL31.GL_UNIFORM_BUFFER;
+import static org.lwjgl.opengl.GL40.GL_DRAW_INDIRECT_BUFFER;
 
 public final class RenderState {
 	private final List<GLState<RenderState>> states = new ArrayList<>();
@@ -31,6 +32,7 @@ public final class RenderState {
 	public final GLViewport viewport = addState(GLViewport::new);
 	public final GLBindVAO vao = addState(GLBindVAO::new);
 	public final GLBindEBO ebo = addState(GLBindEBO::new);
+	public final GLBindIDO ido = addState(GLBindIDO::new);
 	public final GLBindUBO ubo = addState(GLBindUBO::new);
 	public final GLDepthMask depthMask = addState(GLDepthMask::new);
 	public final GLDepthFunc depthFunc = addState(GLDepthFunc::new);
@@ -79,6 +81,10 @@ public final class RenderState {
 
 	public static final class GLBindEBO extends GLState.SingleState<RenderState, Integer> {
 		@Override protected void applyValue(Integer ebo) { glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo); }
+	}
+
+	public static final class GLBindIDO extends GLState.SingleState<RenderState, Integer> {
+		@Override protected void applyValue(Integer ebo) { glBindBuffer(GL_DRAW_INDIRECT_BUFFER, ebo); }
 	}
 
 	public static final class GLBindUBO extends GLState.SingleState<RenderState, Integer> {
