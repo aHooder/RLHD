@@ -7,7 +7,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import rs117.hd.utils.CommandBuffer;
-import rs117.hd.utils.buffer.GpuIntBuffer;
 
 import static org.lwjgl.opengl.GL33C.*;
 import static rs117.hd.HdPlugin.GL_CAPS;
@@ -95,7 +94,7 @@ class VAO {
 		off++;
 	}
 
-	void draw(ZoneRenderer renderer, CommandBuffer cmd, GpuIntBuffer indirect) {
+	void draw(ZoneRenderer renderer, CommandBuffer cmd) {
 		assert !vbo.mapped;
 
 		cmd.BindVertexArray(vao);
@@ -109,7 +108,7 @@ class VAO {
 
 			cmd.SetWorldViewIndex(renderer.uboWorldViews.getIndex(scene));
 			if(GL_CAPS.GL_ARB_draw_indirect) {
-				cmd.DrawArraysIndirect(GL_TRIANGLES, start / (VERT_SIZE / 4), count / (VAO.VERT_SIZE / 4), indirect);
+				cmd.DrawArraysIndirect(GL_TRIANGLES, start / (VERT_SIZE / 4), count / (VAO.VERT_SIZE / 4), ZoneRenderer.indirectDrawCmdsStaging);
 			} else {
 				cmd.DrawArrays(GL_TRIANGLES, start / (VERT_SIZE / 4), count / (VAO.VERT_SIZE / 4));
 			}
@@ -188,9 +187,9 @@ class VAO {
 			}
 		}
 
-		void drawAll(ZoneRenderer renderer, CommandBuffer cmd, GpuIntBuffer indirect) {
+		void drawAll(ZoneRenderer renderer, CommandBuffer cmd) {
 			for (int i = 0; i < drawCount; ++i)
-				vaos.get(i).draw(renderer, cmd, indirect);
+				vaos.get(i).draw(renderer, cmd);
 		}
 
 		void resetAll() {

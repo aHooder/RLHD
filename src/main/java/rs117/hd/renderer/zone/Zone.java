@@ -15,7 +15,6 @@ import rs117.hd.scene.SceneContext;
 import rs117.hd.scene.materials.Material;
 import rs117.hd.utils.Camera;
 import rs117.hd.utils.CommandBuffer;
-import rs117.hd.utils.buffer.GpuIntBuffer;
 
 import static net.runelite.api.Perspective.*;
 import static org.lwjgl.opengl.GL33C.*;
@@ -193,7 +192,7 @@ class Zone {
 		glDrawLength = Arrays.copyOfRange(drawEnd, 0, drawIdx);
 	}
 
-	void renderOpaque(CommandBuffer cmd, int zx, int zz, int minLevel, int currentLevel, int maxLevel, Set<Integer> hiddenRoofIds, GpuIntBuffer indirect) {
+	void renderOpaque(CommandBuffer cmd, int zx, int zz, int minLevel, int currentLevel, int maxLevel, Set<Integer> hiddenRoofIds) {
 		drawIdx = 0;
 
 		for (int level = minLevel; level <= maxLevel; ++level) {
@@ -238,10 +237,10 @@ class Zone {
 
 		lastDrawMode = STATIC_UNSORTED;
 		lastVao = glVao;
-		flush(cmd, indirect);
+		flush(cmd);
 	}
 
-	void renderOpaqueLevel(CommandBuffer cmd, int zx, int zz, int level, GpuIntBuffer indirect) {
+	void renderOpaqueLevel(CommandBuffer cmd, int zx, int zz, int level) {
 		drawIdx = 0;
 
 		pushRange(this.levelOffsets[level - 1], this.levelOffsets[level]);
@@ -251,7 +250,7 @@ class Zone {
 
 		lastDrawMode = STATIC_UNSORTED;
 		lastVao = glVao;
-		flush(cmd, indirect);
+		flush(cmd);
 	}
 
 	private static void pushRange(int start, int end) {
@@ -485,8 +484,7 @@ class Zone {
 		int maxLevel,
 		int level,
 		Camera camera,
-		Set<Integer> hiddenRoofIds,
-		GpuIntBuffer indirect
+		Set<Integer> hiddenRoofIds
 	) {
 		if (alphaModels.isEmpty())
 			return;
@@ -507,7 +505,7 @@ class Zone {
 				continue;
 
 			if (lastVao != m.vao || lastzx != (zx - m.zofx) || lastzz != (zz - m.zofz))
-				flush(cmd, indirect);
+				flush(cmd);
 
 			lastVao = m.vao;
 			lastzx = zx - m.zofx;
@@ -598,11 +596,11 @@ class Zone {
 			}
 		}
 
-		flush(cmd, indirect);
+		flush(cmd);
 		cmd.DepthMask(true);
 	}
 
-	private void flush(CommandBuffer cmd, GpuIntBuffer indirect) {
+	private void flush(CommandBuffer cmd) {
 		if (lastDrawMode == STATIC) {
 			if (ZoneRenderer.alphaFaceCount > 0) {
 				int vertexCount = ZoneRenderer.alphaFaceCount * 3;
@@ -610,7 +608,7 @@ class Zone {
 				cmd.BindVertexArray(lastVao);
 				// The EBO & IDO is bound by in ZoneRenderer
 				if(GL_CAPS.GL_ARB_draw_indirect) {
-					cmd.DrawElementsIndirect(GL_TRIANGLES, vertexCount, (int)(byteOffset / 4L), indirect);
+					cmd.DrawElementsIndirect(GL_TRIANGLES, vertexCount, (int)(byteOffset / 4L), ZoneRenderer.indirectDrawCmdsStaging);
 				} else {
 					cmd.DrawElements(GL_TRIANGLES, vertexCount, byteOffset);
 				}
@@ -621,13 +619,13 @@ class Zone {
 			cmd.BindVertexArray(lastVao);
 			if(glDrawOffset.length == 1) {
 				if(GL_CAPS.GL_ARB_draw_indirect) {
-					cmd.DrawArraysIndirect(GL_TRIANGLES, glDrawOffset[0], glDrawLength[0], indirect);
+					cmd.DrawArraysIndirect(GL_TRIANGLES, glDrawOffset[0], glDrawLength[0], ZoneRenderer.indirectDrawCmdsStaging);
 				} else {
 					cmd.DrawArrays(GL_TRIANGLES, glDrawOffset[0], glDrawLength[0]);
 				}
 			} else {
 				if(GL_CAPS.GL_ARB_multi_draw_indirect) {
-					cmd.MultiDrawArraysIndirect(GL_TRIANGLES, glDrawOffset, glDrawLength, indirect);
+					cmd.MultiDrawArraysIndirect(GL_TRIANGLES, glDrawOffset, glDrawLength, ZoneRenderer.indirectDrawCmdsStaging);
 				} else {
 					cmd.MultiDrawArrays(GL_TRIANGLES, glDrawOffset, glDrawLength);
 				}

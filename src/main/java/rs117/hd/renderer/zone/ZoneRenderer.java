@@ -158,10 +158,29 @@ public class ZoneRenderer implements Renderer {
 	private final CommandBuffer sceneCmd = new CommandBuffer();
 	private final CommandBuffer directionalCmd = new CommandBuffer();
 
-	private VAO.VAOList vaoO;
-	private VAO.VAOList vaoA;
-	private VAO.VAOList vaoPO;
-	private VAO.VAOList vaoPOShadow;
+	static final class FrameDrawContext {
+		VAO.VAOList vaoO;
+		VAO.VAOList vaoA;
+		VAO.VAOList vaoPO;
+		VAO.VAOList vaoPOShadow;
+
+		void init() {
+			vaoO = new VAO.VAOList(eboAlpha);
+			vaoA = new VAO.VAOList(eboAlpha);
+			vaoPO = new VAO.VAOList(eboAlpha);
+			vaoPOShadow = new VAO.VAOList(eboAlpha);
+		}
+
+		void destroy() {
+			vaoO.free();
+			vaoA.free();
+			vaoPO.free();
+			vaoPOShadow.free();
+			vaoO = vaoA = vaoPO = vaoPOShadow = null;
+		}
+	}
+	FrameDrawContext frameDrawCtx = new FrameDrawContext();
+	FrameDrawContext prevFrameDrawCtx = new FrameDrawContext();
 
 	public static int indirectDrawCmds;
 	public static GpuIntBuffer indirectDrawCmdsStaging;
@@ -310,18 +329,13 @@ public class ZoneRenderer implements Renderer {
 		indirectDrawCmds = glGenBuffers();
 		indirectDrawCmdsStaging = new GpuIntBuffer();
 
-		vaoO = new VAO.VAOList(eboAlpha);
-		vaoA = new VAO.VAOList(eboAlpha);
-		vaoPO = new VAO.VAOList(eboAlpha);
-		vaoPOShadow = new VAO.VAOList(eboAlpha);
+		frameDrawCtx.init();
+		prevFrameDrawCtx.init();
 	}
 
 	private void destroyBuffers() {
-		vaoO.free();
-		vaoA.free();
-		vaoPO.free();
-		vaoPOShadow.free();
-		vaoO = vaoA = vaoPO = vaoPOShadow = null;
+		frameDrawCtx.destroy();
+		prevFrameDrawCtx.destroy();
 
 		if (eboAlpha != 0)
 			glDeleteBuffers(eboAlpha);
@@ -372,9 +386,9 @@ public class ZoneRenderer implements Renderer {
 			preSceneDrawTopLevel(scene, cameraX, cameraY, cameraZ, cameraPitch, cameraYaw);
 		} else {
 			Scene topLevel = client.getScene();
-			vaoO.addRange(topLevel);
-			vaoPO.addRange(topLevel);
-			vaoPOShadow.addRange(topLevel);
+			frameDrawCtx.vaoO.addRange(topLevel);
+			frameDrawCtx.vaoPO.addRange(topLevel);
+			frameDrawCtx.vaoPOShadow.addRange(topLevel);
 		}
 	}
 
@@ -791,7 +805,7 @@ public class ZoneRenderer implements Renderer {
 
 		sceneFboValid = true;
 
-		vaoA.unmap();
+		frameDrawCtx.vaoA.unmap();
 
 		// Scene draw state to apply before all recorded commands
 		if (eboAlphaStaging.position() > 0) {
@@ -952,7 +966,7 @@ public class ZoneRenderer implements Renderer {
 
 		int offset = ctx.sceneContext.sceneOffset >> 3;
 		if (z.inSceneFrustum) {
-			z.renderOpaque(sceneCmd, zx - offset, zz - offset, minLevel, level, maxLevel, hideRoofIds, indirectDrawCmdsStaging);
+			z.renderOpaque(sceneCmd, zx - offset, zz - offset, minLevel, level, maxLevel, hideRoofIds);
 		}
 
 		if (z.inShadowFrustum) {
@@ -963,8 +977,7 @@ public class ZoneRenderer implements Renderer {
 				minLevel,
 				level,
 				plugin.configRoofShadows ? 3 : maxLevel,
-				plugin.configRoofShadows ? Collections.emptySet() : hideRoofIds,
-				indirectDrawCmdsStaging
+				plugin.configRoofShadows ? Collections.emptySet() : hideRoofIds
 			);
 		}
 
@@ -988,7 +1001,7 @@ public class ZoneRenderer implements Renderer {
 
 		int offset = ctx.sceneContext.sceneOffset >> 3;
 		if (renderWater)
-			z.renderOpaqueLevel(sceneCmd, zx - offset, zz - offset, Zone.LEVEL_WATER_SURFACE, indirectDrawCmdsStaging);
+			z.renderOpaqueLevel(sceneCmd, zx - offset, zz - offset, Zone.LEVEL_WATER_SURFACE);
 
 		if (!hasAlpha)
 			return;
@@ -1008,8 +1021,7 @@ public class ZoneRenderer implements Renderer {
 				maxLevel,
 				level,
 				sceneCamera,
-				hideRoofIds,
-				indirectDrawCmdsStaging
+				hideRoofIds
 			);
 		}
 
@@ -1023,8 +1035,7 @@ public class ZoneRenderer implements Renderer {
 				plugin.configRoofShadows ? 3 : maxLevel,
 				level,
 				sceneCamera,
-				plugin.configRoofShadows ? Collections.emptySet() : hideRoofIds,
-				indirectDrawCmdsStaging
+				plugin.configRoofShadows ? Collections.emptySet() : hideRoofIds
 			);
 		}
 
@@ -1040,35 +1051,35 @@ public class ZoneRenderer implements Renderer {
 
 		switch (pass) {
 			case DrawCallbacks.PASS_OPAQUE:
-				vaoO.addRange(scene);
-				vaoPO.addRange(scene);
-				vaoPOShadow.addRange(scene);
+				frameDrawCtx.vaoO.addRange(scene);
+				frameDrawCtx.vaoPO.addRange(scene);
+				frameDrawCtx.vaoPOShadow.addRange(scene);
 
 				if (scene.getWorldViewId() == -1) {
 					// Draw opaque
-					vaoO.unmap();
-					vaoO.drawAll(this, sceneCmd, indirectDrawCmdsStaging);
-					vaoO.drawAll(this, directionalCmd, indirectDrawCmdsStaging);
-					vaoO.resetAll();
+					frameDrawCtx.vaoO.unmap();
+					frameDrawCtx.vaoO.drawAll(this, sceneCmd);
+					frameDrawCtx.vaoO.drawAll(this, directionalCmd);
+					frameDrawCtx.vaoO.resetAll();
 
-					vaoPO.unmap();
+					frameDrawCtx.vaoPO.unmap();
 
 					// Draw player shadows
-					vaoPOShadow.unmap();
-					vaoPOShadow.drawAll(this, directionalCmd, indirectDrawCmdsStaging);
-					vaoPOShadow.resetAll();
+					frameDrawCtx.vaoPOShadow.unmap();
+					frameDrawCtx.vaoPOShadow.drawAll(this, directionalCmd);
+					frameDrawCtx.vaoPOShadow.resetAll();
 
 					// Draw players opaque, without depth writes
 					sceneCmd.DepthMask(false);
-					vaoPO.drawAll(this, sceneCmd, indirectDrawCmdsStaging);
+					frameDrawCtx.vaoPO.drawAll(this, sceneCmd);
 					sceneCmd.DepthMask(true);
 
 					// Draw players opaque, writing only depth
 					sceneCmd.ColorMask(false, false, false, false);
-					vaoPO.drawAll(this, sceneCmd, indirectDrawCmdsStaging);
+					frameDrawCtx.vaoPO.drawAll(this, sceneCmd);
 					sceneCmd.ColorMask(true, true, true, true);
 
-					vaoPO.resetAll();
+					frameDrawCtx.vaoPO.resetAll();
 				}
 				break;
 			case DrawCallbacks.PASS_ALPHA:
@@ -1125,11 +1136,11 @@ public class ZoneRenderer implements Renderer {
 
 		int size = m.getFaceCount() * 3 * VAO.VERT_SIZE;
 		if (!hasAlpha) {
-			VAO o = vaoO.get(size);
+			VAO o = frameDrawCtx.vaoO.get(size);
 			sceneUploader.uploadTempModel(m, modelOverride, preOrientation, orient, x, y, z, o.vbo.vb);
 		} else {
 			m.calculateBoundsCylinder();
-			VAO o = vaoO.get(size), a = vaoA.get(size);
+			VAO o = frameDrawCtx.vaoO.get(size), a = frameDrawCtx.vaoA.get(size);
 			int start = a.vbo.vb.position();
 			facePrioritySorter.uploadSortedModel(worldProjection, m, modelOverride, preOrientation, orient, x, y, z, o.vbo.vb, a.vbo.vb);
 			int end = a.vbo.vb.position();
@@ -1172,8 +1183,8 @@ public class ZoneRenderer implements Renderer {
 				// opaque player faces have their own vao and are drawn in a separate pass from normal opaque faces
 				// because they are not depth tested. transparent player faces don't need their own vao because normal
 				// transparent faces are already not depth tested
-				VAO o = renderable instanceof Player ? vaoPO.get(size) : vaoO.get(size);
-				VAO a = vaoA.get(size);
+				VAO o = renderable instanceof Player ? frameDrawCtx.vaoPO.get(size) : frameDrawCtx.vaoO.get(size);
+				VAO a = frameDrawCtx.vaoA.get(size);
 
 				int start = a.vbo.vb.position();
 				m.calculateBoundsCylinder();
@@ -1211,7 +1222,7 @@ public class ZoneRenderer implements Renderer {
 			if (zone.inShadowFrustum) {
 				// Since priority sorting of models includes back-face culling,
 				// we need to upload the entire model again for shadows
-				VAO o = vaoPOShadow.get(size);
+				VAO o = frameDrawCtx.vaoPOShadow.get(size);
 				sceneUploader.uploadTempModel(
 					m,
 					modelOverride,
@@ -1224,7 +1235,7 @@ public class ZoneRenderer implements Renderer {
 				);
 			}
 		} else {
-			VAO o = vaoO.get(size);
+			VAO o = frameDrawCtx.vaoO.get(size);
 			sceneUploader.uploadTempModel(
 				m,
 				modelOverride,
@@ -1381,6 +1392,13 @@ public class ZoneRenderer implements Renderer {
 		}
 
 		glBindFramebuffer(GL_FRAMEBUFFER, plugin.awtContext.getFramebuffer(false));
+
+		{
+			// Swap Frame Draw Contexts to avoid the next frame stalling due to buffers being in use
+			FrameDrawContext temp = frameDrawCtx;
+			frameDrawCtx = prevFrameDrawCtx;
+			prevFrameDrawCtx = temp;
+		}
 
 		frameTimer.end(Timer.DRAW_FRAME);
 		frameTimer.end(Timer.RENDER_FRAME);
