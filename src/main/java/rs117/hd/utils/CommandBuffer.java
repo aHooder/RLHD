@@ -164,8 +164,8 @@ public class CommandBuffer {
 						int x = (int) cmd[readHead++];
 						int y = (int) cmd[readHead++];
 						int z = (int) cmd[readHead++];
-						if (uboCommandBuffer != null)
-							uboCommandBuffer.sceneBase.set(x, y, z);
+						//if (uboCommandBuffer != null)
+						//	uboCommandBuffer.sceneBase.set(x, y, z);
 						break;
 					}
 					case UNIFORM_WORLD_VIEW_ID: {

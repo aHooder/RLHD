@@ -356,7 +356,7 @@ class SceneUploader {
 				onlyWaterSurface,
 				tileExX, tileExY, tileZ,
 				vertexBuffer,
-				tilePoint.getX() * 128 - basex, tilePoint.getY() * 128 - basez
+				tilePoint.getX() * 128, tilePoint.getY() * 128
 			);
 		}
 
@@ -576,11 +576,11 @@ class SceneUploader {
 		Model model = null;
 		if (r instanceof Model) {
 			model = (Model) r;
-			uploadStaticModel(model, modelOverride, preOrientation, orient, x - basex, y, z - basez, vertexBuffer, ab);
+			uploadStaticModel(model, modelOverride, preOrientation, orient, x, y, z, vertexBuffer, ab);
 		} else if (r instanceof DynamicObject) {
 			model = ((DynamicObject) r).getModelZbuf();
 			if (model != null) {
-				uploadStaticModel(model, modelOverride, preOrientation, orient, x - basex, y, z - basez, vertexBuffer, ab);
+				uploadStaticModel(model, modelOverride, preOrientation, orient, x, y, z, vertexBuffer, ab);
 			}
 		}
 		int endpos = zone.vboA != null ? zone.vboA.vb.position() : 0;
@@ -598,7 +598,7 @@ class SceneUploader {
 			}
 			zone.addAlphaModel(
 				zone.glVaoA, model, pos, endpos,
-				x - basex, y, z - basez,
+				x, y, z,
 				lx, lz, ux, uz,
 				rid, level, id
 			);
@@ -907,17 +907,17 @@ class SceneUploader {
 			final int vertex2 = faceZ[face];
 
 			// vertexes are stored in scene local, convert to tile local
-			int lx0 = vertexX[vertex0] - basex;
+			int lx0 = vertexX[vertex0];
 			int ly0 = vertexY[vertex0];
-			int lz0 = vertexZ[vertex0] - basez;
+			int lz0 = vertexZ[vertex0];
 
-			int lx1 = vertexX[vertex1] - basex;
+			int lx1 = vertexX[vertex1];
 			int ly1 = vertexY[vertex1];
-			int lz1 = vertexZ[vertex1] - basez;
+			int lz1 = vertexZ[vertex1];
 
-			int lx2 = vertexX[vertex2] - basex;
+			int lx2 = vertexX[vertex2];
 			int ly2 = vertexY[vertex2];
-			int lz2 = vertexZ[vertex2] - basez;
+			int lz2 = vertexZ[vertex2];
 
 			int[][] localVertices = ProceduralGenerator.faceLocalVertices(tile, face);
 

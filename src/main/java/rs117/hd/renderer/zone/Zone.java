@@ -246,12 +246,7 @@ class Zone {
 		cmd.SetBaseOffset(zx << 10, 0, zz << 10);
 		cmd.BindVertexArray(glVao);
 		if(glDrawOffset.length == 1) {
-			if(indirectBuffer != null) {
-				cmd.BindIndirectBuffer(idoShared);
-				cmd.DrawArraysIndirect(GL_TRIANGLES, glDrawOffset[0], glDrawLength[0], indirectBuffer);
-			} else {
-				cmd.DrawArrays(GL_TRIANGLES, glDrawOffset[0], glDrawLength[0]);
-			}
+			cmd.DrawArrays(GL_TRIANGLES, glDrawOffset[0], glDrawLength[0]);
 		} else {
 			cmd.MultiDrawArrays(GL_TRIANGLES, glDrawOffset, glDrawLength);
 		}
@@ -271,12 +266,7 @@ class Zone {
 		cmd.SetBaseOffset(zx << 10, 0, zz << 10);
 		cmd.BindVertexArray(glVao);
 		if(glDrawOffset.length == 1) {
-			if(indirectBuffer != null) {
-				cmd.BindIndirectBuffer(idoShared);
-				cmd.DrawArraysIndirect(GL_TRIANGLES, glDrawOffset[0], glDrawLength[0], indirectBuffer);
-			} else {
-				cmd.DrawArrays(GL_TRIANGLES, glDrawOffset[0], glDrawLength[0]);
-			}
+			cmd.DrawArrays(GL_TRIANGLES, glDrawOffset[0], glDrawLength[0]);
 		} else {
 			cmd.MultiDrawArrays(GL_TRIANGLES, glDrawOffset, glDrawLength);
 		}
