@@ -4,23 +4,31 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
 import rs117.hd.opengl.GLState;
+import rs117.hd.opengl.shader.ShaderProgram;
 
 import static org.lwjgl.opengl.GL11.glColorMask;
 import static org.lwjgl.opengl.GL11.glDepthFunc;
 import static org.lwjgl.opengl.GL11.glDepthMask;
 import static org.lwjgl.opengl.GL11.glDisable;
+import static org.lwjgl.opengl.GL11.glDrawBuffer;
 import static org.lwjgl.opengl.GL11.glEnable;
+import static org.lwjgl.opengl.GL11.glViewport;
 import static org.lwjgl.opengl.GL14C.glBlendFuncSeparate;
 import static org.lwjgl.opengl.GL15C.GL_ELEMENT_ARRAY_BUFFER;
 import static org.lwjgl.opengl.GL15C.glBindBuffer;
 import static org.lwjgl.opengl.GL30.glBindFramebuffer;
 import static org.lwjgl.opengl.GL30C.glBindVertexArray;
+import static org.lwjgl.opengl.GL30C.glFramebufferTextureLayer;
 import static org.lwjgl.opengl.GL31.GL_UNIFORM_BUFFER;
 
 public final class RenderState {
 	private final List<GLState<RenderState>> states = new ArrayList<>();
 
 	public final GLBindFrameBuffer frameBuffer = addState(GLBindFrameBuffer::new);
+	public final GLFrameBufferTextureLayer frameBufferTextureLayer = addState(GLFrameBufferTextureLayer::new);
+	public final GLDrawBuffer drawBuffer = addState(GLDrawBuffer::new);
+	public final GLShaderProgram program = addState(GLShaderProgram::new);
+	public final GLViewport viewport = addState(GLViewport::new);
 	public final GLBindVAO vao = addState(GLBindVAO::new);
 	public final GLBindEBO ebo = addState(GLBindEBO::new);
 	public final GLBindUBO ubo = addState(GLBindUBO::new);
@@ -31,13 +39,9 @@ public final class RenderState {
 	public final GLEnable enable = addState(GLEnable::new);
 	public final GLDisable disable = addState(GLDisable::new);
 
-	public void apply() {
-		for (GLState<RenderState> state : states)  state.apply();
-	}
+	public void apply() { for (GLState<RenderState> state : states) state.apply(); }
 
-	public void reset() {
-		for (GLState<RenderState> state : states) state.reset();
-	}
+	public void reset() { for (GLState<RenderState> state : states) state.reset(); }
 
 	private <T extends GLState<RenderState>> T addState(Supplier<T> supplier) {
 		T state = supplier.get();
@@ -49,6 +53,24 @@ public final class RenderState {
 	public static final class GLBindFrameBuffer extends GLState.PrimitiveArrayState<RenderState, Integer> {
 		private GLBindFrameBuffer() { super(() -> new Integer[2]); }
 		@Override protected void applyValues(Integer[] values) { glBindFramebuffer(values[0], values[1]); }
+	}
+
+	public static final class GLFrameBufferTextureLayer extends GLState.PrimitiveArrayState<RenderState, Integer> {
+		private GLFrameBufferTextureLayer() { super(() -> new Integer[5]); }
+		@Override protected void applyValues(Integer[] values) { glFramebufferTextureLayer(values[0], values[1], values[2], values[3], values[4]); }
+	}
+
+	public static final class GLViewport extends GLState.PrimitiveArrayState<RenderState, Integer> {
+		private GLViewport() { super(() -> new Integer[4]); }
+		@Override protected void applyValues(Integer[] values) { glViewport(values[0], values[1], values[2], values[3]); }
+	}
+
+	public static final class GLShaderProgram extends GLState.SingleState<RenderState, ShaderProgram> {
+		@Override protected void applyValue(ShaderProgram program) { program.use(); }
+	}
+
+	public static final class GLDrawBuffer extends GLState.SingleState<RenderState, Integer> {
+		@Override protected void applyValue(Integer buf) { glDrawBuffer(buf); }
 	}
 
 	public static final class GLBindVAO extends GLState.SingleState<RenderState, Integer> {

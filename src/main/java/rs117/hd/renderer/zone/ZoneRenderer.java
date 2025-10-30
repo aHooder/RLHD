@@ -610,21 +610,22 @@ public class ZoneRenderer implements Renderer {
 				frameTimer.begin(Timer.DRAW_TILED_LIGHTING);
 				frameTimer.begin(Timer.RENDER_TILED_LIGHTING);
 
-				glViewport(0, 0, plugin.tiledLightingResolution[0], plugin.tiledLightingResolution[1]);
-				glBindFramebuffer(GL_FRAMEBUFFER, plugin.fboTiledLighting);
-
-				glBindVertexArray(plugin.vaoTri);
+				renderState.frameBuffer.set(GL_FRAMEBUFFER, plugin.fboTiledLighting);
+				renderState.viewport.set(0, 0, plugin.tiledLightingResolution[0], plugin.tiledLightingResolution[1]);
+				renderState.vao.set(plugin.vaoTri);
 
 				if (plugin.tiledLightingImageStoreProgram.isValid()) {
-					plugin.tiledLightingImageStoreProgram.use();
-					glDrawBuffer(GL_NONE);
+					renderState.program.set(plugin.tiledLightingImageStoreProgram);
+					renderState.drawBuffer.set(GL_NONE);
+					renderState.apply();
 					glDrawArrays(GL_TRIANGLES, 0, 3);
 				} else {
-					glDrawBuffer(GL_COLOR_ATTACHMENT0);
+					renderState.drawBuffer.set(GL_COLOR_ATTACHMENT0);
 					int layerCount = plugin.configDynamicLights.getTiledLightingLayers();
 					for (int layer = 0; layer < layerCount; layer++) {
-						plugin.tiledLightingShaderPrograms.get(layer).use();
-						glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, plugin.texTiledLighting, 0, layer);
+						renderState.program.set(plugin.tiledLightingShaderPrograms.get(layer));
+						renderState.frameBufferTextureLayer.set(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, plugin.texTiledLighting, 0, layer);
+						renderState.apply();
 						glDrawArrays(GL_TRIANGLES, 0, 3);
 					}
 				}
@@ -749,6 +750,7 @@ public class ZoneRenderer implements Renderer {
 		eboAlphaStaging.clear();
 		sceneCmd.reset();
 		directionalCmd.reset();
+		renderState.reset();
 
 		sceneCmd.SetWorldViewIndex(uboWorldViews.getIndex(null));
 		directionalCmd.SetWorldViewIndex(uboWorldViews.getIndex(null));
@@ -816,8 +818,10 @@ public class ZoneRenderer implements Renderer {
 			frameTimer.begin(Timer.RENDER_SHADOWS);
 
 			// Render to the shadow depth map
-			glViewport(0, 0, plugin.shadowMapResolution, plugin.shadowMapResolution);
-			glBindFramebuffer(GL_FRAMEBUFFER, plugin.fboShadowMap);
+			renderState.frameBuffer.set(GL_FRAMEBUFFER, plugin.fboShadowMap);
+			renderState.viewport.set(0, 0, plugin.shadowMapResolution, plugin.shadowMapResolution);
+			renderState.apply();
+
 			glClearDepth(1);
 			glClear(GL_DEPTH_BUFFER_BIT);
 
@@ -841,13 +845,14 @@ public class ZoneRenderer implements Renderer {
 		sceneProgram.use();
 
 		frameTimer.begin(Timer.DRAW_SCENE);
-		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, plugin.fboScene);
+		renderState.frameBuffer.set(GL_DRAW_FRAMEBUFFER, plugin.fboScene);
 		if (plugin.msaaSamples > 1) {
-			glEnable(GL_MULTISAMPLE);
+			renderState.enable.set(GL_MULTISAMPLE);
 		} else {
-			glDisable(GL_MULTISAMPLE);
+			renderState.disable.set(GL_MULTISAMPLE);
 		}
-		glViewport(0, 0, plugin.sceneResolution[0], plugin.sceneResolution[1]);
+		renderState.viewport.set(0, 0, plugin.sceneResolution[0], plugin.sceneResolution[1]);
+		renderState.apply();
 
 		// Clear scene
 		frameTimer.begin(Timer.CLEAR_SCENE);
