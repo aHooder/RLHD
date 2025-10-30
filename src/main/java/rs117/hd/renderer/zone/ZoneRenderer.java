@@ -835,6 +835,10 @@ public class ZoneRenderer implements Renderer {
 			plugin.fboShadowMap != 0 &&
 			environmentManager.currentDirectionalStrength > 0
 		) {
+			// Flush commands to make sure Command Queue to avoid flushing mid drawing
+			if(IS_APPLE)
+				glFlush();
+
 			frameTimer.begin(Timer.RENDER_SHADOWS);
 
 			// Render to the shadow depth map
