@@ -80,6 +80,7 @@ import rs117.hd.utils.buffer.GpuIntBuffer;
 import static net.runelite.api.Constants.*;
 import static net.runelite.api.Constants.SCENE_SIZE;
 import static net.runelite.api.Perspective.*;
+import static org.lwjgl.opengl.ARBDrawIndirect.GL_DRAW_INDIRECT_BUFFER;
 import static org.lwjgl.opengl.GL33C.*;
 import static rs117.hd.HdPlugin.COLOR_FILTER_FADE_DURATION;
 import static rs117.hd.HdPlugin.IS_APPLE;
@@ -161,6 +162,9 @@ public class ZoneRenderer implements Renderer {
 	private VAO.VAOList vaoA;
 	private VAO.VAOList vaoPO;
 	private VAO.VAOList vaoPOShadow;
+
+	public static int ibo;
+	public static GpuIntBuffer iboStaging;
 
 	public static int eboAlpha;
 	public static GpuIntBuffer eboAlphaStaging;
@@ -303,6 +307,9 @@ public class ZoneRenderer implements Renderer {
 		eboAlpha = glGenBuffers();
 		eboAlphaStaging = new GpuIntBuffer();
 
+		ibo = glGenBuffers();
+		iboStaging = new GpuIntBuffer();
+
 		vaoO = new VAO.VAOList(eboAlpha);
 		vaoA = new VAO.VAOList(eboAlpha);
 		vaoPO = new VAO.VAOList(eboAlpha);
@@ -323,6 +330,14 @@ public class ZoneRenderer implements Renderer {
 		if (eboAlphaStaging != null)
 			eboAlphaStaging.destroy();
 		eboAlphaStaging = null;
+
+		if(ibo != 0)
+			glDeleteBuffers(ibo);
+		ibo = 0;
+
+		if (iboStaging != null)
+			iboStaging.destroy();
+		iboStaging = null;
 	}
 
 	@Override
@@ -746,6 +761,7 @@ public class ZoneRenderer implements Renderer {
 
 		// Reset buffers for the next frame
 		eboAlphaStaging.clear();
+		iboStaging.clear();
 		sceneCmd.reset();
 		directionalCmd.reset();
 
@@ -770,8 +786,6 @@ public class ZoneRenderer implements Renderer {
 		if (root.sceneContext == null || plugin.sceneViewport == null)
 			return;
 
-		frameTimer.end(Timer.DRAW_SCENE);
-
 		sceneFboValid = true;
 
 		vaoA.unmap();
@@ -783,7 +797,15 @@ public class ZoneRenderer implements Renderer {
 			glBufferData(GL_ELEMENT_ARRAY_BUFFER, eboAlphaStaging.getBuffer(), GL_STREAM_DRAW);
 		}
 
+		if(iboStaging.position() > 0) {
+			iboStaging.flip();
+			glBindBuffer(GL_DRAW_INDIRECT_BUFFER, ibo);
+			glBufferData(GL_DRAW_INDIRECT_BUFFER, iboStaging.getBuffer(), GL_STREAM_DRAW);
+
+		}
+
 		directionalShadowPass();
+		frameTimer.end(Timer.DRAW_SCENE);
 
 		if(!IS_APPLE) {
 			scenePass();
@@ -841,6 +863,7 @@ public class ZoneRenderer implements Renderer {
 	private void scenePass() {
 		sceneProgram.use();
 
+		frameTimer.begin(Timer.DRAW_SCENE);
 		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, plugin.fboScene);
 		if (plugin.msaaSamples > 1) {
 			glEnable(GL_MULTISAMPLE);
@@ -882,6 +905,7 @@ public class ZoneRenderer implements Renderer {
 		glDisable(GL_BLEND);
 		glDisable(GL_CULL_FACE);
 		glDisable(GL_DEPTH_TEST);
+		frameTimer.end(Timer.DRAW_SCENE);
 	}
 
 	@Override
@@ -1267,7 +1291,7 @@ public class ZoneRenderer implements Renderer {
 					a.map();
 				}
 
-				zone.initialize(o, a, eboAlpha);
+				zone.initialize(o, a, eboAlpha, iboStaging, ibo);
 
 				sceneUploader.uploadZone(ctx.sceneContext, zone, x, z);
 
@@ -1575,7 +1599,7 @@ public class ZoneRenderer implements Renderer {
 						a.map();
 					}
 
-					zone.initialize(o, a, eboAlpha);
+					zone.initialize(o, a, eboAlpha, iboStaging, ibo);
 				}
 			}
 
@@ -1711,7 +1735,7 @@ public class ZoneRenderer implements Renderer {
 						a.map();
 					}
 
-					zone.initialize(o, a, eboAlpha);
+					zone.initialize(o, a, eboAlpha, iboStaging, ibo);
 				}
 			}
 

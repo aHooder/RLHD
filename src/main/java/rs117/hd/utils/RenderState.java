@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.function.Supplier;
 
+import static org.lwjgl.opengl.ARBDrawIndirect.GL_DRAW_INDIRECT_BUFFER;
 import static org.lwjgl.opengl.GL11.glColorMask;
 import static org.lwjgl.opengl.GL11.glDepthMask;
 import static org.lwjgl.opengl.GL11.glDisable;
@@ -21,6 +22,7 @@ public class RenderState {
 	public final GLBindVAO vao = addState(GLBindVAO::new);
 	public final GLBindEBO ebo = addState(GLBindEBO::new);
 	public final GLBindUBO ubo = addState(GLBindUBO::new);
+	public final GLBindIDO ido = addState(GLBindIDO::new);
 	public final GLDepthMask depthMask = addState(GLDepthMask::new);
 	public final GLColorMask colorMask = addState(GLColorMask::new);
 	public final GLEnable enable = addState(GLEnable::new);
@@ -93,6 +95,20 @@ public class RenderState {
 		@Override void internalApply() {
 			if (!hasApplied || value != appliedValue) {
 				glBindBuffer(GL_UNIFORM_BUFFER, value);
+				appliedValue = value;
+			}
+		}
+	}
+
+	public static class GLBindIDO extends GLState {
+		private int value, appliedValue;
+		public void set(int ido) {
+			hasValue = true;
+			this.value = ido;
+		}
+		@Override void internalApply() {
+			if (!hasApplied || value != appliedValue) {
+				glBindBuffer(GL_DRAW_INDIRECT_BUFFER , value);
 				appliedValue = value;
 			}
 		}

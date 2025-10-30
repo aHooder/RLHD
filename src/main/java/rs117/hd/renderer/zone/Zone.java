@@ -15,6 +15,7 @@ import rs117.hd.scene.SceneContext;
 import rs117.hd.scene.materials.Material;
 import rs117.hd.utils.Camera;
 import rs117.hd.utils.CommandBuffer;
+import rs117.hd.utils.buffer.GpuIntBuffer;
 
 import static net.runelite.api.Perspective.*;
 import static org.lwjgl.opengl.GL33C.*;
@@ -45,6 +46,9 @@ class Zone {
 	int sizeO, sizeA;
 	VBO vboO, vboA;
 
+	GpuIntBuffer indirectBuffer;
+	int idoShared;
+
 	boolean initialized; // whether the zone vao and vbos are ready
 	boolean cull; // whether the zone is queued for deletion
 	boolean dirty; // whether the zone has temporary modifications
@@ -61,9 +65,12 @@ class Zone {
 
 	final List<AlphaModel> alphaModels = new ArrayList<>(0);
 
-	void initialize(VBO o, VBO a, int eboShared) {
+	void initialize(VBO o, VBO a, int eboShared, GpuIntBuffer indirectBuffer, int idoShared) {
 		assert glVao == 0;
 		assert glVaoA == 0;
+
+		this.indirectBuffer = indirectBuffer;
+		this.idoShared = idoShared;
 
 		if (o != null) {
 			vboO = o;
@@ -239,7 +246,12 @@ class Zone {
 		cmd.SetBaseOffset(zx << 10, 0, zz << 10);
 		cmd.BindVertexArray(glVao);
 		if(glDrawOffset.length == 1) {
-			cmd.DrawArrays(GL_TRIANGLES, glDrawOffset[0], glDrawLength[0]);
+			if(indirectBuffer != null) {
+				cmd.BindIndirectBuffer(idoShared);
+				cmd.DrawArraysIndirect(GL_TRIANGLES, glDrawOffset[0], glDrawLength[0], indirectBuffer);
+			} else {
+				cmd.DrawArrays(GL_TRIANGLES, glDrawOffset[0], glDrawLength[0]);
+			}
 		} else {
 			cmd.MultiDrawArrays(GL_TRIANGLES, glDrawOffset, glDrawLength);
 		}
@@ -259,7 +271,12 @@ class Zone {
 		cmd.SetBaseOffset(zx << 10, 0, zz << 10);
 		cmd.BindVertexArray(glVao);
 		if(glDrawOffset.length == 1) {
-			cmd.DrawArrays(GL_TRIANGLES, glDrawOffset[0], glDrawLength[0]);
+			if(indirectBuffer != null) {
+				cmd.BindIndirectBuffer(idoShared);
+				cmd.DrawArraysIndirect(GL_TRIANGLES, glDrawOffset[0], glDrawLength[0], indirectBuffer);
+			} else {
+				cmd.DrawArrays(GL_TRIANGLES, glDrawOffset[0], glDrawLength[0]);
+			}
 		} else {
 			cmd.MultiDrawArrays(GL_TRIANGLES, glDrawOffset, glDrawLength);
 		}
