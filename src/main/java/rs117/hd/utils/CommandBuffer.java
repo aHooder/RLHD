@@ -2,14 +2,11 @@ package rs117.hd.utils;
 
 import java.nio.IntBuffer;
 import java.util.Arrays;
-import java.util.Objects;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.lwjgl.system.MemoryStack;
 import rs117.hd.opengl.uniforms.UBOCommandBuffer;
-import rs117.hd.utils.buffer.GpuIntBuffer;
 
-import static org.lwjgl.opengl.ARBDrawIndirect.glDrawArraysIndirect;
 import static org.lwjgl.opengl.GL33C.*;
 
 @Slf4j
@@ -18,19 +15,17 @@ public class CommandBuffer {
 
 	private static final int GL_BIND_VERTEX_ARRAY_TYPE = 0;
 	private static final int GL_BIND_ELEMENTS_ARRAY_TYPE = 1;
-	private static final int GL_BIND_INDIRECT_BUFFER_TYPE = 2;
-	private static final int GL_MULTI_DRAW_ARRAYS_TYPE = 3;
-	private static final int GL_DRAW_ARRAYS_TYPE = 4;
-	private static final int GL_DRAW_ELEMENTS_TYPE = 5;
-	private static final int GL_DRAW_ARRAYS_INDIRECT_TYPE = 6;
+	private static final int GL_MULTI_DRAW_ARRAYS_TYPE = 2;
+	private static final int GL_DRAW_ARRAYS_TYPE = 3;
+	private static final int GL_DRAW_ELEMENTS_TYPE = 4;
 
-	private static final int GL_DEPTH_MASK_TYPE = 7;
-	private static final int GL_COLOR_MASK_TYPE = 8;
+	private static final int GL_DEPTH_MASK_TYPE = 5;
+	private static final int GL_COLOR_MASK_TYPE = 6;
 
-	private static final int UNIFORM_BASE_OFFSET = 9;
-	private static final int UNIFORM_WORLD_VIEW_ID = 10;
+	private static final int UNIFORM_BASE_OFFSET = 7;
+	private static final int UNIFORM_WORLD_VIEW_ID = 8;
 
-	private static final int GL_TOGGLE_TYPE = 11; // Combined glEnable & glDisable
+	private static final int GL_TOGGLE_TYPE = 9; // Combined glEnable & glDisable
 
 	private static final long INT_MASK = 0xFFFF_FFFFL;
 
@@ -72,12 +67,6 @@ public class CommandBuffer {
 		ensureCapacity(2);
 		cmd[writeHead++] = GL_BIND_ELEMENTS_ARRAY_TYPE;
 		cmd[writeHead++] = ebo;
-	}
-
-	public void BindIndirectBuffer(int ido) {
-		ensureCapacity(2);
-		cmd[writeHead++] = GL_BIND_INDIRECT_BUFFER_TYPE;
-		cmd[writeHead++] = ido;
 	}
 
 	public void DepthMask(boolean writeDepth) {
@@ -124,21 +113,6 @@ public class CommandBuffer {
 		cmd[writeHead++] = vertexCount;
 	}
 
-	public void DrawArraysIndirect(int mode, int offset, int vertexCount, GpuIntBuffer indirect) {
-		ensureCapacity(4);
-
-		int indirectOffset = indirect.position();
-		indirect.ensureCapacity(4).getBuffer()
-			.put(vertexCount)
-			.put(1)
-			.put(offset)
-			.put(0);
-
-		cmd[writeHead++] = GL_DRAW_ARRAYS_INDIRECT_TYPE;
-		cmd[writeHead++] = mode;
-		cmd[writeHead++] = indirectOffset;
-	}
-
 	public void Enable(int capability) {
 		Toggle(capability, true);
 	}
@@ -164,8 +138,8 @@ public class CommandBuffer {
 						int x = (int) cmd[readHead++];
 						int y = (int) cmd[readHead++];
 						int z = (int) cmd[readHead++];
-						//if (uboCommandBuffer != null)
-						//	uboCommandBuffer.sceneBase.set(x, y, z);
+						if (uboCommandBuffer != null)
+							uboCommandBuffer.sceneBase.set(x, y, z);
 						break;
 					}
 					case UNIFORM_WORLD_VIEW_ID: {
@@ -197,10 +171,6 @@ public class CommandBuffer {
 						renderState.ebo.set((int) cmd[readHead++]);
 						break;
 					}
-					case GL_BIND_INDIRECT_BUFFER_TYPE: {
-						renderState.ido.set((int) cmd[readHead++]);
-						break;
-					}
 					case GL_TOGGLE_TYPE: {
 						long packed = cmd[readHead++];
 						int capability = (int) (packed & INT_MASK);
@@ -222,18 +192,6 @@ public class CommandBuffer {
 						renderState.apply();
 
 						glDrawArrays(mode, offset, count);
-						break;
-					}
-					case GL_DRAW_ARRAYS_INDIRECT_TYPE: {
-						int mode = (int) cmd[readHead++];
-						long offset = cmd[readHead++];
-
-						if (uboCommandBuffer != null && uboCommandBuffer.isDirty())
-							uboCommandBuffer.upload(renderState);
-
-						renderState.apply();
-
-						glDrawArraysIndirect(mode, offset);
 						break;
 					}
 					case GL_DRAW_ELEMENTS_TYPE: {
