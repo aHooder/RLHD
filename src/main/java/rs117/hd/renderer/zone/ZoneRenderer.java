@@ -931,7 +931,10 @@ public class ZoneRenderer implements Renderer {
 		if (zone.inSceneFrustum)
 			return zone.inShadowFrustum = true;
 
-		return zone.inShadowFrustum = directionalCamera.intersectsAABB(minX, minY, minZ, maxX, maxY, maxZ);
+		if(plugin.configShadowsEnabled && plugin.configExpandShadowDraw)
+			return zone.inShadowFrustum = directionalCamera.intersectsAABB(minX, minY, minZ, maxX, maxY, maxZ);
+
+		return false;
 	}
 
 	@Override
