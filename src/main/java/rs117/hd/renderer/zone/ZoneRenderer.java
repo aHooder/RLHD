@@ -794,19 +794,17 @@ public class ZoneRenderer implements Renderer {
 		vaoA.unmap();
 
 		// Scene draw state to apply before all recorded commands
-		frameTimer.begin(Timer.CLICKBOX_CHECK);
 		if (eboAlphaStaging.position() > 0) {
 			eboAlphaStaging.flip();
 			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, eboAlpha);
-			glBufferData(GL_ELEMENT_ARRAY_BUFFER, eboAlphaStaging.getBuffer(), GL_STREAM_DRAW);
+			glBufferData(GL_ELEMENT_ARRAY_BUFFER, eboAlphaStaging.getBuffer(), GL_STATIC_DRAW);
 		}
 
 		if(indirectDrawCmdsStaging.position() > 0) {
 			indirectDrawCmdsStaging.flip();
 			glBindBuffer(GL_DRAW_INDIRECT_BUFFER, indirectDrawCmds);
-			glBufferData(GL_DRAW_INDIRECT_BUFFER, indirectDrawCmdsStaging.getBuffer(), GL_STREAM_DRAW);
+			glBufferData(GL_DRAW_INDIRECT_BUFFER, indirectDrawCmdsStaging.getBuffer(), GL_STATIC_DRAW);
 		}
-		frameTimer.end(Timer.CLICKBOX_CHECK);
 
 		directionalShadowPass();
 		frameTimer.end(Timer.DRAW_SCENE);
