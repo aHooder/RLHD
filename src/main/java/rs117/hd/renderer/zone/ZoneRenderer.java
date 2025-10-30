@@ -85,6 +85,7 @@ import static net.runelite.api.Perspective.*;
 import static org.lwjgl.opengl.GL33C.*;
 import static org.lwjgl.opengl.GL40.GL_DRAW_INDIRECT_BUFFER;
 import static rs117.hd.HdPlugin.COLOR_FILTER_FADE_DURATION;
+import static rs117.hd.HdPlugin.GL_CAPS;
 import static rs117.hd.HdPlugin.IS_APPLE;
 import static rs117.hd.HdPlugin.NEAR_PLANE;
 import static rs117.hd.HdPlugin.checkGLErrors;
@@ -816,6 +817,10 @@ public class ZoneRenderer implements Renderer {
 			indirectDrawCmdsStaging.flip();
 			glBindBuffer(GL_DRAW_INDIRECT_BUFFER, indirectDrawCmds);
 			glBufferData(GL_DRAW_INDIRECT_BUFFER, indirectDrawCmdsStaging.getBuffer(), GL_STREAM_DRAW);
+		}
+
+		if(GL_CAPS.OpenGL43) {
+			GL43C.glMemoryBarrier(GL43C.GL_SHADER_STORAGE_BARRIER_BIT);
 		}
 
 		directionalShadowPass();
