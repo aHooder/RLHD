@@ -607,7 +607,7 @@ class Zone {
 				long byteOffset = 4L * (ZoneRenderer.eboAlphaStaging.position() - vertexCount);
 				cmd.BindVertexArray(lastVao);
 				// The EBO & IDO is bound by in ZoneRenderer
-				if(GL_CAPS.GL_ARB_draw_indirect) {
+				if(GL_CAPS.OpenGL43) {
 					cmd.DrawElementsIndirect(GL_TRIANGLES, vertexCount, (int)(byteOffset / 4L), ZoneRenderer.indirectDrawCmdsStaging);
 				} else {
 					cmd.DrawElements(GL_TRIANGLES, vertexCount, byteOffset);
@@ -618,13 +618,13 @@ class Zone {
 			convertForDraw(lastDrawMode == STATIC_UNSORTED ? VERT_SIZE : VAO.VERT_SIZE);
 			cmd.BindVertexArray(lastVao);
 			if(glDrawOffset.length == 1) {
-				if(GL_CAPS.GL_ARB_draw_indirect) {
+				if(GL_CAPS.OpenGL43) {
 					cmd.DrawArraysIndirect(GL_TRIANGLES, glDrawOffset[0], glDrawLength[0], ZoneRenderer.indirectDrawCmdsStaging);
 				} else {
 					cmd.DrawArrays(GL_TRIANGLES, glDrawOffset[0], glDrawLength[0]);
 				}
 			} else {
-				if(GL_CAPS.GL_ARB_multi_draw_indirect) {
+				if(GL_CAPS.OpenGL43) {
 					cmd.MultiDrawArraysIndirect(GL_TRIANGLES, glDrawOffset, glDrawLength, ZoneRenderer.indirectDrawCmdsStaging);
 				} else {
 					cmd.MultiDrawArrays(GL_TRIANGLES, glDrawOffset, glDrawLength);

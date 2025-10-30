@@ -107,7 +107,7 @@ class VAO {
 			int count = end - start;
 
 			cmd.SetWorldViewIndex(renderer.uboWorldViews.getIndex(scene));
-			if(GL_CAPS.GL_ARB_draw_indirect) {
+			if(GL_CAPS.OpenGL43) {
 				cmd.DrawArraysIndirect(GL_TRIANGLES, start / (VERT_SIZE / 4), count / (VAO.VERT_SIZE / 4), ZoneRenderer.indirectDrawCmdsStaging);
 			} else {
 				cmd.DrawArrays(GL_TRIANGLES, start / (VERT_SIZE / 4), count / (VAO.VERT_SIZE / 4));
