@@ -365,6 +365,9 @@ public class ZoneRenderer implements Renderer {
 		this.maxLevel = maxLevel;
 		this.hideRoofIds = hideRoofIds;
 
+		sceneCmd.SetWorldViewIndex(uboWorldViews.getIndex(scene));
+		directionalCmd.SetWorldViewIndex(uboWorldViews.getIndex(scene));
+
 		if (scene.getWorldViewId() == WorldView.TOPLEVEL) {
 			preSceneDrawTopLevel(scene, cameraX, cameraY, cameraZ, cameraPitch, cameraYaw);
 		} else {
@@ -372,8 +375,6 @@ public class ZoneRenderer implements Renderer {
 			vaoO.addRange(topLevel);
 			vaoPO.addRange(topLevel);
 			vaoPOShadow.addRange(topLevel);
-			sceneCmd.SetWorldViewIndex(uboWorldViews.getIndex(scene));
-			directionalCmd.SetWorldViewIndex(uboWorldViews.getIndex(scene));
 		}
 	}
 
@@ -835,10 +836,6 @@ public class ZoneRenderer implements Renderer {
 			plugin.fboShadowMap != 0 &&
 			environmentManager.currentDirectionalStrength > 0
 		) {
-			// Flush commands to make sure Command Queue to avoid flushing mid drawing
-			if(IS_APPLE)
-				glFlush();
-
 			frameTimer.begin(Timer.RENDER_SHADOWS);
 
 			// Render to the shadow depth map
@@ -849,16 +846,15 @@ public class ZoneRenderer implements Renderer {
 
 			plugin.shadowProgram.use();
 
-			// TODO: Depth test will get changed by the command buffer, but we'll be adding a shadowCmd anyway
-			glEnable(GL_DEPTH_TEST);
-			glDepthFunc(GL_LEQUAL);
-			glDisable(GL_CULL_FACE);
+			renderState.enable.set(GL_DEPTH_TEST);
+			renderState.disable.set(GL_CULL_FACE);
+			renderState.depthFunc.set(GL_LEQUAL);
 
 			CommandBuffer.SKIP_DEPTH_MASKING = true;
 			directionalCmd.execute();
 			CommandBuffer.SKIP_DEPTH_MASKING = false;
 
-			glDisable(GL_DEPTH_TEST);
+			renderState.disable.set(GL_DEPTH_TEST);
 
 			frameTimer.end(Timer.RENDER_SHADOWS);
 		}
@@ -893,11 +889,11 @@ public class ZoneRenderer implements Renderer {
 
 		frameTimer.begin(Timer.RENDER_SCENE);
 
-		glEnable(GL_BLEND);
-		glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
-		glEnable(GL_CULL_FACE);
-		glEnable(GL_DEPTH_TEST);
-		glDepthFunc(GL_GREATER);
+		renderState.enable.set(GL_BLEND);
+		renderState.enable.set(GL_CULL_FACE);
+		renderState.enable.set(GL_DEPTH_TEST);
+		renderState.depthFunc.set(GL_GREATER);
+		renderState.blendFunc.set(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
 
 		// Render the scene
 		sceneCmd.execute();
@@ -906,9 +902,11 @@ public class ZoneRenderer implements Renderer {
 		frameTimer.end(Timer.RENDER_SCENE);
 
 		// Done rendering the scene
-		glDisable(GL_BLEND);
-		glDisable(GL_CULL_FACE);
-		glDisable(GL_DEPTH_TEST);
+		renderState.disable.set(GL_BLEND);
+		renderState.disable.set(GL_CULL_FACE);
+		renderState.disable.set(GL_DEPTH_TEST);
+		renderState.apply();
+
 		frameTimer.end(Timer.DRAW_SCENE);
 	}
 
@@ -951,12 +949,10 @@ public class ZoneRenderer implements Renderer {
 
 		int offset = ctx.sceneContext.sceneOffset >> 3;
 		if (z.inSceneFrustum) {
-			sceneCmd.SetWorldViewIndex(uboWorldViews.getIndex(scene));
 			z.renderOpaque(sceneCmd, zx - offset, zz - offset, minLevel, level, maxLevel, hideRoofIds);
 		}
 
 		if (z.inShadowFrustum) {
-			directionalCmd.SetWorldViewIndex(uboWorldViews.getIndex(scene));
 			z.renderOpaque(
 				directionalCmd,
 				zx - offset,
@@ -986,9 +982,6 @@ public class ZoneRenderer implements Renderer {
 		boolean hasAlpha = z.sizeA != 0 || !z.alphaModels.isEmpty();
 		boolean renderWater = z.inSceneFrustum && level == 0 && z.hasWater;
 
-		if (renderWater || hasAlpha)
-			sceneCmd.SetWorldViewIndex(uboWorldViews.getIndex(scene));
-
 		int offset = ctx.sceneContext.sceneOffset >> 3;
 		if (renderWater)
 			z.renderOpaqueLevel(sceneCmd, zx - offset, zz - offset, Zone.LEVEL_WATER_SURFACE);
@@ -1016,7 +1009,6 @@ public class ZoneRenderer implements Renderer {
 		}
 
 		if (z.inShadowFrustum) {
-			directionalCmd.SetWorldViewIndex(uboWorldViews.getIndex(scene));
 			z.renderAlpha(
 				directionalCmd,
 				zx - offset,
