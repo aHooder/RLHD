@@ -5,6 +5,7 @@ import java.util.Arrays;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.lwjgl.system.MemoryStack;
+import rs117.hd.opengl.shader.ShaderProgram;
 import rs117.hd.opengl.uniforms.UBOCommandBuffer;
 import rs117.hd.utils.buffer.GpuIntBuffer;
 
@@ -30,14 +31,18 @@ public class CommandBuffer {
 	private static final int GL_BIND_INDIRECT_ARRAY_TYPE = 8;
 	private static final int GL_DEPTH_MASK_TYPE = 9;
 	private static final int GL_COLOR_MASK_TYPE = 10;
+	private static final int GL_USE_PROGRAM = 11;
 
-	private static final int UNIFORM_BASE_OFFSET = 11;
-	private static final int UNIFORM_WORLD_VIEW_ID = 12;
+	private static final int UNIFORM_BASE_OFFSET = 12;
+	private static final int UNIFORM_WORLD_VIEW_ID = 13;
 
-	private static final int GL_TOGGLE_TYPE = 13; // Combined glEnable & glDisable
+	private static final int GL_TOGGLE_TYPE = 14; // Combined glEnable & glDisable
 
 	private static final long INT_MASK = 0xFFFF_FFFFL;
 	private static final int DRAW_MODE_MASK = 0xF;
+
+	private Object[] objects = new Object[10];
+	private int objectCount = 0;
 
 	@Setter
 	private UBOCommandBuffer uboCommandBuffer;
@@ -77,6 +82,12 @@ public class CommandBuffer {
 	public void BindIndirectArray(int ido) {
 		ensureCapacity(1);
 		cmd[writeHead++] = GL_BIND_INDIRECT_ARRAY_TYPE & 0xFF | (long) ido << 8;
+	}
+
+	public void SetShader(ShaderProgram program) {
+		ensureCapacity(1);
+		int objectIdx = writeObject(program);
+		cmd[writeHead++] = GL_USE_PROGRAM & 0xFF | (long) objectIdx << 8;
 	}
 
 	public void DepthMask(boolean writeDepth) {
@@ -247,6 +258,11 @@ public class CommandBuffer {
 						renderState.ido.set((int) (data >> 8));
 						break;
 					}
+					case GL_USE_PROGRAM: {
+						int objectIdx = (int) (data >> 8);
+						renderState.program.set((ShaderProgram) objects[objectIdx]);
+						break;
+					}
 					case GL_TOGGLE_TYPE: {
 						long packed = cmd[readHead++];
 						int capability = (int) (packed & INT_MASK);
@@ -321,6 +337,16 @@ public class CommandBuffer {
 			}
 			renderState.apply();
 		}
+	}
+
+	private int writeObject(Object obj) {
+		for(int i = 0; i < objectCount; i++) {
+			if(objects[i] == obj) {
+				return i;
+			}
+		}
+		objects[objectCount] = obj;
+		return objectCount++;
 	}
 
 	public void reset() {

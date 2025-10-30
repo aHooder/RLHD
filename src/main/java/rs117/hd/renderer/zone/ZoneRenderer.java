@@ -858,12 +858,6 @@ public class ZoneRenderer implements Renderer {
 			glClearDepth(1);
 			glClear(GL_DEPTH_BUFFER_BIT);
 
-			if(plugin.configShadowMode == ShadowMode.FAST) {
-				fastShadowProgram.use();
-			} else {
-				detailedShadowProgram.use();
-			}
-
 			renderState.enable.set(GL_DEPTH_TEST);
 			renderState.disable.set(GL_CULL_FACE);
 			renderState.depthFunc.set(GL_LEQUAL);
@@ -972,6 +966,7 @@ public class ZoneRenderer implements Renderer {
 		}
 
 		if (z.inShadowFrustum) {
+			directionalCmd.SetShader(fastShadowProgram);
 			z.renderOpaque(
 				directionalCmd,
 				zx - offset,
@@ -1028,6 +1023,7 @@ public class ZoneRenderer implements Renderer {
 		}
 
 		if (z.inShadowFrustum) {
+			directionalCmd.SetShader(plugin.configShadowMode == ShadowMode.DETAILED ? detailedShadowProgram : fastShadowProgram);
 			z.renderAlpha(
 				directionalCmd,
 				zx - offset,
@@ -1058,6 +1054,8 @@ public class ZoneRenderer implements Renderer {
 				vaoPOShadow.addRange(scene);
 
 				if (scene.getWorldViewId() == -1) {
+					directionalCmd.SetShader(fastShadowProgram);
+
 					// Draw opaque
 					vaoO.unmap();
 					vaoO.drawAll(this, sceneCmd);
