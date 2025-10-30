@@ -83,7 +83,6 @@ import rs117.hd.config.VanillaShadowMode;
 import rs117.hd.opengl.AsyncUICopy;
 import rs117.hd.opengl.shader.ShaderException;
 import rs117.hd.opengl.shader.ShaderIncludes;
-import rs117.hd.opengl.shader.ShadowShaderProgram;
 import rs117.hd.opengl.shader.TiledLightingShaderProgram;
 import rs117.hd.opengl.shader.UIShaderProgram;
 import rs117.hd.opengl.uniforms.UBOCompute;
@@ -260,9 +259,6 @@ public class HdPlugin extends Plugin {
 
 	@Inject
 	private FrameTimer frameTimer;
-
-	@Inject
-	public ShadowShaderProgram shadowProgram;
 
 	@Inject
 	private UIShaderProgram uiProgram;
@@ -832,8 +828,6 @@ public class HdPlugin extends Plugin {
 		glBindVertexArray(vaoTri);
 
 		renderer.initializeShaders(includes);
-		shadowProgram.setMode(configShadowMode);
-		shadowProgram.compile(includes);
 		uiProgram.compile(includes);
 
 		if (configDynamicLights != DynamicLights.NONE && configTiledLighting) {
@@ -895,7 +889,6 @@ public class HdPlugin extends Plugin {
 
 	private void destroyShaders() {
 		renderer.destroyShaders();
-		shadowProgram.destroy();
 		uiProgram.destroy();
 
 		tiledLightingImageStoreProgram.destroy();

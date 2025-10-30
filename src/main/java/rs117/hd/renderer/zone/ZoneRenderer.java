@@ -48,9 +48,11 @@ import rs117.hd.HdPlugin;
 import rs117.hd.HdPluginConfig;
 import rs117.hd.config.ColorFilter;
 import rs117.hd.config.DynamicLights;
+import rs117.hd.config.ShadowMode;
 import rs117.hd.opengl.shader.SceneShaderProgram;
 import rs117.hd.opengl.shader.ShaderException;
 import rs117.hd.opengl.shader.ShaderIncludes;
+import rs117.hd.opengl.shader.ShadowShaderProgram;
 import rs117.hd.opengl.uniforms.UBOCommandBuffer;
 import rs117.hd.opengl.uniforms.UBOLights;
 import rs117.hd.opengl.uniforms.UBOWorldViews;
@@ -148,6 +150,12 @@ public class ZoneRenderer implements Renderer {
 
 	@Inject
 	private SceneShaderProgram sceneProgram;
+
+	@Inject
+	private ShadowShaderProgram.FastShadowShaderProgram fastShadowProgram;
+
+	@Inject
+	private ShadowShaderProgram.DetailedShadowShaderProgram detailedShadowProgram;
 
 	private final Camera sceneCamera = new Camera();
 	private final Camera directionalCamera = new Camera().setOrthographic(true);
@@ -296,11 +304,15 @@ public class ZoneRenderer implements Renderer {
 	@Override
 	public void initializeShaders(ShaderIncludes includes) throws ShaderException, IOException {
 		sceneProgram.compile(includes);
+		fastShadowProgram.compile(includes);
+		detailedShadowProgram.compile(includes);
 	}
 
 	@Override
 	public void destroyShaders() {
 		sceneProgram.destroy();
+		fastShadowProgram.destroy();
+		detailedShadowProgram.destroy();
 	}
 
 	private void initializeBuffers() {
@@ -846,7 +858,11 @@ public class ZoneRenderer implements Renderer {
 			glClearDepth(1);
 			glClear(GL_DEPTH_BUFFER_BIT);
 
-			plugin.shadowProgram.use();
+			if(plugin.configShadowMode == ShadowMode.FAST) {
+				fastShadowProgram.use();
+			} else {
+				detailedShadowProgram.use();
+			}
 
 			renderState.enable.set(GL_DEPTH_TEST);
 			renderState.disable.set(GL_CULL_FACE);

@@ -26,4 +26,18 @@ public class ShadowShaderProgram extends ShaderProgram {
 			shaderTemplate.remove(GL_GEOMETRY_SHADER);
 		}
 	}
+
+	public static class FastShadowShaderProgram extends ShadowShaderProgram {
+		public FastShadowShaderProgram() {
+			super();
+			setMode(ShadowMode.FAST);
+		}
+	}
+
+	public static class DetailedShadowShaderProgram extends ShadowShaderProgram {
+		public DetailedShadowShaderProgram() {
+			super();
+			setMode(ShadowMode.DETAILED);
+		}
+	}
 }
