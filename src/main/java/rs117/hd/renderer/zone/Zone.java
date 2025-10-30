@@ -244,7 +244,9 @@ class Zone {
 	void renderOpaqueLevel(CommandBuffer cmd, int zx, int zz, int level, GpuIntBuffer indirect) {
 		drawIdx = 0;
 
-		pushRange(this.levelOffsets[level - 1], this.levelOffsets[level]);if (drawIdx == 0)
+		pushRange(this.levelOffsets[level - 1], this.levelOffsets[level]);
+
+		if (drawIdx == 0)
 			return;
 
 		lastDrawMode = STATIC_UNSORTED;
@@ -492,9 +494,6 @@ class Zone {
 		cmd.DepthMask(false);
 
 		drawIdx = 0;
-		lastDrawMode = lastVao = 0;
-		lastzx = zx;
-		lastzz = zz;
 
 		int yawSin = SINE[camera.getFixedYaw()];
 		int yawCos = COSINE[camera.getFixedYaw()];
