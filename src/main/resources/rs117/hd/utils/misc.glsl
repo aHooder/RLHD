@@ -26,6 +26,7 @@
 
 #include <uniforms/global.glsl>
 
+#include <utils/constants.glsl>
 #include <utils/color_utils.glsl>
 
 // translates a value from a custom range into 0-1

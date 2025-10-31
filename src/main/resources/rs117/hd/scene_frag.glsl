@@ -25,13 +25,14 @@
  */
 #version 330
 
+#define DISPLAY_BASE_COLOR 0
+
 #include <uniforms/global.glsl>
 #include <uniforms/world_views.glsl>
 #include <uniforms/materials.glsl>
 #include <uniforms/water_types.glsl>
 
 #include MATERIAL_CONSTANTS
-#define DISPLAY_BASE_COLOR 0
 
 uniform sampler2DArray textureArray;
 uniform sampler2D shadowMap;

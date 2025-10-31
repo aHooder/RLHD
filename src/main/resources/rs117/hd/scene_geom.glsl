@@ -89,15 +89,16 @@ void main() {
 
     #if UNDO_VANILLA_SHADING && ZONE_RENDERER
     bool isTerrain = (vTerrainData[0] & 1) != 0; // 1 = 0b1
-    if(!isTerrain) {
-        for(int i = 0; i < 3; i++) {
+    if (!isTerrain) {
+        for (int i = 0; i < 3; i++) {
             if ((int(vAlphaBiasHsl[i]) >> 20 & 1) == 0) {
+                vec3 normal;
                 #if FLAT_SHADING
-                    vec3 norm = N;
+                    normal = N;
                 #else
-                    vec3 norm = length(gNormal[i]) == 0 ? N : normalize(gNormal[i]);
+                    normal = length(gNormal[i]) == 0 ? N : normalize(gNormal[i]);
                 #endif
-                undoVanillaShading(vAlphaBiasHsl[i], norm);
+                undoVanillaShading(vAlphaBiasHsl[i], normal);
             }
         }
     }

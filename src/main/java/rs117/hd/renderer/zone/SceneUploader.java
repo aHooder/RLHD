@@ -1315,7 +1315,7 @@ class SceneUploader {
 				color1 = color2 = color3 = 90;
 			}
 
-			if(isTextured || !modelOverride.undoVanillaShading) {
+			if (isTextured || !modelOverride.undoVanillaShading) {
 				// Let the shader know vanilla shading reversal should be skipped for this face
 				packedAlphaBiasHsl |= 1 << 20;
 			}
