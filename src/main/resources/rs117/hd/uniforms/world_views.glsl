@@ -59,7 +59,7 @@
 
         int sceneOffset = worldViewId < 0 ? (184 - 104) / 2 : 0;
         ivec2 sceneSize = getWorldViewSize(worldViewId);
-		int mzx = zoneId % (sceneSize.x >> 3);
+		int mzx = zoneId % (sceneSize.y >> 3);
 		int mzz = zoneId / (sceneSize.y >> 3);
 
         vec3 offset;
