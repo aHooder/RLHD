@@ -33,7 +33,7 @@
         if (worldViewIndex < 0)
             return ivec2(184, 184);
         int packedSize = getWorldView(worldViewIndex).packedSize;
-        return ivec2(packedSize & 0xFFFF, packedSize << 16);
+        return ivec2(packedSize & 0xFFFF, packedSize >> 16);
     }
 
     int getWorldViewId(uint value) {
