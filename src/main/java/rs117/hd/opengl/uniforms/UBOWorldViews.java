@@ -27,7 +27,7 @@ public class UBOWorldViews extends UniformBuffer<GLBuffer> {
 	public UBOWorldViews(int maxWorldViews) {
 		super(GL_DYNAMIC_DRAW);
 		indexMapping = new int[maxWorldViews];
-		initialize(HdPlugin.UNIFORM_BLOCK_WATER_TYPES);
+		initialize(HdPlugin.UNIFORM_BLOCK_WORLD_VIEWS);
 	}
 
 	public void update(Client client) {

@@ -192,6 +192,7 @@ public class ZoneRenderer implements Renderer {
 			for (int x = 0; x < sizeX; ++x) {
 				for (int z = 0; z < sizeZ; ++z) {
 					zones[x][z] = new Zone();
+					zones[x][z].idx = (short) (z * sizeZ + x);
 				}
 			}
 		}
@@ -933,6 +934,9 @@ public class ZoneRenderer implements Renderer {
 		if (root.sceneContext == null)
 			return false;
 
+		if(true)
+			return true;
+
 		Zone zone = root.zones[zx][zz];
 		int minX = (zx << 3) - root.sceneContext.sceneOffset << 7;
 		int minZ = (zz << 3) - root.sceneContext.sceneOffset << 7;
@@ -1290,6 +1294,7 @@ public class ZoneRenderer implements Renderer {
 				assert zone.initialized;
 				zone.free();
 				zone = ctx.zones[x][z] = new Zone();
+				zone.idx = (short) (z * ctx.sizeZ + x);
 
 				SceneUploader sceneUploader = injector.getInstance(SceneUploader.class);
 				sceneUploader.zoneSize(ctx.sceneContext, zone, x, z);
@@ -1559,6 +1564,7 @@ public class ZoneRenderer implements Renderer {
 			for (int z = 0; z < SCENE_ZONES; ++z) {
 				if (newZones[x][z] == null) {
 					newZones[x][z] = new Zone();
+					newZones[x][z].idx = (short) (z * ctx.sizeZ + x);
 				}
 			}
 		}

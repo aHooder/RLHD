@@ -33,7 +33,7 @@ class Zone {
 	// alphaBiasHsl int
 	// materialData int
 	// terrainData int
-	static final int VERT_SIZE = 32;
+	static final int VERT_SIZE = 36;
 
 	static final int LEVEL_WATER_SURFACE = 4;
 
@@ -42,6 +42,8 @@ class Zone {
 
 	int glVaoA;
 	int bufLenA;
+
+	short idx;
 
 	int sizeO, sizeA;
 	VBO vboO, vboA;
@@ -152,6 +154,10 @@ class Zone {
 		// Terrain data
 		glEnableVertexAttribArray(5);
 		glVertexAttribIPointer(5, 1, GL_INT, VERT_SIZE, 28);
+
+		// worldViewId | zoneId | modelId
+		glEnableVertexAttribArray(6);
+		glVertexAttribIPointer(6, 1, GL_UNSIGNED_INT, VERT_SIZE, 32);
 
 		checkGLErrors();
 

@@ -28,7 +28,11 @@
 
 #include <utils/constants.glsl>
 
+#if ZONE_RENDERER
+void computeUvs(const int materialData, const int worldViewIndex, const vec3 pos[3], inout vec3 uvw[3]) {
+#else
 void computeUvs(const int materialData, const vec3 pos[3], inout vec3 uvw[3]) {
+#endif
     if ((materialData >> MATERIAL_FLAG_WORLD_UVS & 1) == 1) {
         // Treat the input uvw as a normal vector for a plane that goes through origo,
         // and find the distance from the point to the plane

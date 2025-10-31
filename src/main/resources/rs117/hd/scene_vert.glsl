@@ -34,6 +34,7 @@ layout (location = 2) in vec3 vNormal;
 layout (location = 3) in int vAlphaBiasHsl;
 layout (location = 4) in int vMaterialData;
 layout (location = 5) in int vTerrainData;
+layout (location = 6) in uint vPackedWorldZoneModelId;
 
 out vec3 gPosition;
 out vec3 gUv;
@@ -41,12 +42,17 @@ out vec3 gNormal;
 out int gAlphaBiasHsl;
 out int gMaterialData;
 out int gTerrainData;
+out uint gPackedWorldZoneModelId;
 
 void main() {
-    gPosition = vec3(getWorldViewProjection(worldViewIndex) * vec4(sceneBase + vPosition, 1));
+    int worldViewId = getWorldViewId(vPackedWorldZoneModelId);
+    int zoneId = getZoneId(vPackedWorldZoneModelId);
+    vec3 sceneOffset = calculateBaseOffset(zoneId);
+    gPosition = vec3(getWorldViewProjection(worldViewId) * vec4(vPosition + sceneOffset, 1));
     gUv = vUv;
     gNormal = vNormal;
     gAlphaBiasHsl = vAlphaBiasHsl;
     gMaterialData = vMaterialData;
     gTerrainData = vTerrainData;
+    gPackedWorldZoneModelId = vPackedWorldZoneModelId;
 }

@@ -19,7 +19,7 @@ class VAO {
 	// alphaBiasHsl int
 	// materialData int
 	// terrainData int
-	static final int VERT_SIZE = 36;
+	static final int VERT_SIZE = 40;
 
 	final VBO vbo;
 	int vao;
@@ -61,6 +61,10 @@ class VAO {
 		// Terrain data
 		glEnableVertexAttribArray(5);
 		glVertexAttribIPointer(5, 1, GL_INT, VERT_SIZE, 32);
+
+		// worldViewId | zoneId | modelId
+		glEnableVertexAttribArray(6);
+		glVertexAttribIPointer(6, 1, GL_UNSIGNED_INT, VERT_SIZE, 36);
 
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 		glBindVertexArray(0);
