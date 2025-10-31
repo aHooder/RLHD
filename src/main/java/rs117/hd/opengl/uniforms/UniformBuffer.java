@@ -303,6 +303,10 @@ public abstract class UniformBuffer<GLBUFFER extends GLBuffer> {
 		size += property.type.size + padding;
 		properties.add(property);
 
+		if(size > 64000) {
+			log.warn("Uniform buffer {} is too large! ({} bytes)", glBuffer.name, size);
+		}
+
 		return property;
 	}
 

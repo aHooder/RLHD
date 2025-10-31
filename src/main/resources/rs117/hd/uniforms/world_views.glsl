@@ -8,6 +8,7 @@
     struct WorldView {
         mat4 projectionMatrix;
         ivec4 tint;
+        int packedSize;
     };
 
     layout(std140) uniform UBOWorldViews {
@@ -26,6 +27,13 @@
         if (worldViewIndex < 0)
             return ivec4(0);
         return getWorldView(worldViewIndex).tint;
+    }
+
+    ivec2 getWorldViewSize(int worldViewIndex) {
+        if (worldViewIndex < 0)
+            return ivec2(184, 184);
+        int packedSize = getWorldView(worldViewIndex).packedSize;
+        return ivec2(packedSize & 0xFFFF, packedSize << 16);
     }
 
     int getWorldViewId(uint value) {
@@ -49,11 +57,10 @@
         if(zoneId < 0)
             return vec3(0);
 
-        int sceneOffset = worldViewId == -1 ? (184 - 104) / 2 : 0;
-        int sizeX = 184;
-        int sizeY = 184;
-		int mzx = zoneId % (sizeX >> 3);
-		int mzz = zoneId / (sizeY >> 3);
+        int sceneOffset = worldViewId < 0 ? (184 - 104) / 2 : 0;
+        ivec2 sceneSize = getWorldViewSize(worldViewId);
+		int mzx = zoneId % (sceneSize.x >> 3);
+		int mzz = zoneId / (sceneSize.y >> 3);
 
         vec3 offset;
         offset.x = (mzx - (sceneOffset >> 3)) << 10;
