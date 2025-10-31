@@ -1549,6 +1549,7 @@ public class ZoneRenderer implements Renderer {
 
 						assert old.cull;
 						old.cull = false;
+						old.idx = (short) (z * ctx.sizeZ + x);
 
 						newZones[x][z] = old;
 					}
@@ -1706,7 +1707,7 @@ public class ZoneRenderer implements Renderer {
 					return false; // TODO: Regenerate underwater geometry instead of discarding entire zones
 			}
 		}
-		return true;
+		return false; // TODO: ZoneID needs to be moved to a different VBO so it can be updated without needing to rebuild the zone
 	}
 
 	private void loadSubScene(WorldView worldView, Scene scene) {
