@@ -1572,7 +1572,7 @@ class SceneUploader {
 				vx1, vy1, vz1, alphaBias | color1,
 				modelUvs[0], modelUvs[1], modelUvs[2], materialData,
 				modelNormals[0], modelNormals[1], modelNormals[2], 0,
-				(byte)0, (byte)0, (short)0
+				(byte)-1, (short)-1, (short)-1
 			);
 
 			GpuIntBuffer.putFloatVertex(
@@ -1580,7 +1580,7 @@ class SceneUploader {
 				vx2, vy2, vz2, alphaBias | color2,
 				modelUvs[4], modelUvs[5], modelUvs[6], materialData,
 				modelNormals[3], modelNormals[4], modelNormals[5], 0,
-				(byte)0, (byte)0, (short)0
+				(byte)-1, (short)-1, (short)-1
 			);
 
 			GpuIntBuffer.putFloatVertex(
@@ -1588,7 +1588,7 @@ class SceneUploader {
 				vx3, vy3, vz3, alphaBias | color3,
 				modelUvs[8], modelUvs[9], modelUvs[10], materialData,
 				modelNormals[6], modelNormals[7], modelNormals[8], 0,
-				(byte)0, (byte)0, (short)0
+				(byte)-1, (short)-1, (short)-1
 			);
 
 			len += 3;
