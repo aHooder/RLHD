@@ -72,4 +72,9 @@
 #else
     #define getWorldViewProjection(worldViewIndex) mat4(1)
     #define getWorldViewTint(worldViewIndex) ivec4(0)
+    #define getWorldViewSize(worldViewIndex) ivec2(0)
+    #define getWorldViewId(value) 0
+    #define getZoneId(value) 0
+    #define getModelId(value) 0
+    #define calculateBaseOffset(worldViewId, zoneId) vec3(0)
 #endif
