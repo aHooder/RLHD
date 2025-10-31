@@ -2444,7 +2444,6 @@
     "flatNormals": true,
     "windDisplacementMode": "OBJECT",
     "castShadows": false,
-    "undoVanillaShading": false,
     "terrainVertexSnap": true,
     "objectIds": [
       "GRASS_1",
