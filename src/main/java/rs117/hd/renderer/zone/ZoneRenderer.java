@@ -934,9 +934,6 @@ public class ZoneRenderer implements Renderer {
 		if (root.sceneContext == null)
 			return false;
 
-		if(true)
-			return true;
-
 		Zone zone = root.zones[zx][zz];
 		int minX = (zx << 3) - root.sceneContext.sceneOffset << 7;
 		int minZ = (zz << 3) - root.sceneContext.sceneOffset << 7;

@@ -191,15 +191,6 @@ class SceneUploader {
 		this.basex = (mzx - (ctx.sceneOffset >> 3)) << 10;
 		this.basez = (mzz - (ctx.sceneOffset >> 3)) << 10;
 
-		int temp_mzx = zone.idx % (ctx.sizeX >> 3);
-		int temp_mzz = zone.idx / (ctx.sizeX >> 3);
-		assert temp_mzx == mzx && temp_mzz == mzz;
-
-		int temp_basex = (temp_mzx - (ctx.sceneOffset >> 3)) << 10;
-		int temp_basez = (temp_mzz - (ctx.sceneOffset >> 3)) << 10;
-		assert temp_basex == basex && temp_basez == basez;
-		// TODO: Try to determine the baseX & baseZ from just the zoneId
-
 		for (int xoff = 0; xoff < 8; ++xoff) {
 			for (int zoff = 0; zoff < 8; ++zoff) {
 				int msx = (mzx << 3) + xoff;

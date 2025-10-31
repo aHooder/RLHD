@@ -47,8 +47,8 @@ out uint gPackedWorldZoneModelId;
 void main() {
     int worldViewId = getWorldViewId(vPackedWorldZoneModelId);
     int zoneId = getZoneId(vPackedWorldZoneModelId);
-    vec3 sceneOffset = calculateBaseOffset(zoneId);
-    gPosition = vec3(getWorldViewProjection(worldViewId) * vec4(vPosition + sceneOffset, 1));
+    vec3 sceneBase = calculateBaseOffset(zoneId);
+    gPosition = vec3(getWorldViewProjection(worldViewId) * vec4(sceneBase + vPosition, 1));
     gUv = vUv;
     gNormal = vNormal;
     gAlphaBiasHsl = vAlphaBiasHsl;
