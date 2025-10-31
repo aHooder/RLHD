@@ -11,10 +11,11 @@ import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
+import rs117.hd.opengl.commandbuffer.CommandBuffer;
+import rs117.hd.opengl.uniforms.UBOCommandBuffer;
 import rs117.hd.scene.SceneContext;
 import rs117.hd.scene.materials.Material;
 import rs117.hd.utils.Camera;
-import rs117.hd.utils.CommandBuffer;
 
 import static net.runelite.api.Perspective.*;
 import static org.lwjgl.opengl.GL33C.*;
@@ -191,7 +192,7 @@ class Zone {
 		glDrawLength = Arrays.copyOfRange(drawEnd, 0, drawIdx);
 	}
 
-	void renderOpaque(CommandBuffer cmd, int zx, int zz, int minLevel, int currentLevel, int maxLevel, Set<Integer> hiddenRoofIds) {
+	void renderOpaque(UBOCommandBuffer ubo, CommandBuffer cmd, int zx, int zz, int minLevel, int currentLevel, int maxLevel, Set<Integer> hiddenRoofIds) {
 		drawIdx = 0;
 
 		for (int level = minLevel; level <= maxLevel; ++level) {
@@ -236,12 +237,16 @@ class Zone {
 
 		convertForDraw(VERT_SIZE);
 
-		cmd.SetBaseOffset(zx << 10, 0, zz << 10);
+		cmd.SetUniformProperty(ubo.sceneBase, zx << 10, 0, zz << 10);
 		cmd.BindVertexArray(glVao);
-		cmd.MultiDrawArrays(GL_TRIANGLES, glDrawOffset, glDrawLength);
+		if(glDrawOffset.length > 1) {
+			cmd.MultiDrawArrays(GL_TRIANGLES, glDrawOffset, glDrawLength);
+		} else {
+			cmd.DrawArrays(GL_TRIANGLES, glDrawOffset[0], glDrawLength[0]);
+		}
 	}
 
-	void renderOpaqueLevel(CommandBuffer cmd, int zx, int zz, int level) {
+	void renderOpaqueLevel(UBOCommandBuffer ubo, CommandBuffer cmd, int zx, int zz, int level) {
 		drawIdx = 0;
 
 		// draw the specific level
@@ -252,9 +257,13 @@ class Zone {
 
 		convertForDraw(VERT_SIZE);
 
-		cmd.SetBaseOffset(zx << 10, 0, zz << 10);
+		cmd.SetUniformProperty(ubo.sceneBase, zx << 10, 0, zz << 10);
 		cmd.BindVertexArray(glVao);
-		cmd.MultiDrawArrays(GL_TRIANGLES, glDrawOffset, glDrawLength);
+		if(glDrawOffset.length > 1) {
+			cmd.MultiDrawArrays(GL_TRIANGLES, glDrawOffset, glDrawLength);
+		} else {
+			cmd.DrawArrays(GL_TRIANGLES, glDrawOffset[0], glDrawLength[0]);
+		}
 	}
 
 	private static void pushRange(int start, int end) {
@@ -480,6 +489,7 @@ class Zone {
 	}
 
 	void renderAlpha(
+		UBOCommandBuffer ubo,
 		CommandBuffer cmd,
 		int zx,
 		int zz,
@@ -487,13 +497,16 @@ class Zone {
 		int currentLevel,
 		int maxLevel,
 		int level,
+		boolean isShadow,
 		Camera camera,
 		Set<Integer> hiddenRoofIds
 	) {
 		if (alphaModels.isEmpty())
 			return;
 
-		cmd.DepthMask(false);
+		if(!isShadow) {
+			cmd.DepthMask(false);
+		}
 
 		drawIdx = 0;
 		lastDrawMode = lastVao = 0;
@@ -512,7 +525,7 @@ class Zone {
 				continue;
 
 			if (lastVao != m.vao || lastzx != (zx - m.zofx) || lastzz != (zz - m.zofz))
-				flush(cmd);
+				flush(ubo, cmd);
 
 			lastVao = m.vao;
 			lastzx = zx - m.zofx;
@@ -603,15 +616,17 @@ class Zone {
 			}
 		}
 
-		flush(cmd);
-		cmd.DepthMask(true);
+		flush(ubo, cmd);
+		if(!isShadow) {
+			cmd.DepthMask(true);
+		}
 	}
 
-	private void flush(CommandBuffer cmd) {
+	private void flush(UBOCommandBuffer ubo, CommandBuffer cmd) {
 		if (lastDrawMode == TEMP) {
-			cmd.SetBaseOffset(0, 0, 0);
+			cmd.SetUniformProperty(ubo.sceneBase, 0, 0, 0);
 		} else {
-			cmd.SetBaseOffset(lastzx << 10, 0, lastzz << 10);
+			cmd.SetUniformProperty(ubo.sceneBase, lastzx << 10, 0, lastzz << 10);
 		}
 
 		if (lastDrawMode == STATIC) {
@@ -625,7 +640,11 @@ class Zone {
 		} else if (drawIdx != 0) {
 			convertForDraw(VAO.VERT_SIZE);
 			cmd.BindVertexArray(lastVao);
-			cmd.MultiDrawArrays(GL_TRIANGLES, glDrawOffset, glDrawLength);
+			if(glDrawOffset.length > 1) {
+				cmd.MultiDrawArrays(GL_TRIANGLES, glDrawOffset, glDrawLength);
+			} else {
+				cmd.DrawArrays(GL_TRIANGLES, glDrawOffset[0], glDrawLength[0]);
+			}
 			drawIdx = 0;
 		}
 	}

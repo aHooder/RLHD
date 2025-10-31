@@ -111,7 +111,7 @@ public class ShaderProgram {
 		uniformBlockMappings.clear();
 	}
 
-	private static class UniformProperty {
+	public static class UniformProperty {
 		ShaderProgram program;
 		String uniformName;
 		int uniformIndex;

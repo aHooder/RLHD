@@ -31,6 +31,9 @@ import rs117.hd.config.ColorFilter;
 import rs117.hd.config.DynamicLights;
 import rs117.hd.model.ModelHasher;
 import rs117.hd.model.ModelOffsets;
+import rs117.hd.opengl.commandbuffer.AWTContextWrapper;
+import rs117.hd.opengl.commandbuffer.CommandBuffer;
+import rs117.hd.opengl.commandbuffer.CommandBufferPool;
 import rs117.hd.opengl.compute.ComputeMode;
 import rs117.hd.opengl.compute.OpenCLManager;
 import rs117.hd.opengl.shader.ModelPassthroughComputeProgram;
@@ -93,6 +96,12 @@ public class LegacyRenderer implements Renderer {
 
 	@Inject
 	private ClientThread clientThread;
+	
+	@Inject
+	private AWTContextWrapper awtContextWrapper;
+
+	@Inject
+	private CommandBufferPool commandBufferPool;
 
 	@Inject
 	private EventBus eventBus;
@@ -243,7 +252,7 @@ public class LegacyRenderer implements Renderer {
 
 		int maxComputeThreadCount;
 		if (computeMode == ComputeMode.OPENCL) {
-			clManager.startUp(this, plugin.awtContext);
+			clManager.startUp(this, awtContextWrapper.getContext());
 			maxComputeThreadCount = clManager.getMaxWorkGroupSize();
 		} else {
 			maxComputeThreadCount = glGetInteger(GL43C.GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS);
@@ -1273,7 +1282,7 @@ public class LegacyRenderer implements Renderer {
 			}
 
 			// Blit from the resolved FBO to the default FBO
-			glBindFramebuffer(GL_DRAW_FRAMEBUFFER, plugin.awtContext.getFramebuffer(false));
+			glBindFramebuffer(GL_DRAW_FRAMEBUFFER, awtContextWrapper.getBackBuffer());
 			glBlitFramebuffer(
 				0,
 				0,
@@ -1291,16 +1300,19 @@ public class LegacyRenderer implements Renderer {
 			glClear(GL_COLOR_BUFFER_BIT);
 		}
 
-		plugin.drawUi(overlayColor);
+		CommandBuffer cmd = commandBufferPool.acquire();
+		plugin.drawUi(overlayColor, cmd);
+		cmd.execute();
+		commandBufferPool.release(cmd);
 
 		try {
 			frameTimer.begin(Timer.SWAP_BUFFERS);
-			plugin.awtContext.swapBuffers();
+			awtContextWrapper.getContext().swapBuffers();
 			frameTimer.end(Timer.SWAP_BUFFERS);
 			drawManager.processDrawComplete(plugin::screenshot);
 		} catch (RuntimeException ex) {
 			// this is always fatal
-			if (!plugin.canvas.isValid()) {
+			if (!awtContextWrapper.getCanvas().isValid()) {
 				// this might be AWT shutting down on VM shutdown, ignore it
 				return;
 			}
@@ -1308,7 +1320,7 @@ public class LegacyRenderer implements Renderer {
 			log.error("Unable to swap buffers:", ex);
 		}
 
-		glBindFramebuffer(GL_FRAMEBUFFER, plugin.awtContext.getFramebuffer(false));
+		glBindFramebuffer(GL_FRAMEBUFFER, awtContextWrapper.getBackBuffer());
 
 		frameTimer.end(Timer.DRAW_FRAME);
 		frameTimer.end(Timer.RENDER_FRAME);

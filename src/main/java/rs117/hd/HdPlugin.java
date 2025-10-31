@@ -28,7 +28,6 @@ package rs117.hd;
 
 import com.google.gson.Gson;
 import com.google.inject.Provides;
-import java.awt.Canvas;
 import java.awt.Dimension;
 import java.awt.GraphicsConfiguration;
 import java.awt.Image;
@@ -49,12 +48,14 @@ import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.swing.SwingUtilities;
 import lombok.Getter;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.events.*;
 import net.runelite.api.hooks.*;
 import net.runelite.client.RuneLite;
 import net.runelite.client.callback.ClientThread;
+import net.runelite.client.callback.Hooks;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.eventbus.Subscribe;
@@ -68,7 +69,6 @@ import net.runelite.client.plugins.entityhider.EntityHiderPlugin;
 import net.runelite.client.ui.ClientUI;
 import net.runelite.client.util.LinkBrowser;
 import net.runelite.client.util.OSType;
-import net.runelite.rlawt.AWTContext;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.*;
 import org.lwjgl.system.Callback;
@@ -80,7 +80,11 @@ import rs117.hd.config.SeasonalTheme;
 import rs117.hd.config.ShadingMode;
 import rs117.hd.config.ShadowMode;
 import rs117.hd.config.VanillaShadowMode;
-import rs117.hd.opengl.AsyncUICopy;
+import rs117.hd.opengl.commandbuffer.AWTContextWrapper;
+import rs117.hd.opengl.commandbuffer.CommandBuffer;
+import rs117.hd.opengl.commandbuffer.CommandBufferPool;
+import rs117.hd.opengl.commandbuffer.FrameSync;
+import rs117.hd.opengl.commandbuffer.RenderThread;
 import rs117.hd.opengl.shader.ShaderException;
 import rs117.hd.opengl.shader.ShaderIncludes;
 import rs117.hd.opengl.shader.ShadowShaderProgram;
@@ -247,9 +251,6 @@ public class HdPlugin extends Plugin {
 	private ModelOverrideManager modelOverrideManager;
 
 	@Inject
-	private AsyncUICopy asyncUICopy;
-
-	@Inject
 	private FishingSpotReplacer fishingSpotReplacer;
 
 	@Inject
@@ -283,16 +284,27 @@ public class HdPlugin extends Plugin {
 	private TiledLightingOverlay tiledLightingOverlay;
 
 	@Inject
+	private RenderThread renderThread;
+
+	@Inject
+	private AWTContextWrapper awtContextWrapper;
+
+	@Inject
+	private CommandBufferPool commandBufferPool;
+
+	@Inject
+	private Hooks hooks;
+
+	@Inject
 	public HDVariables vars;
 
 	public Renderer renderer;
 
 	public static boolean SKIP_GL_ERROR_CHECKS;
 	public static GLCapabilities GL_CAPS;
+	public static GLCapabilities GL_RENDER_THREAD_CAPS;
 	public static boolean AMD_GPU;
 
-	public Canvas canvas;
-	public AWTContext awtContext;
 	private Callback debugCallback;
 
 	private static final String LINUX_VERSION_HEADER =
@@ -316,7 +328,9 @@ public class HdPlugin extends Plugin {
 	private int[] uiResolution;
 	private final int[] actualUiResolution = { 0, 0 }; // Includes stretched mode and DPI scaling
 	private int texUi;
-	private int pboUi;
+	private int[] pboUi = new int[2];
+	private int pboUiIdx = 0;
+	private final FrameSync uiUploadSync = new FrameSync();
 
 	@Nullable
 	public int[] sceneViewport;
@@ -361,11 +375,11 @@ public class HdPlugin extends Plugin {
 	public boolean configUseFasterModelHashing;
 	public boolean configUndoVanillaShading;
 	public boolean configPreserveVanillaNormals;
-	public boolean configAsyncUICopy;
 	public boolean configWindDisplacement;
 	public boolean configCharacterDisplacement;
 	public boolean configTiledLighting;
 	public boolean configTiledLightingImageLoadStore;
+	public boolean configRenderThread;
 	public DynamicLights configDynamicLights;
 	public ShadowMode configShadowMode;
 	public SeasonalTheme configSeasonalTheme;
@@ -444,21 +458,8 @@ public class HdPlugin extends Plugin {
 				lastFrameTimeMillis = 0;
 				lastFrameClientTime = 0;
 
-				AWTContext.loadNatives();
-				canvas = client.getCanvas();
-
-				synchronized (canvas.getTreeLock()) {
-					// Delay plugin startup until the client's canvas is valid
-					if (!canvas.isValid())
-						return false;
-
-					awtContext = new AWTContext(canvas);
-					awtContext.configurePixelFormat(0, 0, 0);
-				}
-
-				awtContext.createGLContext();
-
-				canvas.setIgnoreRepaint(true);
+				if(!awtContextWrapper.initialize())
+					return false;
 
 				// lwjgl defaults to lwjgl- + user.name, but this breaks if the username would cause an invalid path
 				// to be created.
@@ -558,6 +559,8 @@ public class HdPlugin extends Plugin {
 					}
 				}
 
+				renderThread.initialize();
+
 				updateCachedConfigs();
 				developerTools.activate();
 
@@ -637,7 +640,6 @@ public class HdPlugin extends Plugin {
 			client.setUnlockedFps(false);
 			client.setExpandedMapLoading(0);
 
-			asyncUICopy.complete();
 			developerTools.deactivate();
 			tileOverrideManager.shutDown();
 			groundMaterialManager.shutDown();
@@ -673,9 +675,11 @@ public class HdPlugin extends Plugin {
 				renderer = null;
 			}
 
-			if (awtContext != null)
-				awtContext.destroy();
-			awtContext = null;
+			renderThread.shutdown();
+			awtContextWrapper.shutdown();
+
+			GL_CAPS = null;
+			GL_RENDER_THREAD_CAPS = null;
 
 			if (debugCallback != null)
 				debugCallback.free();
@@ -706,8 +710,6 @@ public class HdPlugin extends Plugin {
 	public void restartPlugin() {
 		clientThread.invoke(() -> {
 			shutDown();
-			// Validate the canvas so it becomes valid without having to manually resize the client
-			canvas.validate();
 			startUp();
 		});
 	}
@@ -1006,7 +1008,8 @@ public class HdPlugin extends Plugin {
 	}
 
 	private void initializeUiTexture() {
-		pboUi = glGenBuffers();
+		for(int i = 0; i < pboUi.length; i++)
+			pboUi[i] = glGenBuffers();
 
 		texUi = glGenTextures();
 		glActiveTexture(TEXTURE_UNIT_UI);
@@ -1020,9 +1023,12 @@ public class HdPlugin extends Plugin {
 	private void destroyUiTexture() {
 		uiResolution = null;
 
-		if (pboUi != 0)
-			glDeleteBuffers(pboUi);
-		pboUi = 0;
+		for(int i = 0; i < pboUi.length; i++) {
+			if (pboUi[i] != 0) {
+				glDeleteBuffers(pboUi[i]);
+				pboUi[i] = 0;
+			}
+		}
 
 		if (texUi != 0)
 			glDeleteTextures(texUi);
@@ -1037,6 +1043,7 @@ public class HdPlugin extends Plugin {
 		if (Arrays.equals(newResolution, tiledLightingResolution) && tiledLightingLayerCount == newLayerCount)
 			return;
 
+		renderThread.waitForRenderingCompleted();
 		destroyTiledLightingFbo();
 
 		tiledLightingResolution = newResolution;
@@ -1071,7 +1078,7 @@ public class HdPlugin extends Plugin {
 			ARBShaderImageLoadStore.glBindImageTexture(
 				IMAGE_UNIT_TILED_LIGHTING, texTiledLighting, 0, true, 0, GL_WRITE_ONLY, GL_RGBA16UI);
 
-		glBindFramebuffer(GL_FRAMEBUFFER, awtContext.getFramebuffer(false));
+		glBindFramebuffer(GL_FRAMEBUFFER, awtContextWrapper.getBackBuffer());
 
 		checkGLErrors();
 
@@ -1120,11 +1127,13 @@ public class HdPlugin extends Plugin {
 		if (Arrays.equals(sceneViewport, viewport))
 			return;
 
+		renderThread.waitForRenderingCompleted();
+
 		destroySceneFbo();
 		sceneViewport = viewport;
 
 		// Bind default FBO to check whether anti-aliasing is forced
-		int defaultFramebuffer = awtContext.getFramebuffer(false);
+		int defaultFramebuffer = awtContextWrapper.getBackBuffer();
 		glBindFramebuffer(GL_FRAMEBUFFER, defaultFramebuffer);
 		final int forcedAASamples = glGetInteger(GL_SAMPLES);
 		msaaSamples = forcedAASamples != 0 ? forcedAASamples : min(config.antiAliasingMode().getSamples(), glGetInteger(GL_MAX_SAMPLES));
@@ -1196,12 +1205,14 @@ public class HdPlugin extends Plugin {
 		}
 
 		// Reset
-		glBindFramebuffer(GL_FRAMEBUFFER, awtContext.getFramebuffer(false));
+		glBindFramebuffer(GL_FRAMEBUFFER, awtContextWrapper.getBackBuffer());
 		glBindRenderbuffer(GL_RENDERBUFFER, 0);
 	}
 
 	private void destroySceneFbo() {
 		sceneViewport = null;
+
+		renderer.waitUntilIdle();
 
 		if (fboScene != 0)
 			glDeleteFramebuffers(fboScene);
@@ -1225,6 +1236,8 @@ public class HdPlugin extends Plugin {
 	}
 
 	private void initializeShadowMapFbo() {
+		renderer.waitUntilIdle();
+
 		if (!configShadowsEnabled) {
 			initializeDummyShadowMap();
 			return;
@@ -1271,7 +1284,7 @@ public class HdPlugin extends Plugin {
 		glReadBuffer(GL_NONE);
 
 		// Reset FBO
-		glBindFramebuffer(GL_FRAMEBUFFER, awtContext.getFramebuffer(false));
+		glBindFramebuffer(GL_FRAMEBUFFER, awtContextWrapper.getBackBuffer());
 	}
 
 	private void initializeDummyShadowMap() {
@@ -1287,6 +1300,8 @@ public class HdPlugin extends Plugin {
 	}
 
 	private void destroyShadowMapFbo() {
+		renderer.waitUntilIdle();
+
 		if (texShadowMap != 0)
 			glDeleteTextures(texShadowMap);
 		texShadowMap = 0;
@@ -1303,6 +1318,7 @@ public class HdPlugin extends Plugin {
 		});
 	}
 
+	@SneakyThrows
 	public void prepareInterfaceTexture() {
 		int[] resolution = {
 			max(1, client.getCanvasWidth()),
@@ -1312,13 +1328,17 @@ public class HdPlugin extends Plugin {
 		if (resize) {
 			uiResolution = resolution;
 
-			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pboUi);
-			glBufferData(GL_PIXEL_UNPACK_BUFFER, uiResolution[0] * uiResolution[1] * 4L, GL_STREAM_DRAW);
-			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+			renderThread.invokeOnRenderThread(() -> {
+				for(int i = 0; i < pboUi.length; i++) {
+					glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pboUi[i]);
+					glBufferData(GL_PIXEL_UNPACK_BUFFER, uiResolution[0] * uiResolution[1] * 4L, GL_STREAM_DRAW);
+				}
+				glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 
-			glActiveTexture(TEXTURE_UNIT_UI);
-			glBindTexture(GL_TEXTURE_2D, texUi);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, uiResolution[0], uiResolution[1], 0, GL_BGRA, GL_UNSIGNED_BYTE, 0);
+				glActiveTexture(TEXTURE_UNIT_UI);
+				glBindTexture(GL_TEXTURE_2D, texUi);
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, uiResolution[0], uiResolution[1], 0, GL_BGRA, GL_UNSIGNED_BYTE, 0);
+			});
 		}
 
 		if (client.isStretchedEnabled()) {
@@ -1330,44 +1350,22 @@ public class HdPlugin extends Plugin {
 		}
 		round(actualUiResolution, multiply(vec(actualUiResolution), getDpiScaling()));
 
-		if (configAsyncUICopy) {
-			// Start copying the UI on a different thread, to be uploaded during the next frame
-			asyncUICopy.prepare(pboUi, texUi);
-			// If the window was just resized, upload once synchronously so there is something to show
-			if (resize)
-				asyncUICopy.complete();
-			return;
-		}
-
 		final BufferProvider bufferProvider = client.getBufferProvider();
 		final int[] pixels = bufferProvider.getPixels();
 		final int width = bufferProvider.getWidth();
 		final int height = bufferProvider.getHeight();
 
-		frameTimer.begin(Timer.MAP_UI_BUFFER);
-		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pboUi);
-		ByteBuffer mappedBuffer = glMapBuffer(GL_PIXEL_UNPACK_BUFFER, GL_WRITE_ONLY);
-		frameTimer.end(Timer.MAP_UI_BUFFER);
-		if (mappedBuffer == null) {
-			log.error("Unable to map interface PBO. Skipping UI...");
-		} else if (width > uiResolution[0] || height > uiResolution[1]) {
-			log.error("UI texture resolution mismatch ({}x{} > {}). Skipping UI...", width, height, uiResolution);
-		} else {
-			frameTimer.begin(Timer.COPY_UI);
-			mappedBuffer.asIntBuffer().put(pixels, 0, width * height);
-			frameTimer.end(Timer.COPY_UI);
+		uiUploadSync.markInFlight();
 
-			frameTimer.begin(Timer.UPLOAD_UI);
-			glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
-			glActiveTexture(TEXTURE_UNIT_UI);
-			glBindTexture(GL_TEXTURE_2D, texUi);
-			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, 0);
-			frameTimer.end(Timer.UPLOAD_UI);
-		}
-		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+		CommandBuffer cmd = commandBufferPool.acquire();
+		cmd.BeginTimer(Timer.UPLOAD_UI);
+		cmd.UploadPixelData(TEXTURE_UNIT_UI, texUi, pboUi[pboUiIdx], width, height, pixels, uiUploadSync);
+		cmd.EndTimer(Timer.UPLOAD_UI);
+		pboUiIdx = (pboUiIdx + 1) % pboUi.length;
+		renderThread.submit(cmd);
 	}
 
-	public void drawUi(int overlayColor) {
+	public void drawUi(int overlayColor, CommandBuffer cmd) {
 		if (uiResolution == null || developerTools.isHideUiEnabled() && hasLoggedIn)
 			return;
 
@@ -1375,21 +1373,20 @@ public class HdPlugin extends Plugin {
 		if (client.getGameState().getState() < GameState.LOADING.getState())
 			overlayColor = 0;
 
-		frameTimer.begin(Timer.RENDER_UI);
-
-		glBindFramebuffer(GL_FRAMEBUFFER, awtContext.getFramebuffer(false));
+		cmd.BeginTimer(Timer.RENDER_UI);
+		cmd.BindFrameBuffer(GL_FRAMEBUFFER, awtContextWrapper.getBackBuffer());
 		// Disable alpha writes, just in case the default FBO has an alpha channel
-		glColorMask(true, true, true, false);
+		cmd.ColorMask(true, true, true, false);
 
-		glViewport(0, 0, actualUiResolution[0], actualUiResolution[1]);
+		cmd.Viewport(0, 0, uiResolution[0], uiResolution[1]);
 
-		tiledLightingOverlay.render();
+		tiledLightingOverlay.render(cmd);
 
-		uiProgram.use();
-		uboUI.sourceDimensions.set(uiResolution);
-		uboUI.targetDimensions.set(actualUiResolution);
-		uboUI.alphaOverlay.set(ColorUtils.srgba(overlayColor));
-		uboUI.upload();
+		cmd.SetShaderProgram(uiProgram);
+
+		cmd.SetUniformProperty(uboUI.sourceDimensions, uiResolution);
+		cmd.SetUniformProperty(uboUI.targetDimensions, actualUiResolution);
+		cmd.SetUniformProperty(uboUI.alphaOverlay, ColorUtils.srgba(overlayColor));
 
 		// Set the sampling function used when stretching the UI.
 		// This is probably better done with sampler objects instead of texture parameters, but this is easier and likely more portable.
@@ -1401,25 +1398,25 @@ public class HdPlugin extends Plugin {
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, function);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, function);
 
-		glEnable(GL_BLEND);
-		glBlendFuncSeparate(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
-		glBindVertexArray(vaoTri);
-		glDrawArrays(GL_TRIANGLES, 0, 3);
+		cmd.Enable(GL_BLEND);
+		cmd.BlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
+		cmd.BindVertexArray(vaoTri);
+		cmd.DrawArrays(GL_TRIANGLES, 0, 3);
 
-		shadowMapOverlay.render();
-		gammaCalibrationOverlay.render();
+		shadowMapOverlay.render(cmd);
+		gammaCalibrationOverlay.render(cmd);
 
 		// Reset
-		glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
-		glDisable(GL_BLEND);
-		glColorMask(true, true, true, true);
+		cmd.BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
+		cmd.Disable(GL_BLEND);
+		cmd.ColorMask(true, true, true, true);
 
-		frameTimer.end(Timer.RENDER_UI);
+		cmd.EndTimer(Timer.RENDER_UI);
 	}
 
 	/**
-	 * Convert the front framebuffer to an Image
-	 */
+     * Convert the front framebuffer to an Image
+     */
 	public Image screenshot() {
 		if (uiResolution == null)
 			return null;
@@ -1429,7 +1426,7 @@ public class HdPlugin extends Plugin {
 
 		ByteBuffer buffer = BufferUtils.createByteBuffer(width * height * 4);
 
-		glReadBuffer(awtContext.getBufferMode());
+		glReadBuffer(awtContextWrapper.getBufferMode());
 		glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, buffer);
 
 		BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
@@ -1481,11 +1478,11 @@ public class HdPlugin extends Plugin {
 		configDynamicLights = config.dynamicLights();
 		configTiledLighting = config.tiledLighting();
 		configTiledLightingImageLoadStore = config.tiledLightingImageLoadStore();
+		configRenderThread = config.renderThread();
 		configExpandShadowDraw = config.expandShadowDraw();
 		configUseFasterModelHashing = config.fasterModelHashing();
 		configUndoVanillaShading = config.shadingMode() != ShadingMode.VANILLA;
 		configPreserveVanillaNormals = config.preserveVanillaNormals();
-		configAsyncUICopy = config.asyncUICopy();
 		configWindDisplacement = config.windDisplacement();
 		configCharacterDisplacement = config.characterDisplacement();
 		configSeasonalTheme = config.seasonalTheme();
@@ -1559,6 +1556,8 @@ public class HdPlugin extends Plugin {
 			if (pendingConfigChanges.isEmpty())
 				return;
 
+			renderer.waitUntilIdle();
+
 			try {
 				// Synchronize with scene loading
 				synchronized (this) {
@@ -1596,9 +1595,6 @@ public class HdPlugin extends Plugin {
 									recompilePrograms = true;
 								if (configColorFilter == ColorFilter.CEL_SHADING || configColorFilterPrevious == ColorFilter.CEL_SHADING)
 									reloadScene = true;
-								break;
-							case KEY_ASYNC_UI_COPY:
-								asyncUICopy.complete();
 								break;
 						}
 
@@ -1682,9 +1678,6 @@ public class HdPlugin extends Plugin {
 						}
 					}
 
-					if (reloadTexturesAndMaterials || recompilePrograms)
-						renderer.waitUntilIdle();
-
 					if (reloadTexturesAndMaterials) {
 						materialManager.reload(false);
 						modelOverrideManager.reload();
@@ -1755,7 +1748,7 @@ public class HdPlugin extends Plugin {
 				break;
 		}
 
-		int actualSwapInterval = awtContext.setSwapInterval(swapInterval);
+		int actualSwapInterval = awtContextWrapper.setSwapInterval(swapInterval);
 		if (actualSwapInterval != swapInterval) {
 			log.info("unsupported swap interval {}, got {}", swapInterval, actualSwapInterval);
 		}
@@ -1789,16 +1782,18 @@ public class HdPlugin extends Plugin {
 		return config.expandedMapLoadingChunks();
 	}
 
+	@SneakyThrows
 	@Subscribe(priority = -1) // Run after the low detail plugin
 	public void onBeforeRender(BeforeRender beforeRender) {
 		SKIP_GL_ERROR_CHECKS = !log.isDebugEnabled() || developerTools.isFrameTimingsOverlayEnabled();
 
-		// Upload the UI which we began copying during the previous frame
-		if (configAsyncUICopy)
-			asyncUICopy.complete();
+		long start = System.nanoTime();
+		uiUploadSync.await();
+		frameTimer.add(Timer.COPY_UI, System.nanoTime() - start);
 
 		if (client.getScene() == null)
 			return;
+
 		// The game runs significantly slower with lower planes in Chambers of Xeric
 		client.getScene().setMinLevel(isInChambersOfXeric ? client.getPlane() : client.getScene().getMinLevel());
 	}
@@ -1826,14 +1821,17 @@ public class HdPlugin extends Plugin {
 		// @formatter:on
 	}
 
-	public static void checkGLErrors() {
-		if (SKIP_GL_ERROR_CHECKS)
-			return;
+	public static boolean checkGLErrors() { return checkGLErrors(null); }
 
+	public static boolean checkGLErrors(String context) {
+		if (SKIP_GL_ERROR_CHECKS)
+			return false;
+
+		boolean hasError = false;
 		while (true) {
 			int err = glGetError();
 			if (err == GL_NO_ERROR)
-				return;
+				return hasError;
 
 			String errStr;
 			switch (err) {
@@ -1860,7 +1858,12 @@ public class HdPlugin extends Plugin {
 					break;
 			}
 
-			log.debug("glGetError:", new Exception(errStr));
+			if(context != null) {
+				log.debug("{} - glGetError:", context, new Exception(errStr));
+			} else {
+				log.debug("glGetError:", new Exception(errStr));
+			}
+			hasError = true;
 		}
 	}
 

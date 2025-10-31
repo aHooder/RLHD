@@ -9,14 +9,21 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.callback.ClientThread;
 import org.lwjgl.opengl.*;
 import rs117.hd.HdPlugin;
+import rs117.hd.opengl.commandbuffer.RenderThread;
 
 import static org.lwjgl.opengl.GL33C.*;
 
 @Slf4j
 @Singleton
 public class FrameTimer {
+	@Getter
+	private static FrameTimer instance;
+
 	@Inject
 	private ClientThread clientThread;
+
+	@Inject
+	private RenderThread renderThread;
 
 	@Inject
 	private HdPlugin plugin;
@@ -37,8 +44,12 @@ public class FrameTimer {
 	public long cumulativeError;
 	public long errorCompensation;
 
+	public FrameTimer() {
+		instance = this;
+	}
+
 	private void initialize() {
-		clientThread.invoke(() -> {
+		renderThread.invokeOnRenderThread(() -> {
 			int[] queryNames = new int[NUM_GPU_TIMERS * 2];
 			glGenQueries(queryNames);
 			int queryIndex = 0;
@@ -68,7 +79,7 @@ public class FrameTimer {
 	}
 
 	private void destroy() {
-		clientThread.invoke(() -> {
+		renderThread.invokeOnRenderThread(() -> {
 			if (!isActive)
 				return;
 
@@ -124,8 +135,10 @@ public class FrameTimer {
 			return;
 
 		if (timer.isGpuTimer) {
-			if (activeTimers[timer.ordinal()])
-				throw new UnsupportedOperationException("Cumulative GPU timing isn't supported");
+			if (activeTimers[timer.ordinal()]) {
+				log.warn("Cumulative GPU timing isn't supported");
+				return;
+			}
 			glQueryCounter(gpuQueries[timer.ordinal() * 2], GL_TIMESTAMP);
 		} else if (!activeTimers[timer.ordinal()]) {
 			cumulativeError += errorCompensation + 1 >> 1;
@@ -191,7 +204,7 @@ public class FrameTimer {
 			} else {
 				if (activeTimers[i]) {
 					// End the CPU timer automatically, but warn about it
-					log.warn("Timer {} was never ended", timer);
+					//log.warn("Timer {} was never ended", timer);
 					timings[i] += frameEndNanos;
 				}
 			}

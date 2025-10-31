@@ -245,7 +245,7 @@ public interface HdPluginConfig extends Config
 	)
 	@Range(
 		min = 0,
-		max = 999
+		max = 2000
 	)
 	default int fpsTarget()
 	{
@@ -1098,17 +1098,6 @@ public interface HdPluginConfig extends Config
 		return false;
 	}
 
-	String KEY_ASYNC_UI_COPY = "experimentalAsyncUICopy";
-	@ConfigItem(
-		keyName = KEY_ASYNC_UI_COPY,
-		name = "Perform UI copy asynchronously",
-		description = "Slightly improves performance by delaying the UI by one frame.",
-		section = experimentalSettings
-	)
-	default boolean asyncUICopy() {
-		return false;
-	}
-
 	String KEY_TILED_LIGHTING_IMAGE_STORE = "experimentalTiledLightingImageStore";
 	@ConfigItem(
 		keyName = KEY_TILED_LIGHTING_IMAGE_STORE,
@@ -1117,6 +1106,17 @@ public interface HdPluginConfig extends Config
 		section = experimentalSettings
 	)
 	default boolean tiledLightingImageLoadStore() {
+		return true;
+	}
+
+	String KEY_RENDER_THREAD = "experimentalRenderThread";
+	@ConfigItem(
+		keyName = KEY_RENDER_THREAD,
+		name = "Render Thread",
+		description = "Its a Render Thread...",
+		section = experimentalSettings
+	)
+	default boolean renderThread() {
 		return true;
 	}
 

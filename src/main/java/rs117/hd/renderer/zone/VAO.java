@@ -4,9 +4,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
-import rs117.hd.utils.CommandBuffer;
+import rs117.hd.opengl.commandbuffer.CommandBuffer;
+import rs117.hd.opengl.commandbuffer.RenderThread;
 
 import static org.lwjgl.opengl.GL33C.*;
 
@@ -76,8 +78,6 @@ class VAO {
 	int off = 0;
 
 	void addRange(Scene scene) {
-		assert vbo.mapped;
-
 		if (off > 0 && lengths[off - 1] == vbo.vb.position()) {
 			return;
 		}
@@ -94,8 +94,6 @@ class VAO {
 	}
 
 	void draw(ZoneRenderer renderer, CommandBuffer cmd) {
-		assert !vbo.mapped;
-
 		int start = 0;
 		for (int i = 0; i < off; ++i) {
 			int end = lengths[i];
@@ -103,7 +101,7 @@ class VAO {
 
 			int count = end - start;
 
-			cmd.SetWorldViewIndex(renderer.uboWorldViews.getIndex(scene));
+			cmd.SetUniformProperty(renderer.uboCommandBuffer.worldViewIndex, renderer.uboWorldViews.getIndex(scene));
 			cmd.BindVertexArray(vao);
 			cmd.DrawArrays(GL_TRIANGLES, start / (VERT_SIZE / 4), count / (VAO.VERT_SIZE / 4));
 
@@ -127,14 +125,14 @@ class VAO {
 		private final List<VAO> vaos = new ArrayList<>();
 		private final int eboAlpha;
 
-		VAO get(int size) {
+		@SneakyThrows
+		VAO get(RenderThread renderThread, int size) {
 			assert size <= VAO_SIZE;
 
 			while (curIdx < vaos.size()) {
 				VAO vao = vaos.get(curIdx);
-				if (!vao.vbo.mapped) {
-					vao.vbo.map();
-				}
+				if (!vao.vbo.mapped)
+					renderThread.invokeOnRenderThread(vao.vbo::map);
 
 				int rem = vao.vbo.vb.remaining() * Integer.BYTES;
 				if (size <= rem) {
@@ -144,24 +142,33 @@ class VAO {
 				curIdx++;
 			}
 
-			VAO vao = new VAO(VAO_SIZE);
-			vao.initialize(eboAlpha);
-			vao.vbo.map();
-			vaos.add(vao);
-			log.debug("Allocated VAO {} request {}", vao.vao, size);
+			final VAO vao = new VAO(VAO_SIZE);
+			renderThread.invokeOnRenderThread(() -> {
+				vao.initialize(eboAlpha);
+				vao.vbo.map();
+				vaos.add(vao);
+				log.debug("Allocated VAO {} request {}", vao.vao, size);
+			});
 			return vao;
 		}
 
-		void unmap() {
-			int sz = 0;
+		void map() {
 			for (VAO vao : vaos) {
-				if (vao.vbo.mapped) {
-					++sz;
+				if (!vao.vbo.mapped)
+					vao.vbo.map();
+			}
+		}
+
+		void setDrawCount() {
+			drawCount = curIdx + 1;
+		}
+
+		void unmap() {
+			for (VAO vao : vaos) {
+				if (vao.vbo.mapped)
 					vao.vbo.unmap();
-				}
 			}
 			curIdx = 0;
-			drawCount = sz;
 		}
 
 		void free() {

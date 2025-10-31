@@ -47,6 +47,7 @@ import net.runelite.client.ui.overlay.OverlayLayer;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.ui.overlay.OverlayPosition;
 import rs117.hd.HdPlugin;
+import rs117.hd.opengl.commandbuffer.CommandBuffer;
 import rs117.hd.opengl.shader.ShaderException;
 import rs117.hd.opengl.shader.ShaderProgram;
 import rs117.hd.opengl.shader.ShaderTemplate;
@@ -372,10 +373,9 @@ public class ShaderOverlay<T extends ShaderOverlay.Shader> extends Overlay {
 		return isMovable() || isResizable();
 	}
 
-	private void updateTransform() {
-		assert shader.isActive();
+	private void updateTransform(CommandBuffer cmd) {
 		if (isFullscreen()) {
-			shader.uniTransform.set(0, 0, 1, 1);
+			cmd.SetUniformProperty(shader.uniTransform, 0.0f, 0.0f, 1.0f, 1.0f);
 		} else {
 			int[] resolution = plugin.getUiResolution();
 			if (resolution == null)
@@ -391,31 +391,31 @@ public class ShaderOverlay<T extends ShaderOverlay.Shader> extends Overlay {
 				rect[i] -= 1;
 			}
 			rect[1] *= -1;
-			shader.uniTransform.set(rect);
+			cmd.SetUniformProperty(shader.uniTransform, rect);
 		}
 	}
 
-	public void render() {
+	public void render(CommandBuffer cmd) {
 		if (isHidden())
 			return;
 
-		shader.use();
-		updateTransform();
-		updateUniforms();
-		renderShader();
+		cmd.SetShaderProgram( shader);
+		updateTransform(cmd);
+		updateUniforms(cmd);
+		renderShader(cmd);
 	}
 
-	protected void updateUniforms() {}
+	protected void updateUniforms(CommandBuffer cmd) {}
 
-	protected void renderShader() {
-		glEnable(GL_BLEND);
-		glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
+	protected void renderShader(CommandBuffer cmd) {
+		cmd.Enable(GL_BLEND);
+		cmd.BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
 		if (fullscreen) {
-			glBindVertexArray(plugin.vaoTri);
-			glDrawArrays(GL_TRIANGLES, 0, 3);
+			cmd.BindVertexArray(plugin.vaoTri);
+			cmd.DrawArrays(GL_TRIANGLES, 0, 3);
 		} else {
-			glBindVertexArray(plugin.vaoQuad);
-			glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+			cmd.BindVertexArray(plugin.vaoQuad);
+			cmd.DrawArrays(GL_TRIANGLE_FAN, 0, 4);
 		}
 	}
 

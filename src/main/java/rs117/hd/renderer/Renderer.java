@@ -28,6 +28,7 @@ public interface Renderer extends DrawCallbacks {
 	}
 	default void reloadScene() {}
 	default void clearCaches() {}
+	default void onBeforeRender() {}
 	@Nullable
 	default SceneContext getSceneContext() {
 		return null;
