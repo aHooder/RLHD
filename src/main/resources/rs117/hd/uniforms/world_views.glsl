@@ -45,14 +45,12 @@
         return int(masked) - 1;
     }
 
-    vec3 calculateBaseOffset(int zoneId) {
+    vec3 calculateBaseOffset(int worldViewId, int zoneId) {
         if(zoneId < 0)
             return vec3(0);
 
-        // for -1 (EXTENDED_SCENE_SIZE - SCENE_SIZE) / 2, sub scene have this set to 0
-        int sceneOffset = (184 - 104) / 2;
-
-        int sizeX = 184; // TODO: Should sizeX/sizeY be stored within the worldViewStruct?
+        int sceneOffset = worldViewId == -1 ? (184 - 104) / 2 : 0;
+        int sizeX = 184;
         int sizeY = 184;
 		int mzx = zoneId % (sizeX >> 3);
 		int mzz = zoneId / (sizeY >> 3);
@@ -61,6 +59,7 @@
         offset.x = (mzx - (sceneOffset >> 3)) << 10;
         offset.y = 0;
         offset.z = (mzz - (sceneOffset >> 3)) << 10;
+
         return offset;
     }
 #else

@@ -73,8 +73,10 @@ void main() {
 
     int shouldCastShadow = isShadowDisabled ? 0 : 1;
 
-    // TODO: Use Zoneid to lookUp sceneBase
-    vec3 pos = vPosition;
+    int worldViewId = getWorldViewId(vPackedWorldZoneModelId);
+    int zoneId = getZoneId(vPackedWorldZoneModelId);
+    vec3 sceneBase = calculateBaseOffset(worldViewId, zoneId);
+    vec3 pos = sceneBase + vPosition;
 
     #if SHADOW_MODE == SHADOW_MODE_DETAILED
         gPosition = pos;
