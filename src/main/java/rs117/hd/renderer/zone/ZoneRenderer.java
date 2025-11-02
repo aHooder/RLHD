@@ -1271,7 +1271,7 @@ public class ZoneRenderer implements Renderer {
 				}
 
 				zone.initialize(o, a, eboAlpha);
-				zone.setMetadata(wv, ctx.sceneContext, x, z);
+				zone.setMetadata(wv.getId(), ctx.sceneContext, x, z);
 
 				sceneUploader.uploadZone(ctx.sceneContext, zone, x, z);
 
@@ -1560,7 +1560,6 @@ public class ZoneRenderer implements Renderer {
 					Zone zone = newZones[x][z];
 
 					if (zone.initialized) {
-						zone.setMetadata(worldView, nextSceneContext, x, z);
 						continue;
 					}
 
@@ -1580,7 +1579,7 @@ public class ZoneRenderer implements Renderer {
 					}
 
 					zone.initialize(o, a, eboAlpha);
-					zone.setMetadata(worldView, nextSceneContext, x, z);
+					zone.setMetadata(worldView.getId(), nextSceneContext, x, z);
 				}
 			}
 
@@ -1717,7 +1716,7 @@ public class ZoneRenderer implements Renderer {
 					}
 
 					zone.initialize(o, a, eboAlpha);
-					zone.setMetadata(worldView, ctx.sceneContext, x, z);
+					zone.setMetadata(worldView.getId(), ctx.sceneContext, x, z);
 				}
 			}
 
@@ -1814,6 +1813,8 @@ public class ZoneRenderer implements Renderer {
 					zone.unmap();
 					zone.initialized = true;
 				}
+
+				zone.setMetadata(scene.getWorldViewId(), ctx.sceneContext, x, z);
 			}
 		}
 
@@ -1841,6 +1842,8 @@ public class ZoneRenderer implements Renderer {
 					zone.unmap();
 					zone.initialized = true;
 				}
+
+				zone.setMetadata(scene.getWorldViewId(), ctx.sceneContext, x, z);
 			}
 		}
 		log.debug("WorldView ready: {}", scene.getWorldViewId());

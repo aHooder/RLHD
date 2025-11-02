@@ -91,7 +91,7 @@ class Zone {
 		}
 	}
 
-	void setMetadata(WorldView wv, ZoneSceneContext ctx, int mx, int mz) {
+	void setMetadata(int worldViewIdx, ZoneSceneContext ctx, int mx, int mz) {
 		if(!metadataDirty) {
 			return;
 		}
@@ -101,7 +101,7 @@ class Zone {
 		int baseZ = (mz - (ctx.sceneOffset >> 3)) << 10;
 
 		vboM.map();
-		vboM.vb.put(wv.getId());
+		vboM.vb.put(worldViewIdx);
 		vboM.vb.put(baseX);
 		vboM.vb.put(baseZ);
 		vboM.unmap();
