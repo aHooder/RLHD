@@ -74,7 +74,7 @@ void main() {
 
     int shouldCastShadow = isShadowDisabled ? 0 : 1;
 
-    vec3 sceneOffset = vec3(vSceneBase.x, 0, vSceneBase.y) * 128;
+    vec3 sceneOffset = vec3(vSceneBase.x, 0, vSceneBase.y);
     vec3 pos = sceneOffset + vPosition;
 
     #if SHADOW_MODE == SHADOW_MODE_DETAILED

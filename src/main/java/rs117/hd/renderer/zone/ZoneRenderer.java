@@ -1545,7 +1545,7 @@ public class ZoneRenderer implements Renderer {
 
 						assert old.cull;
 						old.cull = false;
-						old.metadata = true;
+						old.metadataDirty = true;
 
 						newZones[x][z] = old;
 					}

@@ -10,9 +10,10 @@ class VBO {
 	int glUsage;
 	int bufId;
 	IntBuffer vb;
-	ByteBuffer mappedBuffer;
 	int len;
 	boolean mapped;
+
+	private ByteBuffer mappedBuffer;
 
 	VBO(int size) {
 		this.size = size;

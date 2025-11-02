@@ -36,9 +36,9 @@ class Zone {
 	static final int VERT_SIZE = 32;
 
 	// Metadata format
-	// worldViewId byte int
-	// sceneOffset short vec2(x, y)
-	static final int METADATA_SIZE = 5;
+	// worldViewId int int
+	// sceneOffset int vec2(x, y)
+	static final int METADATA_SIZE = 12;
 
 	static final int LEVEL_WATER_SURFACE = 4;
 
@@ -54,7 +54,7 @@ class Zone {
 	boolean initialized; // whether the zone vao and vbos are ready
 	boolean cull; // whether the zone is queued for deletion
 	boolean dirty; // whether the zone has temporary modifications
-	boolean metadata; // whether the zone needs metadata updating
+	boolean metadataDirty; // whether the zone needs metadata updating
 	boolean invalidate; // whether the zone needs rebuilding
 	boolean hasWater; // whether the zone has any water tiles
 	boolean inSceneFrustum; // whether the zone is visible to the scene camera
@@ -72,9 +72,11 @@ class Zone {
 		assert glVao == 0;
 		assert glVaoA == 0;
 
-		vboM = new VBO(METADATA_SIZE);
-		vboM.initialize(GL_STATIC_DRAW);
-		metadata = true;
+		if (o != null || a != null) {
+			vboM = new VBO(METADATA_SIZE);
+			vboM.initialize(GL_STATIC_DRAW);
+			metadataDirty = true;
+		}
 
 		if (o != null) {
 			vboO = o;
@@ -90,18 +92,18 @@ class Zone {
 	}
 
 	void setMetadata(WorldView wv, ZoneSceneContext ctx, int mx, int mz) {
-		if(!metadata) {
+		if(!metadataDirty) {
 			return;
 		}
-		metadata = false;
+		metadataDirty = false;
 
 		int baseX = (mx - (ctx.sceneOffset >> 3)) << 10;
 		int baseZ = (mz - (ctx.sceneOffset >> 3)) << 10;
 
 		vboM.map();
-		vboM.mappedBuffer.put((byte) (wv.getId() + 1));
-		vboM.mappedBuffer.putShort((short) (baseX / LOCAL_TILE_SIZE));
-		vboM.mappedBuffer.putShort((short) (baseZ / LOCAL_TILE_SIZE));
+		vboM.vb.put(wv.getId());
+		vboM.vb.put(baseX);
+		vboM.vb.put(baseZ);
 		vboM.unmap();
 	}
 
@@ -184,12 +186,12 @@ class Zone {
 		// worldViewIndex
 		glEnableVertexAttribArray(6);
 		glVertexAttribDivisor(6, 1);
-		glVertexAttribIPointer(6, 1, GL_UNSIGNED_BYTE, 5, 0);
+		glVertexAttribIPointer(6, 1, GL_INT, METADATA_SIZE, 0);
 
 		// scene offset
 		glEnableVertexAttribArray(7);
 		glVertexAttribDivisor(7, 1);
-		glVertexAttribIPointer(7, 2, GL_SHORT, 5, 1);
+		glVertexAttribIPointer(7, 2, GL_INT, METADATA_SIZE, 4);
 
 		checkGLErrors();
 
