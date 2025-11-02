@@ -192,7 +192,6 @@ public class ZoneRenderer implements Renderer {
 			for (int x = 0; x < sizeX; ++x) {
 				for (int z = 0; z < sizeZ; ++z) {
 					zones[x][z] = new Zone();
-					zones[x][z].idx = (short) (z * sizeZ + x);
 				}
 			}
 		}
@@ -966,17 +965,14 @@ public class ZoneRenderer implements Renderer {
 		if (!z.initialized || z.sizeO == 0)
 			return;
 
-		int offset = ctx.sceneContext.sceneOffset >> 3;
 		if (z.inSceneFrustum) {
-			z.renderOpaque(sceneCmd, zx - offset, zz - offset, minLevel, level, maxLevel, hideRoofIds);
+			z.renderOpaque(sceneCmd, minLevel, level, maxLevel, hideRoofIds);
 		}
 
 		if (z.inShadowFrustum) {
 			directionalCmd.SetShader(fastShadowProgram);
 			z.renderOpaque(
 				directionalCmd,
-				zx - offset,
-				zz - offset,
 				minLevel,
 				level,
 				plugin.configRoofShadows ? 3 : maxLevel,
@@ -1004,7 +1000,7 @@ public class ZoneRenderer implements Renderer {
 
 		int offset = ctx.sceneContext.sceneOffset >> 3;
 		if (renderWater)
-			z.renderOpaqueLevel(sceneCmd, zx - offset, zz - offset, Zone.LEVEL_WATER_SURFACE);
+			z.renderOpaqueLevel(sceneCmd, Zone.LEVEL_WATER_SURFACE);
 
 		if (!hasAlpha)
 			return;
@@ -1291,7 +1287,6 @@ public class ZoneRenderer implements Renderer {
 				assert zone.initialized;
 				zone.free();
 				zone = ctx.zones[x][z] = new Zone();
-				zone.idx = (short) (z * ctx.sizeZ + x);
 
 				SceneUploader sceneUploader = injector.getInstance(SceneUploader.class);
 				sceneUploader.zoneSize(ctx.sceneContext, zone, x, z);
@@ -1312,6 +1307,7 @@ public class ZoneRenderer implements Renderer {
 				}
 
 				zone.initialize(o, a, eboAlpha);
+				zone.setMetadata(wv, ctx.sceneContext, x, z);
 
 				sceneUploader.uploadZone(ctx.sceneContext, zone, x, z);
 
@@ -1549,7 +1545,7 @@ public class ZoneRenderer implements Renderer {
 
 						assert old.cull;
 						old.cull = false;
-						old.idx = (short) (z * ctx.sizeZ + x);
+						old.metadata = true;
 
 						newZones[x][z] = old;
 					}
@@ -1562,7 +1558,6 @@ public class ZoneRenderer implements Renderer {
 			for (int z = 0; z < SCENE_ZONES; ++z) {
 				if (newZones[x][z] == null) {
 					newZones[x][z] = new Zone();
-					newZones[x][z].idx = (short) (z * ctx.sizeZ + x);
 				}
 			}
 		}
@@ -1603,6 +1598,7 @@ public class ZoneRenderer implements Renderer {
 					Zone zone = newZones[x][z];
 
 					if (zone.initialized) {
+						zone.setMetadata(worldView, nextSceneContext, x, z);
 						continue;
 					}
 
@@ -1622,6 +1618,7 @@ public class ZoneRenderer implements Renderer {
 					}
 
 					zone.initialize(o, a, eboAlpha);
+					zone.setMetadata(worldView, nextSceneContext, x, z);
 				}
 			}
 
@@ -1707,7 +1704,7 @@ public class ZoneRenderer implements Renderer {
 					return false; // TODO: Regenerate underwater geometry instead of discarding entire zones
 			}
 		}
-		return false; // TODO: ZoneID needs to be moved to a different VBO so it can be updated without needing to rebuild the zone
+		return true;
 	}
 
 	private void loadSubScene(WorldView worldView, Scene scene) {
@@ -1758,6 +1755,7 @@ public class ZoneRenderer implements Renderer {
 					}
 
 					zone.initialize(o, a, eboAlpha);
+					zone.setMetadata(worldView, ctx.sceneContext, x, z);
 				}
 			}
 

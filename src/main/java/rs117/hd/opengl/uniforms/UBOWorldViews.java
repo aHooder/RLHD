@@ -18,7 +18,6 @@ public class UBOWorldViews extends UniformBuffer<GLBuffer> {
 	public static class WorldViewStruct extends StructProperty {
 		public final Property projection = addProperty(PropertyType.Mat4, "projection");
 		public final Property tint = addProperty(PropertyType.IVec4, "tint");
-		public final Property packedSize = addProperty(PropertyType.Int, "packedSize");
 	}
 
 	private final WorldViewStruct[] uboStructs = addStructs(new WorldViewStruct[MAX_SIMULTANEOUS_WORLD_VIEWS], WorldViewStruct::new);
@@ -55,7 +54,6 @@ public class UBOWorldViews extends UniformBuffer<GLBuffer> {
 
 			var proj = worldView.getMainWorldProjection();
 			struct.projection.set(proj instanceof FloatProjection ? ((FloatProjection) proj).getProjection() : Mat4.identity());
-			struct.packedSize.set(worldView.getSizeX() | worldView.getSizeY() << 16);
 
 			var scene = worldView.getScene();
 			if (scene == null) {

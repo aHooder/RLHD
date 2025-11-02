@@ -41,7 +41,7 @@ in vec3 gNormal[3];
 in int gAlphaBiasHsl[3];
 in int gMaterialData[3];
 in int gTerrainData[3];
-in uint gPackedWorldZoneModelId[3];
+in int gWorldViewId[3];
 
 flat out ivec3 vAlphaBiasHsl;
 flat out ivec3 vMaterialData;
@@ -69,8 +69,7 @@ void main() {
     }
 
 #if ZONE_RENDERER
-    int worldViewId = getWorldViewId(gPackedWorldZoneModelId[0]);
-    computeUvs(vMaterialData[0], worldViewId, vec3[](gPosition[0], gPosition[1], gPosition[2]), vUv);
+    computeUvs(vMaterialData[0], gWorldViewId[0], vec3[](gPosition[0], gPosition[1], gPosition[2]), vUv);
 #else
     computeUvs(vMaterialData[0], vec3[](gPosition[0], gPosition[1], gPosition[2]), vUv);
 #endif

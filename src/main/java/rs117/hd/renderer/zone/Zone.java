@@ -33,7 +33,12 @@ class Zone {
 	// alphaBiasHsl int
 	// materialData int
 	// terrainData int
-	static final int VERT_SIZE = 36;
+	static final int VERT_SIZE = 32;
+
+	// Metadata format
+	// worldViewId byte int
+	// sceneOffset short vec2(x, y)
+	static final int METADATA_SIZE = 5;
 
 	static final int LEVEL_WATER_SURFACE = 4;
 
@@ -43,14 +48,13 @@ class Zone {
 	int glVaoA;
 	int bufLenA;
 
-	short idx;
-
 	int sizeO, sizeA;
-	VBO vboO, vboA;
+	VBO vboO, vboA, vboM;
 
 	boolean initialized; // whether the zone vao and vbos are ready
 	boolean cull; // whether the zone is queued for deletion
 	boolean dirty; // whether the zone has temporary modifications
+	boolean metadata; // whether the zone needs metadata updating
 	boolean invalidate; // whether the zone needs rebuilding
 	boolean hasWater; // whether the zone has any water tiles
 	boolean inSceneFrustum; // whether the zone is visible to the scene camera
@@ -68,17 +72,37 @@ class Zone {
 		assert glVao == 0;
 		assert glVaoA == 0;
 
+		vboM = new VBO(METADATA_SIZE);
+		vboM.initialize(GL_STATIC_DRAW);
+		metadata = true;
+
 		if (o != null) {
 			vboO = o;
 			glVao = glGenVertexArrays();
-			setupVao(glVao, o.bufId, eboShared);
+			setupVao(glVao, o.bufId, vboM.bufId, eboShared);
 		}
 
 		if (a != null) {
 			vboA = a;
 			glVaoA = glGenVertexArrays();
-			setupVao(glVaoA, a.bufId, eboShared);
+			setupVao(glVaoA, a.bufId, vboM.bufId, eboShared);
 		}
+	}
+
+	void setMetadata(WorldView wv, ZoneSceneContext ctx, int mx, int mz) {
+		if(!metadata) {
+			return;
+		}
+		metadata = false;
+
+		int baseX = (mx - (ctx.sceneOffset >> 3)) << 10;
+		int baseZ = (mz - (ctx.sceneOffset >> 3)) << 10;
+
+		vboM.map();
+		vboM.mappedBuffer.put((byte) (wv.getId() + 1));
+		vboM.mappedBuffer.putShort((short) (baseX / LOCAL_TILE_SIZE));
+		vboM.mappedBuffer.putShort((short) (baseZ / LOCAL_TILE_SIZE));
+		vboM.unmap();
 	}
 
 	void free() {
@@ -124,7 +148,7 @@ class Zone {
 		}
 	}
 
-	private void setupVao(int vao, int buffer, int ebo) {
+	private void setupVao(int vao, int buffer, int metadata, int ebo) {
 		glBindVertexArray(vao);
 		glBindBuffer(GL_ARRAY_BUFFER, buffer);
 
@@ -155,9 +179,17 @@ class Zone {
 		glEnableVertexAttribArray(5);
 		glVertexAttribIPointer(5, 1, GL_INT, VERT_SIZE, 28);
 
-		// worldViewId | zoneId | modelId
+		glBindBuffer(GL_ARRAY_BUFFER, metadata);
+
+		// worldViewIndex
 		glEnableVertexAttribArray(6);
-		glVertexAttribIPointer(6, 1, GL_UNSIGNED_INT, VERT_SIZE, 32);
+		glVertexAttribDivisor(6, 1);
+		glVertexAttribIPointer(6, 1, GL_UNSIGNED_BYTE, 5, 0);
+
+		// scene offset
+		glEnableVertexAttribArray(7);
+		glVertexAttribDivisor(7, 1);
+		glVertexAttribIPointer(7, 2, GL_SHORT, 5, 1);
 
 		checkGLErrors();
 
@@ -198,7 +230,7 @@ class Zone {
 		glDrawLength = Arrays.copyOfRange(drawEnd, 0, drawIdx);
 	}
 
-	void renderOpaque(CommandBuffer cmd, int zx, int zz, int minLevel, int currentLevel, int maxLevel, Set<Integer> hiddenRoofIds) {
+	void renderOpaque(CommandBuffer cmd, int minLevel, int currentLevel, int maxLevel, Set<Integer> hiddenRoofIds) {
 		drawIdx = 0;
 
 		for (int level = minLevel; level <= maxLevel; ++level) {
@@ -246,7 +278,7 @@ class Zone {
 		flush(cmd);
 	}
 
-	void renderOpaqueLevel(CommandBuffer cmd, int zx, int zz, int level) {
+	void renderOpaqueLevel(CommandBuffer cmd, int level) {
 		drawIdx = 0;
 
 		pushRange(this.levelOffsets[level - 1], this.levelOffsets[level]);

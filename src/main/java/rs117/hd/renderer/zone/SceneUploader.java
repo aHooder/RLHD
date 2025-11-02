@@ -354,7 +354,6 @@ class SceneUploader {
 				t,
 				paint,
 				onlyWaterSurface,
-				(byte)ctx.scene.getWorldViewId(), zone.idx,
 				tileExX, tileExY, tileZ,
 				vertexBuffer,
 				tilePoint.getX() * 128 - basex, tilePoint.getY() * 128 - basez
@@ -363,7 +362,7 @@ class SceneUploader {
 
 		SceneTileModel model = t.getSceneTileModel();
 		if (model != null)
-			upload(ctx, worldPos, t, model, onlyWaterSurface, (byte)ctx.scene.getWorldViewId(), zone.idx, tileExX, tileExY, tileZ, basex, basez, vertexBuffer);
+			upload(ctx, worldPos, t, model, onlyWaterSurface, tileExX, tileExY, tileZ, basex, basez, vertexBuffer);
 
 		if (!onlyWaterSurface)
 			uploadZoneTileRenderables(ctx, zone, t, worldPos, vertexBuffer, alphaBuffer);
@@ -577,11 +576,11 @@ class SceneUploader {
 		Model model = null;
 		if (r instanceof Model) {
 			model = (Model) r;
-			uploadStaticModel(model, modelOverride, (byte)ctx.scene.getWorldViewId(), zone.idx, (short)0, preOrientation, orient, x - basex, y, z - basez, vertexBuffer, ab);
+			uploadStaticModel(model, modelOverride, preOrientation, orient, x - basex, y, z - basez, vertexBuffer, ab);
 		} else if (r instanceof DynamicObject) {
 			model = ((DynamicObject) r).getModelZbuf();
 			if (model != null) {
-				uploadStaticModel(model, modelOverride, (byte)ctx.scene.getWorldViewId(), zone.idx, (short)0, preOrientation, orient, x - basex, y, z - basez, vertexBuffer, ab);
+				uploadStaticModel(model, modelOverride, preOrientation, orient, x - basex, y, z - basez, vertexBuffer, ab);
 			}
 		}
 		int endpos = zone.vboA != null ? zone.vboA.vb.position() : 0;
@@ -613,7 +612,6 @@ class SceneUploader {
 		Tile tile,
 		SceneTilePaint paint,
 		boolean onlyWaterSurface,
-		byte sceneId, short zoneId,
 		int tileExX, int tileExY, int tileZ,
 		GpuIntBuffer vb,
 		int lx,
@@ -806,43 +804,37 @@ class SceneUploader {
 		vb.putVertex(
 			lx2, neHeight, lz2, neColor,
 			uvx, uvy, 0, neMaterialData,
-			neNormals[0], neNormals[2], neNormals[1], neTerrainData,
-			sceneId, zoneId, (short)0
+			neNormals[0], neNormals[2], neNormals[1], neTerrainData
 		);
 
 		vb.putVertex(
 			lx3, nwHeight, lz3, nwColor,
 			uvx - uvcos, uvy - uvsin, 0, nwMaterialData,
-			nwNormals[0], nwNormals[2], nwNormals[1], nwTerrainData,
-			sceneId, zoneId, (short)0
+			nwNormals[0], nwNormals[2], nwNormals[1], nwTerrainData
 		);
 
 		vb.putVertex(
 			lx1, seHeight, lz1, seColor,
 			uvx + uvsin, uvy - uvcos, 0, seMaterialData,
-			seNormals[0], seNormals[2], seNormals[1], seTerrainData,
-			sceneId, zoneId, (short)0
+			seNormals[0], seNormals[2], seNormals[1], seTerrainData
 		);
 
 		vb.putVertex(
 			lx0, swHeight, lz0, swColor,
 			uvx - uvcos + uvsin, uvy - uvsin - uvcos, 0, swMaterialData,
-			swNormals[0], swNormals[2], swNormals[1], swTerrainData,
-			sceneId, zoneId, (short)0
+			swNormals[0], swNormals[2], swNormals[1], swTerrainData
 		);
 
 		vb.putVertex(
 			lx1, seHeight, lz1, seColor,
 			uvx + uvsin, uvy - uvcos, 0, seMaterialData,
-			seNormals[0], seNormals[2], seNormals[1], seTerrainData,
-			sceneId, zoneId, (short)0
+			seNormals[0], seNormals[2], seNormals[1], seTerrainData
 		);
 
 		vb.putVertex(
 			lx3, nwHeight, lz3, nwColor,
 			uvx - uvcos, uvy - uvsin, 0, nwMaterialData,
-			nwNormals[0], nwNormals[2], nwNormals[1], nwTerrainData,
-			sceneId, zoneId, (short)0
+			nwNormals[0], nwNormals[2], nwNormals[1], nwTerrainData
 		);
 	}
 
@@ -852,7 +844,6 @@ class SceneUploader {
 		Tile tile,
 		SceneTileModel model,
 		boolean onlyWaterSurface,
-		byte sceneId, short zoneId,
 		int tileExX, int tileExY, int tileZ,
 		int basex, int basez,
 		GpuIntBuffer vb
@@ -1100,22 +1091,19 @@ class SceneUploader {
 			vb.putVertex(
 				lx0, ly0, lz0, colorA,
 				uvAx, uvAy, 0, materialDataA,
-				normalsA[0], normalsA[2], normalsA[1], terrainDataA,
-				sceneId, zoneId, (short)0
+				normalsA[0], normalsA[2], normalsA[1], terrainDataA
 			);
 
 			vb.putVertex(
 				lx1, ly1, lz1, colorB,
 				uvBx, uvBy, 0, materialDataB,
-				normalsB[0], normalsB[2], normalsB[1], terrainDataB,
-				sceneId, zoneId, (short)0
+				normalsB[0], normalsB[2], normalsB[1], terrainDataB
 			);
 
 			vb.putVertex(
 				lx2, ly2, lz2, colorC,
 				uvCx, uvCy, 0, materialDataC,
-				normalsC[0], normalsC[2], normalsC[1], terrainDataC,
-				sceneId, zoneId, (short)0
+				normalsC[0], normalsC[2], normalsC[1], terrainDataC
 			);
 		}
 	}
@@ -1124,7 +1112,6 @@ class SceneUploader {
 	private int uploadStaticModel(
 		Model model,
 		ModelOverride modelOverride,
-		byte sceneId, short zoneId, short modelId,
 		int preOrientation, int orientation, int x, int y, int z, GpuIntBuffer vertexBuffer, GpuIntBuffer ab
 	) {
 		final int vertexCount = model.getVerticesCount();
@@ -1324,22 +1311,19 @@ class SceneUploader {
 			vb.putVertex(
 				vx1, vy1, vz1, alphaBias | color1,
 				modelUvs[0], modelUvs[1], modelUvs[2], materialData,
-				modelNormals[0], modelNormals[1], modelNormals[2], 0,
-				sceneId, zoneId, modelId
+				modelNormals[0], modelNormals[1], modelNormals[2], 0
 			);
 
 			vb.putVertex(
 				vx2, vy2, vz2, alphaBias | color2,
 				modelUvs[4], modelUvs[5], modelUvs[6], materialData,
-				modelNormals[3], modelNormals[4], modelNormals[5], 0,
-				sceneId, zoneId, modelId
+				modelNormals[3], modelNormals[4], modelNormals[5], 0
 			);
 
 			vb.putVertex(
 				vx3, vy3, vz3, alphaBias | color3,
 				modelUvs[8], modelUvs[9], modelUvs[10], materialData,
-				modelNormals[6], modelNormals[7], modelNormals[8], 0,
-				sceneId, zoneId, modelId
+				modelNormals[6], modelNormals[7], modelNormals[8], 0
 			);
 
 			len += 3;
@@ -1562,24 +1546,21 @@ class SceneUploader {
 				opaqueBuffer,
 				vx1, vy1, vz1, alphaBias | color1,
 				modelUvs[0], modelUvs[1], modelUvs[2], materialData,
-				modelNormals[0], modelNormals[1], modelNormals[2], 0,
-				(byte)-1, (short)-1, (short)-1
+				modelNormals[0], modelNormals[1], modelNormals[2], 0
 			);
 
 			GpuIntBuffer.putFloatVertex(
 				opaqueBuffer,
 				vx2, vy2, vz2, alphaBias | color2,
 				modelUvs[4], modelUvs[5], modelUvs[6], materialData,
-				modelNormals[3], modelNormals[4], modelNormals[5], 0,
-				(byte)-1, (short)-1, (short)-1
+				modelNormals[3], modelNormals[4], modelNormals[5], 0
 			);
 
 			GpuIntBuffer.putFloatVertex(
 				opaqueBuffer,
 				vx3, vy3, vz3, alphaBias | color3,
 				modelUvs[8], modelUvs[9], modelUvs[10], materialData,
-				modelNormals[6], modelNormals[7], modelNormals[8], 0,
-				(byte)-1, (short)-1, (short)-1
+				modelNormals[6], modelNormals[7], modelNormals[8], 0
 			);
 
 			len += 3;

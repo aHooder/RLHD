@@ -42,7 +42,7 @@ flat in vec3 gPosition[3];
 flat in vec3 gUv[3];
 flat in int gMaterialData[3];
 flat in int gCastShadow[3];
-flat in uint gPackedWorldZoneModelId[3];
+flat in int gWorldViewId[3];
 
 out vec3 fUvw;
 flat out int fMaterialData;
@@ -62,7 +62,7 @@ void main() {
     // MacOS doesn't allow assigning these arrays directly.
     // One of the many wonders of Apple software...
     vec3 uvw[3] = vec3[](gUv[0], gUv[1], gUv[2]);
-    int worldViewIndex = getWorldViewId(gPackedWorldZoneModelId[0]);
+    int worldViewIndex = gWorldViewId[0];
 #if ZONE_RENDERER
     computeUvs(materialData, worldViewIndex, vec3[](gPosition[0], gPosition[1], gPosition[2]), uvw);
 #else
