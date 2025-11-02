@@ -582,6 +582,8 @@ class Zone {
 				distanceToFaces[fz][distanceFaceCount[fz]++] = bufferIdx++;
 			}
 
+			ZoneRenderer.eboAlphaStaging.ensureCapacity(bufferIdx * 3);
+
 			byte[] faceRenderPriorities = m.renderPriorities;
 			final int start = m.startpos / (VERT_SIZE >> 2); // ints to verts
 			if (faceRenderPriorities == null) {
@@ -590,7 +592,6 @@ class Zone {
 					if (cnt > 0) {
 						final char[] faces = distanceToFaces[i];
 
-						ZoneRenderer.eboAlphaStaging.ensureCapacity(cnt * 3);
 						ZoneRenderer.alphaFaceCount += cnt;
 						for (int faceIdx = 0; faceIdx < cnt; ++faceIdx) {
 							final int face = faces[faceIdx];
@@ -625,7 +626,6 @@ class Zone {
 					final int priNum = numOfPriority[pri];
 					final int[] priFaces = orderedFaces[pri];
 
-					ZoneRenderer.eboAlphaStaging.ensureCapacity(priNum * 3);
 					ZoneRenderer.alphaFaceCount += priNum;
 					for (int faceIdx = 0; faceIdx < priNum; ++faceIdx) {
 						final int face = priFaces[faceIdx];
