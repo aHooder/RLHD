@@ -102,11 +102,8 @@ class VAO {
 		int start = 0;
 		for (int i = 0; i < off; ++i) {
 			int end = lengths[i];
-			Scene scene = scenes[i];
-
 			int count = end - start;
 
-			cmd.SetWorldViewIndex(renderer.uboWorldViews.getIndex(scene));
 			if(GL_CAPS.OpenGL43) {
 				cmd.DrawArraysIndirect(GL_TRIANGLES, start / (VERT_SIZE / 4), count / (VAO.VERT_SIZE / 4), ZoneRenderer.indirectDrawCmdsStaging);
 			} else {

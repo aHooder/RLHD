@@ -118,6 +118,11 @@ class Zone {
 			vboA = null;
 		}
 
+		if(vboM != null) {
+			vboM.destroy();
+			vboM = null;
+		}
+
 		if (glVao != 0) {
 			glDeleteVertexArrays(glVao);
 			glVao = 0;

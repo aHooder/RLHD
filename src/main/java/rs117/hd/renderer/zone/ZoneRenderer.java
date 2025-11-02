@@ -52,7 +52,6 @@ import rs117.hd.opengl.shader.SceneShaderProgram;
 import rs117.hd.opengl.shader.ShaderException;
 import rs117.hd.opengl.shader.ShaderIncludes;
 import rs117.hd.opengl.shader.ShadowShaderProgram;
-import rs117.hd.opengl.uniforms.UBOCommandBuffer;
 import rs117.hd.opengl.uniforms.UBOLights;
 import rs117.hd.opengl.uniforms.UBOWorldViews;
 import rs117.hd.overlays.FrameTimer;
@@ -162,8 +161,10 @@ public class ZoneRenderer implements Renderer {
 	private int minLevel, level, maxLevel;
 	private Set<Integer> hideRoofIds;
 
-	private final CommandBuffer sceneCmd = new CommandBuffer();
-	private final CommandBuffer directionalCmd = new CommandBuffer();
+	private final RenderState renderState = new RenderState();
+	private final CommandBuffer sceneCmd = new CommandBuffer(renderState);
+	private final CommandBuffer directionalCmd = new CommandBuffer(renderState);
+
 
 	VAO.VAOList vaoO;
 	VAO.VAOList vaoA;
@@ -224,8 +225,6 @@ public class ZoneRenderer implements Renderer {
 	private boolean sceneFboValid;
 	private boolean deferScenePass;
 
-	private final RenderState renderState = new RenderState();
-	private final UBOCommandBuffer uboCommandBuffer = new UBOCommandBuffer();
 	public final UBOWorldViews uboWorldViews = new UBOWorldViews(MAX_WORLDVIEWS);
 
 	private final WorldViewContext root = new WorldViewContext(null, NUM_ZONES, NUM_ZONES);
@@ -256,13 +255,7 @@ public class ZoneRenderer implements Renderer {
 	public void initialize() {
 		initializeBuffers();
 
-		uboCommandBuffer.initialize(UNIFORM_BLOCK_COMMAND_BUFFER);
 		uboWorldViews.initialize(UNIFORM_BLOCK_WORLD_VIEWS);
-
-		sceneCmd.setUboCommandBuffer(uboCommandBuffer);
-		sceneCmd.setRenderState(renderState);
-		directionalCmd.setUboCommandBuffer(uboCommandBuffer);
-		directionalCmd.setRenderState(renderState);
 	}
 
 	@Override
@@ -276,7 +269,6 @@ public class ZoneRenderer implements Renderer {
 		}
 
 		destroyBuffers();
-		uboCommandBuffer.destroy();
 		uboWorldViews.destroy();
 
 		nextZones = null;
@@ -296,8 +288,7 @@ public class ZoneRenderer implements Renderer {
 		includes
 			.define("MAX_SIMULTANEOUS_WORLD_VIEWS", UBOWorldViews.MAX_SIMULTANEOUS_WORLD_VIEWS)
 			.addInclude("WORLD_VIEW_GETTER", () -> plugin.generateGetter("WorldView", MAX_WORLDVIEWS))
-			.addUniformBuffer(uboWorldViews)
-			.addUniformBuffer(uboCommandBuffer);
+			.addUniformBuffer(uboWorldViews);
 	}
 
 	@Override
@@ -361,9 +352,6 @@ public class ZoneRenderer implements Renderer {
 		this.level = level;
 		this.maxLevel = maxLevel;
 		this.hideRoofIds = hideRoofIds;
-
-		sceneCmd.SetWorldViewIndex(uboWorldViews.getIndex(scene));
-		directionalCmd.SetWorldViewIndex(uboWorldViews.getIndex(scene));
 
 		if (scene.getWorldViewId() == WorldView.TOPLEVEL) {
 			preSceneDrawTopLevel(scene, cameraX, cameraY, cameraZ, cameraPitch, cameraYaw);
@@ -776,9 +764,6 @@ public class ZoneRenderer implements Renderer {
 		directionalCmd.reset();
 		renderState.reset();
 
-		sceneCmd.SetWorldViewIndex(uboWorldViews.getIndex(null));
-		directionalCmd.SetWorldViewIndex(uboWorldViews.getIndex(null));
-
 		checkGLErrors();
 	}
 
@@ -786,9 +771,6 @@ public class ZoneRenderer implements Renderer {
 	public void postSceneDraw(Scene scene) {
 		if (scene.getWorldViewId() == WorldView.TOPLEVEL) {
 			postDrawTopLevel();
-		} else {
-			sceneCmd.SetWorldViewIndex(uboWorldViews.getIndex(null));
-			directionalCmd.SetWorldViewIndex(uboWorldViews.getIndex(null));
 		}
 	}
 

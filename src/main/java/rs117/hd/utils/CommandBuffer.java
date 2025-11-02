@@ -2,11 +2,9 @@ package rs117.hd.utils;
 
 import java.nio.IntBuffer;
 import java.util.Arrays;
-import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.lwjgl.system.MemoryStack;
 import rs117.hd.opengl.shader.ShaderProgram;
-import rs117.hd.opengl.uniforms.UBOCommandBuffer;
 import rs117.hd.utils.buffer.GpuIntBuffer;
 
 import static org.lwjgl.opengl.GL33C.*;
@@ -33,40 +31,26 @@ public class CommandBuffer {
 	private static final int GL_COLOR_MASK_TYPE = 10;
 	private static final int GL_USE_PROGRAM = 11;
 
-	private static final int UNIFORM_BASE_OFFSET = 12;
-	private static final int UNIFORM_WORLD_VIEW_ID = 13;
-
-	private static final int GL_TOGGLE_TYPE = 14; // Combined glEnable & glDisable
+	private static final int GL_TOGGLE_TYPE = 12; // Combined glEnable & glDisable
 
 	private static final long INT_MASK = 0xFFFF_FFFFL;
 	private static final int DRAW_MODE_MASK = 0xF;
 
-	private Object[] objects = new Object[10];
+	private final Object[] objects = new Object[10];
 	private int objectCount = 0;
 
-	@Setter
-	private UBOCommandBuffer uboCommandBuffer;
-
-	@Setter
-	private RenderState renderState;
+	private final RenderState renderState;
 
 	private long[] cmd = new long[1 << 20]; // ~1 million calls
 	private int writeHead = 0;
 
+	public CommandBuffer(RenderState renderState) {
+		this.renderState = renderState;
+	}
+
 	private void ensureCapacity(int numLongs) {
 		if (writeHead + numLongs >= cmd.length)
 			cmd = Arrays.copyOf(cmd, cmd.length * 2);
-	}
-
-	public void SetBaseOffset(int x, int y, int z) {
-		ensureCapacity(2);
-		cmd[writeHead++] = UNIFORM_BASE_OFFSET & 0xFF | (long) x << 32;
-		cmd[writeHead++] = (long) y << 32 | z & INT_MASK;
-	}
-
-	public void SetWorldViewIndex(int index) {
-		ensureCapacity(1);
-		cmd[writeHead++] = UNIFORM_WORLD_VIEW_ID & 0xFF | (long) index << 8;
 	}
 
 	public void BindVertexArray(int vao) {
@@ -209,28 +193,10 @@ public class CommandBuffer {
 				int type = (int) data & 0xFF;
 
 				if(type < GL_DRAW_CALL_TYPE_COUNT) {
-					if (uboCommandBuffer != null && uboCommandBuffer.isDirty())
-						uboCommandBuffer.upload(renderState);
-
 					renderState.apply();
 				}
 
 				switch (type) {
-					case UNIFORM_BASE_OFFSET: {
-						long packed = cmd[readHead++];
-						int x = (int) (data >> 32);
-						int y = (int) (packed >> 32);
-						int z = (int) packed;
-						if (uboCommandBuffer != null)
-							uboCommandBuffer.sceneBase.set(x, y, z);
-						break;
-					}
-					case UNIFORM_WORLD_VIEW_ID: {
-						int id = (int) (data >> 8);
-						if (uboCommandBuffer != null)
-							uboCommandBuffer.worldViewIndex.set(id);
-						break;
-					}
 					case GL_DEPTH_MASK_TYPE: {
 						int state = (int) (data >> 8) & 1;
 						if (SKIP_DEPTH_MASKING)
