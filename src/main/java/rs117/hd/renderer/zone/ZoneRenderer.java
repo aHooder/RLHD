@@ -165,11 +165,10 @@ public class ZoneRenderer implements Renderer {
 	private final CommandBuffer sceneCmd = new CommandBuffer(renderState);
 	private final CommandBuffer directionalCmd = new CommandBuffer(renderState);
 
-
-	VAO.VAOList vaoO;
-	VAO.VAOList vaoA;
-	VAO.VAOList vaoPO;
-	VAO.VAOList vaoPOShadow;
+	private VAO.VAOList vaoO;
+	private VAO.VAOList vaoA;
+	private VAO.VAOList vaoPO;
+	private VAO.VAOList vaoPOShadow;
 
 	public static int indirectDrawCmds;
 	public static GpuIntBuffer indirectDrawCmdsStaging;

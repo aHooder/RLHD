@@ -101,7 +101,7 @@ class Zone {
 		int baseZ = (mz - (ctx.sceneOffset >> 3)) << 10;
 
 		vboM.map();
-		vboM.vb.put(worldViewIdx);
+		vboM.vb.put(worldViewIdx + 1);
 		vboM.vb.put(baseX);
 		vboM.vb.put(baseZ);
 		vboM.unmap();
