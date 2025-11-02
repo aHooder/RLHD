@@ -91,7 +91,7 @@ void main() {
     bool isTerrain = (vTerrainData[0] & 1) != 0; // 1 = 0b1
     if (!isTerrain) {
         for (int i = 0; i < 3; i++) {
-            if ((int(vAlphaBiasHsl[i]) >> 20 & 1) == 0) {
+            if ((int(vAlphaBiasHsl[i]) >> 23 & 1) == 0) {
                 vec3 normal;
                 #if FLAT_SHADING
                     normal = N;
@@ -121,7 +121,7 @@ void main() {
 
         pos = projectionMatrix * pos;
         #if ZONE_RENDERER
-            int depthBias = (gAlphaBiasHsl[i] >> 16) & 0xff;
+            int depthBias = (gAlphaBiasHsl[i] >> 16) & 0x7f;
             pos.z += depthBias / 128.0;
         #endif
         gl_Position = pos;

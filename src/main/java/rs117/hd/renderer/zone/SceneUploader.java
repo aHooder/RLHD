@@ -1305,7 +1305,7 @@ class SceneUploader {
 
 			int packedAlphaBiasHsl = 0;
 			packedAlphaBiasHsl |= transparencies != null ? (transparencies[face] & 0xff) << 24 : 0;
-			packedAlphaBiasHsl |= bias != null ? (bias[face] & 0xff) << 16 : 0;
+			packedAlphaBiasHsl |= bias != null ? (bias[face] & 0x7f) << 16 : 0;
 
 			boolean isTextured = faceTextures != null && faceTextures[face] != -1;
 			if (isTextured) {
@@ -1317,7 +1317,7 @@ class SceneUploader {
 
 			if (isTextured || !modelOverride.undoVanillaShading) {
 				// Let the shader know vanilla shading reversal should be skipped for this face
-				packedAlphaBiasHsl |= 1 << 20;
+				packedAlphaBiasHsl |= 1 << 23;
 			}
 
 			GpuIntBuffer vb = alpha ? ab : vertexBuffer;
