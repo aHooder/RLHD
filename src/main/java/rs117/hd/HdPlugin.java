@@ -1177,7 +1177,7 @@ public class HdPlugin extends Plugin {
 		// Create depth render buffer
 		rboSceneDepth = glGenRenderbuffers();
 		glBindRenderbuffer(GL_RENDERBUFFER, rboSceneDepth);
-		glRenderbufferStorageMultisample(GL_RENDERBUFFER, msaaSamples, GL_DEPTH24_STENCIL8, sceneResolution[0], sceneResolution[1]);
+		glRenderbufferStorageMultisample(GL_RENDERBUFFER, msaaSamples, GL_DEPTH_COMPONENT32F, sceneResolution[0], sceneResolution[1]);
 		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rboSceneDepth);
 		checkGLErrors();
 
