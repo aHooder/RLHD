@@ -501,7 +501,7 @@ public class ZoneRenderer implements Renderer {
 				sceneCamera.getInvViewProjMatrix(plugin.invViewProjMatrix);
 				sceneCamera.getFrustumPlanes(plugin.cameraFrustum);
 
-				if(sceneCamera.isDirty()) {
+				if (sceneCamera.isDirty()) {
 					int shadowDrawDistance = config.shadowDistance().getValue() * LOCAL_TILE_SIZE;
 					directionalCamera.setPitch(environmentManager.currentSunAngles[0]);
 					directionalCamera.setYaw(PI - environmentManager.currentSunAngles[1]);
@@ -516,16 +516,15 @@ public class ZoneRenderer implements Renderer {
 					sceneCamera.setFarPlane(0.0f); // Reset so Scene can use Infinite Plane instead
 
 					final float[] sceneCenter = new float[3];
-					for (float[] corner : sceneFrustumCorners) {
+					for (float[] corner : sceneFrustumCorners)
 						add(sceneCenter, sceneCenter, corner);
-					}
 					divide(sceneCenter, sceneCenter, (float) sceneFrustumCorners.length);
 
 					float minX = Float.POSITIVE_INFINITY, maxX = Float.NEGATIVE_INFINITY;
 					float minZ = Float.POSITIVE_INFINITY, maxZ = Float.NEGATIVE_INFINITY;
 					float radius = 0f;
 					for (float[] corner : sceneFrustumCorners) {
-						radius = Math.max(radius, distance(sceneCenter, corner));
+						radius = max(radius, distance(sceneCenter, corner));
 
 						directionalCamera.transformPoint(corner, corner);
 
@@ -535,7 +534,7 @@ public class ZoneRenderer implements Renderer {
 						minZ = min(minZ, corner[2]);
 						maxZ = max(maxZ, corner[2]);
 					}
-					int directionalSize = (int)max(abs(maxX - minX), abs(maxZ - minZ));
+					int directionalSize = (int) max(abs(maxX - minX), abs(maxZ - minZ));
 
 					directionalCamera.setPosition(sceneCenter);
 					directionalCamera.setNearPlane(radius * 2.0f);

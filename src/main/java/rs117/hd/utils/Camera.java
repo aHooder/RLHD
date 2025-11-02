@@ -1,6 +1,7 @@
 package rs117.hd.utils;
 
 import java.util.Arrays;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 import static rs117.hd.utils.MathUtils.*;
@@ -32,11 +33,16 @@ public class Camera {
 
 	private int dirtyFlags = PROJ_CHANGED | VIEW_CHANGED;
 
+	@Getter
 	private int viewportWidth = 10;
+	@Getter
 	private int viewportHeight = 10;
 
+	@Getter
 	private float zoom = 1.0f;
+	@Getter
 	private float nearPlane = 0.5f;
+	@Getter
 	private float farPlane = 0.0f;
 	private boolean isOrthographic = false;
 
@@ -66,10 +72,6 @@ public class Camera {
 		return this;
 	}
 
-	public float getViewportWidth() {
-		return viewportWidth;
-	}
-
 	public Camera setViewportHeight(int newViewportHeight) {
 		if (viewportHeight != newViewportHeight) {
 			viewportHeight = newViewportHeight;
@@ -78,15 +80,8 @@ public class Camera {
 		return this;
 	}
 
-	public float getViewportHeight() {
-		return viewportHeight;
-	}
-
 	public float getAspectRatio() {
-		if (viewportHeight == 0) {
-			return 1.0f;
-		}
-		return (float) viewportWidth / (float) viewportHeight;
+		return viewportHeight == 0 ? 1 : (float) viewportWidth / viewportHeight;
 	}
 
 	public Camera setNearPlane(float newNearPlane) {
@@ -97,10 +92,6 @@ public class Camera {
 		return this;
 	}
 
-	public float getNearPlane() {
-		return nearPlane;
-	}
-
 	public Camera setFarPlane(float newFarPlane) {
 		if (farPlane != newFarPlane) {
 			farPlane = newFarPlane;
@@ -109,20 +100,12 @@ public class Camera {
 		return this;
 	}
 
-	public float getFarPlane() {
-		return farPlane;
-	}
-
 	public Camera setZoom(float newZoom) {
 		if (zoom != newZoom) {
 			zoom = newZoom;
 			dirtyFlags |= PROJ_CHANGED;
 		}
 		return this;
-	}
-
-	public float getZoom() {
-		return zoom;
 	}
 
 	public float getPositionX() {
@@ -403,7 +386,9 @@ public class Camera {
 		return frustumCorners;
 	}
 
-	public float[][] getFrustumCorners() { return getFrustumCorners(new float[8][3]); }
+	public float[][] getFrustumCorners() {
+		return getFrustumCorners(new float[8][3]);
+	}
 
 	public boolean intersectsAABB(int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
 		calculateFrustumPlanes();
