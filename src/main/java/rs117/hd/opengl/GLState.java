@@ -10,7 +10,11 @@ public abstract class GLState<T> {
 	public T owner;
 	protected boolean hasValue;
 	protected boolean hasApplied;
-	public void reset() { hasValue = hasApplied = false; }
+
+	public void reset() {
+		hasValue = hasApplied = false;
+	}
+
 	public void apply() {
 		if (hasValue) {
 			internalApply();
@@ -18,6 +22,7 @@ public abstract class GLState<T> {
 			hasApplied = true;
 		}
 	}
+
 	abstract void internalApply();
 
 	public abstract static class SingleState<T, K> extends GLState<T> {

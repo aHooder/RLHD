@@ -92,9 +92,8 @@ class Zone {
 	}
 
 	void setMetadata(int worldViewIdx, ZoneSceneContext ctx, int mx, int mz) {
-		if(!metadataDirty) {
+		if (!metadataDirty)
 			return;
-		}
 		metadataDirty = false;
 
 		int baseX = (mx - (ctx.sceneOffset >> 3)) << 10;
@@ -118,7 +117,7 @@ class Zone {
 			vboA = null;
 		}
 
-		if(vboM != null) {
+		if (vboM != null) {
 			vboM.destroy();
 			vboM = null;
 		}
@@ -652,8 +651,8 @@ class Zone {
 				long byteOffset = 4L * (ZoneRenderer.eboAlphaStaging.position() - vertexCount);
 				cmd.BindVertexArray(lastVao);
 				// The EBO & IDO is bound by in ZoneRenderer
-				if(GL_CAPS.OpenGL43) {
-					cmd.DrawElementsIndirect(GL_TRIANGLES, vertexCount, (int)(byteOffset / 4L), ZoneRenderer.indirectDrawCmdsStaging);
+				if (GL_CAPS.OpenGL43) {
+					cmd.DrawElementsIndirect(GL_TRIANGLES, vertexCount, (int) (byteOffset / 4L), ZoneRenderer.indirectDrawCmdsStaging);
 				} else {
 					cmd.DrawElements(GL_TRIANGLES, vertexCount, byteOffset);
 				}
@@ -662,14 +661,14 @@ class Zone {
 		} else if (drawIdx != 0) {
 			convertForDraw(lastDrawMode == STATIC_UNSORTED ? VERT_SIZE : VAO.VERT_SIZE);
 			cmd.BindVertexArray(lastVao);
-			if(glDrawOffset.length == 1) {
-				if(GL_CAPS.OpenGL43) {
+			if (glDrawOffset.length == 1) {
+				if (GL_CAPS.OpenGL43) {
 					cmd.DrawArraysIndirect(GL_TRIANGLES, glDrawOffset[0], glDrawLength[0], ZoneRenderer.indirectDrawCmdsStaging);
 				} else {
 					cmd.DrawArrays(GL_TRIANGLES, glDrawOffset[0], glDrawLength[0]);
 				}
 			} else {
-				if(GL_CAPS.OpenGL43) {
+				if (GL_CAPS.OpenGL43) {
 					cmd.MultiDrawArraysIndirect(GL_TRIANGLES, glDrawOffset, glDrawLength, ZoneRenderer.indirectDrawCmdsStaging);
 				} else {
 					cmd.MultiDrawArrays(GL_TRIANGLES, glDrawOffset, glDrawLength);

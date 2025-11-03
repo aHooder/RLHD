@@ -63,11 +63,7 @@ void main() {
     // One of the many wonders of Apple software...
     vec3 uvw[3] = vec3[](gUv[0], gUv[1], gUv[2]);
     int worldViewIndex = gWorldViewId[0];
-#if ZONE_RENDERER
     computeUvs(materialData, worldViewIndex, vec3[](gPosition[0], gPosition[1], gPosition[2]), uvw);
-#else
-    computeUvs(materialData, vec3[](gPosition[0], gPosition[1], gPosition[2]), uvw);
-#endif
 
     fMaterialData = materialData;
 

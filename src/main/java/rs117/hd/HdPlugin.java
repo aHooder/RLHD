@@ -286,8 +286,8 @@ public class HdPlugin extends Plugin {
 	public static boolean SKIP_GL_ERROR_CHECKS;
 	public static GLCapabilities GL_CAPS;
 	public static boolean AMD_GPU;
-	public static boolean IS_APPLE;
-	public static boolean IS_APPLE_M1;
+	public static boolean APPLE;
+	public static boolean APPLE_ARM;
 
 	public Canvas canvas;
 	public AWTContext awtContext;
@@ -467,8 +467,8 @@ public class HdPlugin extends Plugin {
 				useLowMemoryMode = config.lowMemoryMode();
 				BUFFER_GROWTH_MULTIPLIER = useLowMemoryMode ? 1.333f : 2;
 
-				IS_APPLE = OSType.getOSType() == OSType.MacOS;
-				IS_APPLE_M1 = IS_APPLE && System.getProperty("os.arch").equals("aarch64");
+				APPLE = OSType.getOSType() == OSType.MacOS;
+				APPLE_ARM = APPLE && System.getProperty("os.arch").equals("aarch64");
 
 				String glRenderer = Objects.requireNonNullElse(glGetString(GL_RENDERER), "Unknown");
 				String glVendor = Objects.requireNonNullElse(glGetString(GL_VENDOR), "Unknown");
@@ -739,7 +739,7 @@ public class HdPlugin extends Plugin {
 	public String generateGetter(String type, int arrayLength) {
 		StringBuilder include = new StringBuilder();
 
-		if (config.macosIntelWorkaround() && !IS_APPLE_M1) {
+		if (config.macosIntelWorkaround() && !APPLE_ARM) {
 			// Workaround wrapper for drivers that do not support dynamic indexing,
 			// particularly Intel drivers on macOS
 			include

@@ -35,15 +35,15 @@ public class ShadowShaderProgram extends ShaderProgram {
 		}
 	}
 
-	public static class FastShadowShaderProgram extends ShadowShaderProgram {
-		public FastShadowShaderProgram() {
+	public static class Fast extends ShadowShaderProgram {
+		public Fast() {
 			super();
 			setMode(ShadowMode.FAST);
 		}
 	}
 
-	public static class DetailedShadowShaderProgram extends ShadowShaderProgram {
-		public DetailedShadowShaderProgram() {
+	public static class Detailed extends ShadowShaderProgram {
+		public Detailed() {
 			super();
 			setMode(ShadowMode.DETAILED);
 		}

@@ -82,9 +82,9 @@ import static net.runelite.api.Constants.SCENE_SIZE;
 import static net.runelite.api.Perspective.*;
 import static org.lwjgl.opengl.GL33C.*;
 import static org.lwjgl.opengl.GL40.GL_DRAW_INDIRECT_BUFFER;
+import static rs117.hd.HdPlugin.APPLE;
 import static rs117.hd.HdPlugin.COLOR_FILTER_FADE_DURATION;
 import static rs117.hd.HdPlugin.GL_CAPS;
-import static rs117.hd.HdPlugin.IS_APPLE;
 import static rs117.hd.HdPlugin.NEAR_PLANE;
 import static rs117.hd.HdPlugin.checkGLErrors;
 import static rs117.hd.utils.Mat4.clipFrustumToDistance;
@@ -154,10 +154,10 @@ public class ZoneRenderer implements Renderer {
 	private SceneShaderProgram sceneProgram;
 
 	@Inject
-	private ShadowShaderProgram.FastShadowShaderProgram fastShadowProgram;
+	private ShadowShaderProgram.Fast fastShadowProgram;
 
 	@Inject
-	private ShadowShaderProgram.DetailedShadowShaderProgram detailedShadowProgram;
+	private ShadowShaderProgram.Detailed detailedShadowProgram;
 
 	private final Camera sceneCamera = new Camera();
 	private final Camera directionalCamera = new Camera().setOrthographic(true);
@@ -314,7 +314,7 @@ public class ZoneRenderer implements Renderer {
 
 		indirectDrawCmds = glGenBuffers();
 		indirectDrawCmdsStaging = new GpuIntBuffer();
-		
+
 		vaoO = new VAO.VAOList(eboAlpha);
 		vaoA = new VAO.VAOList(eboAlpha);
 		vaoPO = new VAO.VAOList(eboAlpha);
@@ -624,7 +624,7 @@ public class ZoneRenderer implements Renderer {
 				frameTimer.begin(Timer.DRAW_TILED_LIGHTING);
 				frameTimer.begin(Timer.RENDER_TILED_LIGHTING);
 
-				renderState.frameBuffer.set(GL_FRAMEBUFFER, plugin.fboTiledLighting);
+				renderState.framebuffer.set(GL_FRAMEBUFFER, plugin.fboTiledLighting);
 				renderState.viewport.set(0, 0, plugin.tiledLightingResolution[0], plugin.tiledLightingResolution[1]);
 				renderState.vao.set(plugin.vaoTri);
 
@@ -638,7 +638,7 @@ public class ZoneRenderer implements Renderer {
 					int layerCount = plugin.configDynamicLights.getTiledLightingLayers();
 					for (int layer = 0; layer < layerCount; layer++) {
 						renderState.program.set(plugin.tiledLightingShaderPrograms.get(layer));
-						renderState.frameBufferTextureLayer.set(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, plugin.texTiledLighting, 0, layer);
+						renderState.framebufferTextureLayer.set(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, plugin.texTiledLighting, 0, layer);
 						renderState.apply();
 						glDrawArrays(GL_TRIANGLES, 0, 3);
 					}
@@ -772,9 +772,8 @@ public class ZoneRenderer implements Renderer {
 
 	@Override
 	public void postSceneDraw(Scene scene) {
-		if (scene.getWorldViewId() == WorldView.TOPLEVEL) {
+		if (scene.getWorldViewId() == WorldView.TOPLEVEL)
 			postDrawTopLevel();
-		}
 	}
 
 	private void postDrawTopLevel() {
@@ -792,21 +791,20 @@ public class ZoneRenderer implements Renderer {
 			glBufferData(GL_ELEMENT_ARRAY_BUFFER, eboAlphaStaging.getBuffer(), GL_STREAM_DRAW);
 		}
 
-		if(indirectDrawCmdsStaging.position() > 0) {
+		if (indirectDrawCmdsStaging.position() > 0) {
 			indirectDrawCmdsStaging.flip();
 			glBindBuffer(GL_DRAW_INDIRECT_BUFFER, indirectDrawCmds);
 			glBufferData(GL_DRAW_INDIRECT_BUFFER, indirectDrawCmdsStaging.getBuffer(), GL_STREAM_DRAW);
 		}
 
-		if(GL_CAPS.OpenGL43) {
+		if (GL_CAPS.OpenGL43) // TODO: Specify why & gate it behind some other check, since it really supports OpenGL 4.2. Possibly even allow extensions.
 			GL43C.glMemoryBarrier(GL43C.GL_SHADER_STORAGE_BARRIER_BIT);
-		}
 
 		directionalShadowPass();
 		frameTimer.end(Timer.DRAW_SCENE);
 		frameTimer.begin(Timer.RENDER_FRAME);
 
-		if(!IS_APPLE) {
+		if (!APPLE) {
 			scenePass();
 		} else {
 			deferScenePass = true;
@@ -835,7 +833,7 @@ public class ZoneRenderer implements Renderer {
 			frameTimer.begin(Timer.RENDER_SHADOWS);
 
 			// Render to the shadow depth map
-			renderState.frameBuffer.set(GL_FRAMEBUFFER, plugin.fboShadowMap);
+			renderState.framebuffer.set(GL_FRAMEBUFFER, plugin.fboShadowMap);
 			renderState.viewport.set(0, 0, plugin.shadowMapResolution, plugin.shadowMapResolution);
 			renderState.apply();
 
@@ -860,7 +858,7 @@ public class ZoneRenderer implements Renderer {
 		sceneProgram.use();
 
 		frameTimer.begin(Timer.DRAW_SCENE);
-		renderState.frameBuffer.set(GL_DRAW_FRAMEBUFFER, plugin.fboScene);
+		renderState.framebuffer.set(GL_DRAW_FRAMEBUFFER, plugin.fboScene);
 		if (plugin.msaaSamples > 1) {
 			renderState.enable.set(GL_MULTISAMPLE);
 		} else {
@@ -926,7 +924,7 @@ public class ZoneRenderer implements Renderer {
 		if (zone.inSceneFrustum)
 			return zone.inShadowFrustum = true;
 
-		if(plugin.configShadowsEnabled && plugin.configExpandShadowDraw)
+		if (plugin.configShadowsEnabled && plugin.configExpandShadowDraw)
 			return zone.inShadowFrustum = directionalCamera.intersectsAABB(minX, minY, minZ, maxX, maxY, maxZ);
 
 		return false;
@@ -942,9 +940,8 @@ public class ZoneRenderer implements Renderer {
 		if (!z.initialized || z.sizeO == 0)
 			return;
 
-		if (ctx != root || z.inSceneFrustum) {
+		if (ctx != root || z.inSceneFrustum)
 			z.renderOpaque(sceneCmd, minLevel, level, maxLevel, hideRoofIds);
-		}
 
 		if (ctx != root || z.inShadowFrustum) {
 			directionalCmd.SetShader(fastShadowProgram);
@@ -1034,25 +1031,25 @@ public class ZoneRenderer implements Renderer {
 
 					// Draw opaque
 					vaoO.unmap();
-					vaoO.drawAll(this, sceneCmd);
-					vaoO.drawAll(this, directionalCmd);
+					vaoO.drawAll(sceneCmd);
+					vaoO.drawAll(directionalCmd);
 					vaoO.resetAll();
 
 					vaoPO.unmap();
 
 					// Draw player shadows
 					vaoPOShadow.unmap();
-					vaoPOShadow.drawAll(this, directionalCmd);
+					vaoPOShadow.drawAll(directionalCmd);
 					vaoPOShadow.resetAll();
 
 					// Draw players opaque, without depth writes
 					sceneCmd.DepthMask(false);
-					vaoPO.drawAll(this, sceneCmd);
+					vaoPO.drawAll(sceneCmd);
 					sceneCmd.DepthMask(true);
 
 					// Draw players opaque, writing only depth
 					sceneCmd.ColorMask(false, false, false, false);
-					vaoPO.drawAll(this, sceneCmd);
+					vaoPO.drawAll(sceneCmd);
 					sceneCmd.ColorMask(true, true, true, true);
 
 					vaoPO.resetAll();
@@ -1277,7 +1274,7 @@ public class ZoneRenderer implements Renderer {
 			return;
 		}
 
-		if(deferScenePass) {
+		if (deferScenePass) {
 			scenePass();
 			deferScenePass = false;
 		}

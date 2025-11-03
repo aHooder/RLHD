@@ -94,7 +94,7 @@ class VAO {
 		off++;
 	}
 
-	void draw(ZoneRenderer renderer, CommandBuffer cmd) {
+	void draw(CommandBuffer cmd) {
 		assert !vbo.mapped;
 
 		cmd.BindVertexArray(vao);
@@ -104,8 +104,13 @@ class VAO {
 			int end = lengths[i];
 			int count = end - start;
 
-			if(GL_CAPS.OpenGL43) {
-				cmd.DrawArraysIndirect(GL_TRIANGLES, start / (VERT_SIZE / 4), count / (VAO.VERT_SIZE / 4), ZoneRenderer.indirectDrawCmdsStaging);
+			if (GL_CAPS.OpenGL43) {
+				cmd.DrawArraysIndirect(
+					GL_TRIANGLES,
+					start / (VERT_SIZE / 4),
+					count / (VAO.VERT_SIZE / 4),
+					ZoneRenderer.indirectDrawCmdsStaging
+				);
 			} else {
 				cmd.DrawArrays(GL_TRIANGLES, start / (VERT_SIZE / 4), count / (VAO.VERT_SIZE / 4));
 			}
@@ -184,9 +189,9 @@ class VAO {
 			}
 		}
 
-		void drawAll(ZoneRenderer renderer, CommandBuffer cmd) {
+		void drawAll(CommandBuffer cmd) {
 			for (int i = 0; i < drawCount; ++i)
-				vaos.get(i).draw(renderer, cmd);
+				vaos.get(i).draw(cmd);
 		}
 
 		void resetAll() {

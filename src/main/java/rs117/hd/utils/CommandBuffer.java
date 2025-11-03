@@ -103,13 +103,13 @@ public class CommandBuffer {
 
 	public void DrawElements(int mode, int vertexCount, long offset) {
 		ensureCapacity(2);
-		cmd[writeHead++] = GL_DRAW_ELEMENTS_TYPE & 0xFF | mode << 8 | (long) vertexCount << 32;
+		cmd[writeHead++] = GL_DRAW_ELEMENTS_TYPE & 0xFF | (mode & DRAW_MODE_MASK) << 8 | (long) vertexCount << 32;
 		cmd[writeHead++] = offset;
 	}
 
 	public void DrawArrays(int mode, int offset, int vertexCount) {
 		ensureCapacity(2);
-		cmd[writeHead++] = GL_DRAW_ARRAYS_TYPE & 0xFF | mode << 8;
+		cmd[writeHead++] = GL_DRAW_ARRAYS_TYPE & 0xFF | (mode & DRAW_MODE_MASK) << 8;
 		cmd[writeHead++] = (long) offset << 32 | vertexCount & INT_MASK;
 	}
 
@@ -125,7 +125,7 @@ public class CommandBuffer {
 			.put(0);        // baseInstance (reserved 4.1 prior)
 
 		cmd[writeHead++] = GL_DRAW_ARRAYS_INDIRECT_TYPE & 0xFF | (long) mode << 8;
-		cmd[writeHead++] = (long)indirectOffset * Integer.BYTES;
+		cmd[writeHead++] = (long) indirectOffset * Integer.BYTES;
 	}
 
 	public void DrawElementsIndirect(int mode, int indexCount, int indexOffset, GpuIntBuffer indirectBuffer) {
@@ -191,10 +191,8 @@ public class CommandBuffer {
 				// Casting from long to int keeps the lower 32 bits
 				long data = cmd[readHead++];
 				int type = (int) data & 0xFF;
-
-				if(type < GL_DRAW_CALL_TYPE_COUNT) {
+				if (type < GL_DRAW_CALL_TYPE_COUNT)
 					renderState.apply();
-				}
 
 				switch (type) {
 					case GL_DEPTH_MASK_TYPE: {
@@ -292,7 +290,7 @@ public class CommandBuffer {
 					}
 					case GL_MULTI_DRAW_ARRAYS_INDIRECT_TYPE: {
 						int mode = (int) data >> 8;
-						int drawCount = (int)(data >> 32);
+						int drawCount = (int) (data >> 32);
 						long offset = cmd[readHead++];
 						glMultiDrawArraysIndirect(mode, offset, drawCount, 0);
 						break;
@@ -306,8 +304,8 @@ public class CommandBuffer {
 	}
 
 	private int writeObject(Object obj) {
-		for(int i = 0; i < objectCount; i++) {
-			if(objects[i] == obj) {
+		for (int i = 0; i < objectCount; i++) {
+			if (objects[i] == obj) {
 				return i;
 			}
 		}

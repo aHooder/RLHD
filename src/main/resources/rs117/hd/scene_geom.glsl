@@ -71,11 +71,7 @@ void main() {
 
     int materialData = vMaterialData[0];
 
-    #if ZONE_RENDERER
-        computeUvs(materialData, gWorldViewId[0], vec3[](gPosition[0], gPosition[1], gPosition[2]), vUv);
-    #else
-        computeUvs(materialData, vec3[](gPosition[0], gPosition[1], gPosition[2]), vUv);
-    #endif
+    computeUvs(materialData, gWorldViewId[0], vec3[](gPosition[0], gPosition[1], gPosition[2]), vUv);
 
     // Calculate tangent-space vectors
     mat2 triToUv = mat2(

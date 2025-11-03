@@ -41,7 +41,7 @@ class VBO {
 	void map() {
 		assert !mapped;
 		glBindBuffer(GL_ARRAY_BUFFER, bufId);
-		if(glUsage != GL_STATIC_DRAW) {
+		if (glUsage != GL_STATIC_DRAW) {
 			mappedBuffer = glMapBufferRange(
 				GL_ARRAY_BUFFER,
 				0,
@@ -65,8 +65,8 @@ class VBO {
 		vb = null;
 
 		glBindBuffer(GL_ARRAY_BUFFER, bufId);
-		if(glUsage != GL_STATIC_DRAW)
-			glFlushMappedBufferRange(GL_ARRAY_BUFFER, 0, (long)len * Integer.BYTES);
+		if (glUsage != GL_STATIC_DRAW)
+			glFlushMappedBufferRange(GL_ARRAY_BUFFER, 0, (long) len * Integer.BYTES);
 		glUnmapBuffer(GL_ARRAY_BUFFER);
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 		mapped = false;

@@ -23,7 +23,6 @@ import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.plugins.PluginManager;
 import net.runelite.client.ui.DrawManager;
-import net.runelite.client.util.OSType;
 import org.lwjgl.opengl.*;
 import rs117.hd.HdPlugin;
 import rs117.hd.HdPluginConfig;
@@ -173,7 +172,7 @@ public class LegacyRenderer implements Renderer {
 	@Inject
 	public ShadowShaderProgram shadowProgram;
 
-	private final ComputeMode computeMode = OSType.getOSType() == OSType.MacOS ? ComputeMode.OPENCL : ComputeMode.OPENGL;
+	private final ComputeMode computeMode = HdPlugin.APPLE ? ComputeMode.OPENCL : ComputeMode.OPENGL;
 	private final List<ModelSortingComputeProgram> modelSortingComputePrograms = new ArrayList<>();
 
 	public int vaoScene;
