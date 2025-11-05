@@ -28,6 +28,7 @@ import java.nio.IntBuffer;
 import java.util.Arrays;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import rs117.hd.HdPlugin;
 import rs117.hd.scene.MaterialManager;
@@ -39,6 +40,7 @@ import rs117.hd.utils.buffer.GpuIntBuffer;
 import static net.runelite.api.Perspective.*;
 import static rs117.hd.utils.MathUtils.*;
 
+@Slf4j
 @Singleton
 class FacePrioritySorter {
 	static final int[] distances;
@@ -379,6 +381,10 @@ class FacePrioritySorter {
 		final int[] indices2 = model.getFaceIndices2();
 		final int[] indices3 = model.getFaceIndices3();
 
+		final short[] unlitFaceColors = model.getUnlitFaceColors();
+		boolean unlit = unlitFaceColors != null;
+		if (!unlit)
+			log.debug("Skipping null unlit: {} - {}", -1, modelOverride.description);
 		final int[] faceColors1 = model.getFaceColors1();
 		final int[] faceColors2 = model.getFaceColors2();
 		final int[] faceColors3 = model.getFaceColors3();
@@ -427,14 +433,18 @@ class FacePrioritySorter {
 		float vy3 = modelLocalY[triangleC];
 		float vz3 = modelLocalZ[triangleC];
 
-		int color1 = faceColors1[face];
-		int color2 = faceColors2[face];
-		int color3 = faceColors3[face];
+		int color1, color2, color3;
+		color1 = faceColors1[face];
+		color2 = faceColors2[face];
+		color3 = faceColors3[face];
 
 		if (color3 == -1)
 			color2 = color3 = color1;
 
-		if (plugin.configUndoVanillaShading) {
+		if (unlit)
+			color1 = color2 = color3 = unlitFaceColors[face];
+
+		if (plugin.configUndoVanillaShading && false) {
 			int color1H = color1 >> 10 & 0x3F;
 			int color1S = color1 >> 7 & 0x7;
 			int color1L = color1 & 0x7F;

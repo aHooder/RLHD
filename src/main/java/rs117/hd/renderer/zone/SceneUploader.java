@@ -389,8 +389,12 @@ class SceneUploader {
 		if (model != null && drawTile)
 			uploadTileModel(ctx, worldPos, t, model, onlyWaterSurface, tileExX, tileExY, tileZ, basex, basez, vertexBuffer);
 
-		if (!onlyWaterSurface)
-			uploadZoneTileRenderables(ctx, zone, t, worldPos, vertexBuffer, alphaBuffer);
+		try {
+			if (!onlyWaterSurface)
+				uploadZoneTileRenderables(ctx, zone, t, worldPos, vertexBuffer, alphaBuffer);
+		} catch (Exception ex) {
+			log.error("Error:", ex);
+		}
 
 		Tile bridge = t.getBridge();
 		if (bridge != null)
@@ -1188,6 +1192,10 @@ class SceneUploader {
 		final int[] indices2 = model.getFaceIndices2();
 		final int[] indices3 = model.getFaceIndices3();
 
+		final short[] unlitFaceColors = model.getUnlitFaceColors();
+		boolean unlit = unlitFaceColors != null;
+		if (!unlit)
+			log.debug("Skipping null unlit: {} - {}", ModelHash.getUuidId(uuid), modelOverride.description);
 		final int[] color1s = model.getFaceColors1();
 		final int[] color2s = model.getFaceColors2();
 		final int[] color3s = model.getFaceColors3();
@@ -1242,6 +1250,8 @@ class SceneUploader {
 			int color1 = color1s[face];
 			int color2 = color2s[face];
 			int color3 = color3s[face];
+			if (unlit)
+				color1 = color2 = color3 = unlitFaceColors[face];
 
 			if (color3 == -1) {
 				color2 = color3 = color1;
@@ -1495,6 +1505,10 @@ class SceneUploader {
 		final int[] indices2 = model.getFaceIndices2();
 		final int[] indices3 = model.getFaceIndices3();
 
+		final short[] unlitFaceColors = model.getUnlitFaceColors();
+		boolean unlit = unlitFaceColors != null;
+		if (!unlit)
+			log.debug("Skipping null unlit: {} - {}", -1, modelOverride.description);
 		final int[] color1s = model.getFaceColors1();
 		final int[] color2s = model.getFaceColors2();
 		final int[] color3s = model.getFaceColors3();
@@ -1554,6 +1568,8 @@ class SceneUploader {
 			int color1 = color1s[face];
 			int color2 = color2s[face];
 			int color3 = color3s[face];
+			if (unlit)
+				color1 = color2 = color3 = unlitFaceColors[face];
 
 			if (color3 == -1) {
 				color2 = color3 = color1;

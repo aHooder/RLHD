@@ -25,7 +25,7 @@
  */
 #version 330
 
-#define DISPLAY_BASE_COLOR 0
+#define DISPLAY_BASE_COLOR 1
 
 #include <uniforms/global.glsl>
 #include <uniforms/world_views.glsl>

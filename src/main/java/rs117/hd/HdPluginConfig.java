@@ -1131,6 +1131,17 @@ public interface HdPluginConfig extends Config
 		return false;
 	}
 
+	String KEY_VANILLA_SHADING = "experimentalVanillaShading";
+	@ConfigItem(
+		keyName = KEY_VANILLA_SHADING,
+		name = "Vanilla shading",
+		description = "Whether the game's usual shading should be used.",
+		section = experimentalSettings
+	)
+	default boolean vanillaShading() {
+		return false;
+	}
+
 	/*====== Internal settings ======*/
 
 	@ConfigItem(keyName = "pluginUpdateMessage", hidden = true, name = "", description = "")
