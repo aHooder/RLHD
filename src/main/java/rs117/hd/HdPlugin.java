@@ -581,6 +581,8 @@ public class HdPlugin extends Plugin {
 				int gpuFlags = DrawCallbacks.GPU | renderer.gpuFlags();
 				if (config.removeVertexSnapping())
 					gpuFlags |= DrawCallbacks.NO_VERTEX_SNAPPING;
+				if (!configVanillaShading)
+					gpuFlags |= DrawCallbacks.UNLIT_FACE_COLORS;
 
 				initializeShaders();
 				initializeShaderHotswapping();
@@ -1586,6 +1588,7 @@ public class HdPlugin extends Plugin {
 							case KEY_LOW_MEMORY_MODE:
 							case KEY_REMOVE_VERTEX_SNAPPING:
 							case KEY_LEGACY_RENDERER:
+							case KEY_VANILLA_SHADING:
 								restartPlugin();
 								// since we'll be restarting the plugin anyway, skip pending changes
 								return;

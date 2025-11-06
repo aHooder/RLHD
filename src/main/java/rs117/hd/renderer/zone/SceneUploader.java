@@ -393,12 +393,8 @@ class SceneUploader {
 		if (model != null && drawTile)
 			uploadTileModel(ctx, worldPos, t, model, onlyWaterSurface, tileExX, tileExY, tileZ, basex, basez, vertexBuffer);
 
-		try {
-			if (!onlyWaterSurface)
-				uploadZoneTileRenderables(ctx, zone, t, worldPos, vertexBuffer, alphaBuffer);
-		} catch (Exception ex) {
-			log.error("Error:", ex);
-		}
+		if (!onlyWaterSurface)
+			uploadZoneTileRenderables(ctx, zone, t, worldPos, vertexBuffer, alphaBuffer);
 
 		Tile bridge = t.getBridge();
 		if (bridge != null)
@@ -627,6 +623,7 @@ class SceneUploader {
 				alphaBuffer
 			);
 		} catch (Throwable ex) {
+			log.error("original: ", ex);
 			throw new RuntimeException(
 				String.format(
 					"Error uploading static %s %s (ID %d), override=\"%s\", opaque=%s, alpha=%s",
@@ -1199,9 +1196,6 @@ class SceneUploader {
 		final int[] indices3 = model.getFaceIndices3();
 
 		final short[] unlitFaceColors = model.getUnlitFaceColors();
-		boolean unlit = unlitFaceColors != null;
-		if (!unlit)
-			log.debug("Skipping null unlit: {} - {}", ModelHash.getUuidId(uuid), modelOverride.description);
 		final int[] color1s = model.getFaceColors1();
 		final int[] color2s = model.getFaceColors2();
 		final int[] color3s = model.getFaceColors3();
@@ -1256,17 +1250,15 @@ class SceneUploader {
 			int color1 = color1s[face];
 			int color2 = color2s[face];
 			int color3 = color3s[face];
-			if (unlit) {
-				color1 = color2 = color3 = unlitFaceColors[face] & 0xFFFF;
-			} else {
-//				color3 = 6 << 7 | 127;
-			}
 
 			if (color3 == -1) {
 				color2 = color3 = color1;
 			} else if (color3 == -2) {
 				continue;
 			}
+
+			if (!plugin.configVanillaShading)
+				color1 = color2 = color3 = unlitFaceColors[face] & 0xFFFF;
 
 			int triangleA = indices1[face];
 			int triangleB = indices2[face];
@@ -1518,9 +1510,6 @@ class SceneUploader {
 		final int[] indices3 = model.getFaceIndices3();
 
 		final short[] unlitFaceColors = model.getUnlitFaceColors();
-		boolean unlit = unlitFaceColors != null;
-		if (!unlit)
-			log.debug("Skipping null unlit: {} - {}", -1, modelOverride.description);
 		final int[] color1s = model.getFaceColors1();
 		final int[] color2s = model.getFaceColors2();
 		final int[] color3s = model.getFaceColors3();
@@ -1584,17 +1573,15 @@ class SceneUploader {
 			int color1 = color1s[face];
 			int color2 = color2s[face];
 			int color3 = color3s[face];
-			if (unlit) {
-				color1 = color2 = color3 = unlitFaceColors[face] & 0xFFFF;
-			} else {
-				color3 = 6 << 7 | 127;
-			}
 
 			if (color3 == -1) {
 				color2 = color3 = color1;
 			} else if (color3 == -2) {
 				continue;
 			}
+
+			if (!plugin.configVanillaShading)
+				color1 = color2 = color3 = unlitFaceColors[face] & 0xFFFF;
 
 			// HSL override is not applied to textured faces
 			if (overrideAmount > 0 && (!isVanillaTextured || faceTextures[face] == -1)) {

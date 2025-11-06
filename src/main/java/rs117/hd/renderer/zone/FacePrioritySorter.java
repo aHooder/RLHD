@@ -382,9 +382,6 @@ class FacePrioritySorter {
 		final int[] indices3 = model.getFaceIndices3();
 
 		final short[] unlitFaceColors = model.getUnlitFaceColors();
-		boolean unlit = unlitFaceColors != null;
-		if (!unlit)
-			log.debug("Skipping null unlit: {} - {}", -1, modelOverride.description);
 		final int[] faceColors1 = model.getFaceColors1();
 		final int[] faceColors2 = model.getFaceColors2();
 		final int[] faceColors3 = model.getFaceColors3();
@@ -433,21 +430,16 @@ class FacePrioritySorter {
 		float vy3 = modelLocalY[triangleC];
 		float vz3 = modelLocalZ[triangleC];
 
-		int color1, color2, color3;
-		color1 = faceColors1[face];
-		color2 = faceColors2[face];
-		color3 = faceColors3[face];
+		int color1 = faceColors1[face];
+		int color2 = faceColors2[face];
+		int color3 = faceColors3[face];
 
 		if (color3 == -1)
 			color2 = color3 = color1;
 
-		if (unlit) {
+		if (!plugin.configVanillaShading) {
 			color1 = color2 = color3 = unlitFaceColors[face] & 0xFFFF;
-		} else {
-//			color3 = 6 << 7 | 127;
-		}
-
-		if (plugin.configUndoVanillaShading && false) {
+		} else if (plugin.configUndoVanillaShading) {
 			int color1H = color1 >> 10 & 0x3F;
 			int color1S = color1 >> 7 & 0x7;
 			int color1L = color1 & 0x7F;
