@@ -383,8 +383,8 @@ class FacePrioritySorter {
 
 		final short[] unlitFaceColors = model.getUnlitFaceColors();
 		boolean unlit = unlitFaceColors != null;
-		if (!unlit)
-			log.debug("Skipping null unlit: {} - {}", -1, modelOverride.description);
+//		if (!unlit)
+//			log.debug("Skipping null unlit: {} - {}", -1, modelOverride.description);
 		final int[] faceColors1 = model.getFaceColors1();
 		final int[] faceColors2 = model.getFaceColors2();
 		final int[] faceColors3 = model.getFaceColors3();
@@ -441,8 +441,11 @@ class FacePrioritySorter {
 		if (color3 == -1)
 			color2 = color3 = color1;
 
-		if (unlit)
+		if (unlit) {
 			color1 = color2 = color3 = unlitFaceColors[face];
+		} else {
+			color3 = 6 << 7 | 127;
+		}
 
 		if (plugin.configUndoVanillaShading && false) {
 			int color1H = color1 >> 10 & 0x3F;
@@ -547,7 +550,7 @@ class FacePrioritySorter {
 			if (material == Material.NONE)
 				material = materialManager.fromVanillaTexture(textureId);
 
-			color1 = color2 = color3 = 90;
+//			color1 = color2 = color3 = 90;
 		}
 
 		ModelOverride faceOverride = modelOverride;

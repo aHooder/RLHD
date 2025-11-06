@@ -1194,8 +1194,8 @@ class SceneUploader {
 
 		final short[] unlitFaceColors = model.getUnlitFaceColors();
 		boolean unlit = unlitFaceColors != null;
-		if (!unlit)
-			log.debug("Skipping null unlit: {} - {}", ModelHash.getUuidId(uuid), modelOverride.description);
+//		if (!unlit)
+//			log.debug("Skipping null unlit: {} - {}", ModelHash.getUuidId(uuid), modelOverride.description);
 		final int[] color1s = model.getFaceColors1();
 		final int[] color2s = model.getFaceColors2();
 		final int[] color3s = model.getFaceColors3();
@@ -1250,8 +1250,11 @@ class SceneUploader {
 			int color1 = color1s[face];
 			int color2 = color2s[face];
 			int color3 = color3s[face];
-			if (unlit)
+			if (unlit) {
 				color1 = color2 = color3 = unlitFaceColors[face];
+			} else {
+				color3 = 6 << 7 | 127;
+			}
 
 			if (color3 == -1) {
 				color2 = color3 = color1;
@@ -1303,7 +1306,7 @@ class SceneUploader {
 				// Without overriding the color for textured faces, vanilla shading remains pretty noticeable even after
 				// the approximate reversal above. Ardougne rooftops is a good example, where vanilla shading results in a
 				// weird-looking tint. The brightness clamp afterward is required to reduce the over-exposure introduced.
-				color1 = color2 = color3 = 90;
+//				color1 = color2 = color3 = 90;
 			} else {
 				if (modelOverride.inheritTileColorType != InheritTileColorType.NONE) {
 					final Scene scene = ctx.scene;
@@ -1507,8 +1510,8 @@ class SceneUploader {
 
 		final short[] unlitFaceColors = model.getUnlitFaceColors();
 		boolean unlit = unlitFaceColors != null;
-		if (!unlit)
-			log.debug("Skipping null unlit: {} - {}", -1, modelOverride.description);
+//		if (!unlit)
+//			log.debug("Skipping null unlit: {} - {}", -1, modelOverride.description);
 		final int[] color1s = model.getFaceColors1();
 		final int[] color2s = model.getFaceColors2();
 		final int[] color3s = model.getFaceColors3();
@@ -1568,8 +1571,11 @@ class SceneUploader {
 			int color1 = color1s[face];
 			int color2 = color2s[face];
 			int color3 = color3s[face];
-			if (unlit)
+			if (unlit) {
 				color1 = color2 = color3 = unlitFaceColors[face];
+			} else {
+				color3 = 6 << 7 | 127;
+			}
 
 			if (color3 == -1) {
 				color2 = color3 = color1;
@@ -1628,7 +1634,7 @@ class SceneUploader {
 				// Without overriding the color for textured faces, vanilla shading remains pretty noticeable even after
 				// the approximate reversal above. Ardougne rooftops is a good example, where vanilla shading results in a
 				// weird-looking tint. The brightness clamp afterward is required to reduce the over-exposure introduced.
-				color1 = color2 = color3 = 90;
+//				color1 = color2 = color3 = 90;
 			}
 
 			ModelOverride faceOverride = modelOverride;

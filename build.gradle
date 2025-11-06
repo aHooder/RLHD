@@ -19,7 +19,7 @@ dependencies {
 	compileOnly 'org.projectlombok:lombok:1.18.20'
 	annotationProcessor 'org.projectlombok:lombok:1.18.20'
 
-	implementation files("./client-1.12.2-SNAPSHOT-shaded.jar")
+	implementation files("./client-1.12.4-SNAPSHOT-shaded.jar")
 
 	testImplementation 'junit:junit:4.13.2'
 	testImplementation 'org.mockito:mockito-core:3.1.0'
