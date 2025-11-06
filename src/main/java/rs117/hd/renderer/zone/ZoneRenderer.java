@@ -226,8 +226,7 @@ public class ZoneRenderer implements Renderer {
 			DrawCallbacks.ZBUF |
 			DrawCallbacks.ZBUF_ZONE_FRUSTUM_CHECK |
 			DrawCallbacks.NORMALS |
-			DrawCallbacks.UNLIT_FACE_COLORS |
-			DrawCallbacks.HILLSKEW;
+			DrawCallbacks.UNLIT_FACE_COLORS;
 	}
 
 	@Override

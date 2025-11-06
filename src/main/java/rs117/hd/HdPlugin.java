@@ -582,8 +582,6 @@ public class HdPlugin extends Plugin {
 				if (config.removeVertexSnapping())
 					gpuFlags |= DrawCallbacks.NO_VERTEX_SNAPPING;
 
-				gpuFlags |= DrawCallbacks.UNLIT_FACE_COLORS;
-
 				initializeShaders();
 				initializeShaderHotswapping();
 				initializeUiTexture();
