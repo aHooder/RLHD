@@ -623,11 +623,12 @@ class SceneUploader {
 				alphaBuffer
 			);
 		} catch (Throwable ex) {
-			log.error("original: ", ex);
-			throw new RuntimeException(
+			log.error(
 				String.format(
-					"Error uploading static %s %s (ID %d), override=\"%s\", opaque=%s, alpha=%s",
+					"Error uploading %s %s %d %s (ID %d), override=\"%s\", opaque=%s, alpha=%s",
+					r instanceof DynamicObject ? "dynamic" : "static",
 					ModelHash.getTypeName(ModelHash.getUuidType(uuid)),
+					ModelHash.getUuidSubType(uuid),
 					gamevalManager.getObjectName(id),
 					id,
 					modelOverride.description,
