@@ -8,17 +8,22 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
+import javax.annotation.Nullable;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
+import rs117.hd.opengl.buffer.storage.SSBOModelData;
+import rs117.hd.scene.MaterialManager;
 import rs117.hd.scene.SceneContext;
 import rs117.hd.scene.materials.Material;
+import rs117.hd.scene.model_overrides.ModelOverride;
 import rs117.hd.utils.Camera;
 import rs117.hd.utils.CommandBuffer;
 
 import static net.runelite.api.Perspective.*;
 import static org.lwjgl.opengl.GL33C.*;
 import static rs117.hd.HdPlugin.GL_CAPS;
+import static rs117.hd.HdPlugin.SUPPORTS_INDIRECT_DRAW;
 import static rs117.hd.HdPlugin.checkGLErrors;
 import static rs117.hd.renderer.zone.FacePrioritySorter.distanceFaceCount;
 import static rs117.hd.renderer.zone.FacePrioritySorter.distanceToFaces;
@@ -33,10 +38,11 @@ class Zone {
 	// alphaBiasHsl int
 	// materialData int
 	// terrainData int
-	static final int VERT_SIZE = 32;
+	// modelOffset int TODO: Make short
+	static final int VERT_SIZE = 36;
 
 	// Metadata format
-	// worldViewId int int
+	// worldViewIndex int int
 	// sceneOffset int vec2(x, y)
 	static final int METADATA_SIZE = 12;
 
@@ -49,6 +55,7 @@ class Zone {
 	int bufLenA;
 
 	int sizeO, sizeA;
+	@Nullable
 	VBO vboO, vboA, vboM;
 
 	boolean initialized; // whether the zone vao and vbos are ready
@@ -65,10 +72,12 @@ class Zone {
 	int[][] rids;
 	int[][] roofStart;
 	int[][] roofEnd;
+	short modelCount;
+	SSBOModelData.Slice modelDataSlice;
 
 	final List<AlphaModel> alphaModels = new ArrayList<>(0);
 
-	void initialize(VBO o, VBO a, int eboShared) {
+	void initialize(SSBOModelData modelData, VBO o, VBO a, int eboShared) {
 		assert glVao == 0;
 		assert glVaoA == 0;
 
@@ -89,21 +98,20 @@ class Zone {
 			glVaoA = glGenVertexArrays();
 			setupVao(glVaoA, a.bufId, vboM.bufId, eboShared);
 		}
+
+		if(modelCount > 0) {
+			modelDataSlice = modelData.obtainSlice(modelCount);
+		}
 	}
 
-	void setMetadata(int worldViewIdx, ZoneSceneContext ctx, int mx, int mz) {
-		if (!metadataDirty)
+	public static void freeZones(@Nullable Zone[][] zones) {
+		if (zones == null)
 			return;
-		metadataDirty = false;
 
-		int baseX = (mx - (ctx.sceneOffset >> 3)) << 10;
-		int baseZ = (mz - (ctx.sceneOffset >> 3)) << 10;
-
-		vboM.map();
-		vboM.vb.put(worldViewIdx + 1);
-		vboM.vb.put(baseX);
-		vboM.vb.put(baseZ);
-		vboM.unmap();
+		for (Zone[] column : zones)
+			for (Zone zone : column)
+				if (zone != null)
+					zone.free();
 	}
 
 	void free() {
@@ -131,6 +139,12 @@ class Zone {
 			glDeleteVertexArrays(glVaoA);
 			glVaoA = 0;
 		}
+
+		if(modelDataSlice != null) {
+			modelDataSlice.free();
+			modelDataSlice = null;
+		}
+		modelCount = 0;
 
 		// don't add permanent alphamodels to the cache as permanent alphamodels are always allocated
 		// to avoid having to synchronize the cache
@@ -185,22 +199,41 @@ class Zone {
 		glEnableVertexAttribArray(5);
 		glVertexAttribIPointer(5, 1, GL_INT, VERT_SIZE, 28);
 
+		// modelOffset
+		glEnableVertexAttribArray(6);
+		glVertexAttribIPointer(6, 1, GL_INT, VERT_SIZE, 32);
+
 		glBindBuffer(GL_ARRAY_BUFFER, metadata);
 
-		// worldViewIndex
-		glEnableVertexAttribArray(6);
-		glVertexAttribDivisor(6, 1);
-		glVertexAttribIPointer(6, 1, GL_INT, METADATA_SIZE, 0);
-
-		// scene offset
+		// WorldView index (not ID)
 		glEnableVertexAttribArray(7);
 		glVertexAttribDivisor(7, 1);
-		glVertexAttribIPointer(7, 2, GL_INT, METADATA_SIZE, 4);
+		glVertexAttribIPointer(7, 1, GL_INT, METADATA_SIZE, 0);
+
+		// Scene offset
+		glEnableVertexAttribArray(8);
+		glVertexAttribDivisor(8, 1);
+		glVertexAttribIPointer(8, 2, GL_INT, METADATA_SIZE, 4);
 
 		checkGLErrors();
 
 		glBindVertexArray(0);
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
+	}
+
+	void setMetadata(int worldViewIdx, ZoneSceneContext ctx, int mx, int mz) {
+		if (vboM == null || !metadataDirty)
+			return;
+		metadataDirty = false;
+
+		int baseX = (mx - (ctx.sceneOffset >> 3)) << 10;
+		int baseZ = (mz - (ctx.sceneOffset >> 3)) << 10;
+
+		vboM.map();
+		vboM.vb.put(worldViewIdx + 1);
+		vboM.vb.put(baseX);
+		vboM.vb.put(baseZ);
+		vboM.unmap();
 	}
 
 	void updateRoofs(Map<Integer, Integer> updates) {
@@ -338,8 +371,10 @@ class Zone {
 	static final Queue<AlphaModel> modelCache = new ArrayDeque<>();
 
 	void addAlphaModel(
+		MaterialManager materialManager,
 		int vao,
 		Model model,
+		ModelOverride modelOverride,
 		int startpos,
 		int endpos,
 		int x,
@@ -373,6 +408,7 @@ class Zone {
 		}
 
 		int faceCount = model.getFaceCount();
+		int[] color1 = model.getFaceColors1();
 		int[] color3 = model.getFaceColors3();
 		byte[] transparencies = model.getFaceTransparencies();
 		short[] faceTextures = model.getFaceTextures();
@@ -390,10 +426,8 @@ class Zone {
 			if (color3[f] == -2)
 				continue;
 
-			boolean alpha =
-				transparencies != null && transparencies[f] != 0 ||
-				faceTextures != null && Material.hasVanillaTransparency(faceTextures[f]);
-			if (!alpha)
+			boolean hasAlpha = modelOverride.mightHaveTransparency || transparencies != null && transparencies[f] != 0;
+			if (!hasAlpha)
 				continue;
 
 			int fx = (int) (vertexX[indices1[f]] + vertexX[indices2[f]] + vertexX[indices3[f]]);
@@ -433,10 +467,34 @@ class Zone {
 			if (color3[f] == -2)
 				continue;
 
-			boolean alpha =
-				transparencies != null && transparencies[f] != 0 ||
-				faceTextures != null && Material.hasVanillaTransparency(faceTextures[f]);
-			if (!alpha)
+			int transparency = transparencies != null ? transparencies[f] & 0xFF : 0;
+			int textureId = faceTextures != null ? faceTextures[f] : -1;
+
+			Material material = Material.NONE;
+			if (textureId != -1) {
+				if (modelOverride.textureMaterial != Material.NONE) {
+					material = modelOverride.textureMaterial;
+				} else {
+					material = materialManager.fromVanillaTexture(textureId);
+					if (modelOverride.materialOverrides != null) {
+						var override = modelOverride.materialOverrides.get(material);
+						if (override != null) {
+							material = override.textureMaterial;
+						}
+					}
+				}
+			} else if (modelOverride.colorOverrides != null) {
+				int ahsl = (0xFF - transparency) << 16 | color1[f];
+				for (var override : modelOverride.colorOverrides) {
+					if (override.ahslCondition.test(ahsl)) {
+						material = override.baseMaterial;
+						break;
+					}
+				}
+			}
+
+			boolean hasAlpha = material.hasTransparency || transparency != 0;
+			if (!hasAlpha)
 				continue;
 
 			int fx = (((int) (vertexX[indices1[f]] + vertexX[indices2[f]] + vertexX[indices3[f]]) / 3) - cx) >> shift;
@@ -457,7 +515,8 @@ class Zone {
 		m.radius = 2 + (int) Math.sqrt(radius);
 
 		assert packedFaces.length > 0;
-		assert bufferIdx == packedFaces.length : String.format("%d != %d", (int) bufferIdx, packedFaces.length);
+		// Normally these will be equal, but transparency is used to hide faces in the TzHaar reskin
+		assert bufferIdx <= packedFaces.length : String.format("%d > %d", (int) bufferIdx, packedFaces.length);
 
 		alphaModels.add(m);
 	}
@@ -651,7 +710,7 @@ class Zone {
 				long byteOffset = 4L * (ZoneRenderer.eboAlphaStaging.position() - vertexCount);
 				cmd.BindVertexArray(lastVao);
 				// The EBO & IDO is bound by in ZoneRenderer
-				if (GL_CAPS.OpenGL43) {
+				if (GL_CAPS.OpenGL40 && SUPPORTS_INDIRECT_DRAW) {
 					cmd.DrawElementsIndirect(GL_TRIANGLES, vertexCount, (int) (byteOffset / 4L), ZoneRenderer.indirectDrawCmdsStaging);
 				} else {
 					cmd.DrawElements(GL_TRIANGLES, vertexCount, byteOffset);
@@ -662,13 +721,13 @@ class Zone {
 			convertForDraw(lastDrawMode == STATIC_UNSORTED ? VERT_SIZE : VAO.VERT_SIZE);
 			cmd.BindVertexArray(lastVao);
 			if (glDrawOffset.length == 1) {
-				if (GL_CAPS.OpenGL43) {
+				if (GL_CAPS.OpenGL40 && SUPPORTS_INDIRECT_DRAW) {
 					cmd.DrawArraysIndirect(GL_TRIANGLES, glDrawOffset[0], glDrawLength[0], ZoneRenderer.indirectDrawCmdsStaging);
 				} else {
 					cmd.DrawArrays(GL_TRIANGLES, glDrawOffset[0], glDrawLength[0]);
 				}
 			} else {
-				if (GL_CAPS.OpenGL43) {
+				if (GL_CAPS.OpenGL43 && SUPPORTS_INDIRECT_DRAW) {
 					cmd.MultiDrawArraysIndirect(GL_TRIANGLES, glDrawOffset, glDrawLength, ZoneRenderer.indirectDrawCmdsStaging);
 				} else {
 					cmd.MultiDrawArrays(GL_TRIANGLES, glDrawOffset, glDrawLength);

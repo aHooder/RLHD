@@ -1,16 +1,20 @@
-package rs117.hd.opengl.uniforms;
+package rs117.hd.opengl.buffer.uniforms;
 
 import java.util.Arrays;
 import javax.annotation.Nullable;
+import javax.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
+import rs117.hd.HdPlugin;
+import rs117.hd.opengl.buffer.UniformStructuredBuffer;
+import rs117.hd.renderer.zone.ZoneRenderer;
 import rs117.hd.utils.Mat4;
 import rs117.hd.utils.buffer.GLBuffer;
 
 import static org.lwjgl.opengl.GL33C.*;
 
 @Slf4j
-public class UBOWorldViews extends UniformBuffer<GLBuffer> {
+public class UBOWorldViews extends UniformStructuredBuffer<GLBuffer> {
 	// The max concurrent visible worldviews is 25
 	// Source: https://discord.com/channels/886733267284398130/1419633364817674351/1429129853592146041
 	public static final int MAX_SIMULTANEOUS_WORLD_VIEWS = 128;
@@ -20,15 +24,18 @@ public class UBOWorldViews extends UniformBuffer<GLBuffer> {
 		public final Property tint = addProperty(PropertyType.IVec4, "tint");
 	}
 
+	@Inject
+	private Client client;
+
 	private final WorldViewStruct[] uboStructs = addStructs(new WorldViewStruct[MAX_SIMULTANEOUS_WORLD_VIEWS], WorldViewStruct::new);
 	private final int[] indexMapping;
 
-	public UBOWorldViews(int maxWorldViews) {
+	public UBOWorldViews() {
 		super(GL_DYNAMIC_DRAW);
-		indexMapping = new int[maxWorldViews];
+		indexMapping = new int[ZoneRenderer.MAX_WORLDVIEWS];
 	}
 
-	public void update(Client client) {
+	public void update() {
 		Arrays.fill(indexMapping, -1);
 
 		int index = 0;
@@ -74,9 +81,18 @@ public class UBOWorldViews extends UniformBuffer<GLBuffer> {
 	public int getIndex(@Nullable Scene scene) {
 		if (scene == null)
 			return -1;
-		int id = scene.getWorldViewId();
-		if (id < 0 || id >= indexMapping.length)
+		return getIndex(scene.getWorldViewId());
+	}
+
+	public int getIndex(@Nullable WorldView worldView) {
+		if (worldView == null)
 			return -1;
-		return indexMapping[id];
+		return getIndex(worldView.getId());
+	}
+
+	public int getIndex(int worldViewId) {
+		if (worldViewId < 0 || worldViewId >= indexMapping.length)
+			return -1;
+		return indexMapping[worldViewId];
 	}
 }

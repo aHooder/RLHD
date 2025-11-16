@@ -23,9 +23,10 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#version 330
+#include VERSION_HEADER
 
 #include <uniforms/global.glsl>
+#include <buffers/model_data.glsl>
 
 layout(triangles) in;
 layout(triangle_strip, max_vertices = 3) out;
@@ -43,6 +44,7 @@ in int gAlphaBiasHsl[3];
 in int gMaterialData[3];
 in int gTerrainData[3];
 in int gWorldViewId[3];
+in int gModelOffset[3];
 
 flat out ivec3 vAlphaBiasHsl;
 flat out ivec3 vMaterialData;
@@ -58,6 +60,7 @@ out FragmentData {
 } OUT;
 
 void main() {
+    ModelData modelData = getModelData(gModelOffset[0]);
     vec3 vUv[3];
 
     // MacOS doesn't allow assigning these arrays directly.
@@ -92,11 +95,15 @@ void main() {
 
     #if UNDO_VANILLA_SHADING && ZONE_RENDERER
         if ((materialData >> MATERIAL_FLAG_UNDO_VANILLA_SHADING & 1) == 1) {
-            vec3 normal = N;
             for (int i = 0; i < 3; i++) {
-                #if !FLAT_SHADING
-                    normal = length(gNormal[i]) == 0 ? N : normalize(gNormal[i]);
-                #endif
+                vec3 normal = gNormal[i];
+                float magnitude = length(normal);
+                if (magnitude == 0) {
+                    normal = N;
+                } else {
+                    normal /= magnitude;
+                }
+                // TODO: Rotate normal for player shading reversal
                 undoVanillaShading(vAlphaBiasHsl[i], normal);
             }
         }
