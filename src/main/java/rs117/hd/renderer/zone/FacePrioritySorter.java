@@ -28,6 +28,7 @@ import java.nio.IntBuffer;
 import java.util.Arrays;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import rs117.hd.HdPlugin;
 import rs117.hd.scene.MaterialManager;
@@ -39,6 +40,7 @@ import rs117.hd.utils.buffer.GpuIntBuffer;
 import static net.runelite.api.Perspective.*;
 import static rs117.hd.utils.MathUtils.*;
 
+@Slf4j
 @Singleton
 class FacePrioritySorter {
 	private static final int[] EMPTY_NORMALS = new int[9];
@@ -381,6 +383,7 @@ class FacePrioritySorter {
 		final int[] indices2 = model.getFaceIndices2();
 		final int[] indices3 = model.getFaceIndices3();
 
+		final short[] unlitFaceColors = plugin.configVanillaShading ? null : model.getUnlitFaceColors();
 		final int[] faceColors1 = model.getFaceColors1();
 		final int[] faceColors2 = model.getFaceColors2();
 		final int[] faceColors3 = model.getFaceColors3();
@@ -437,7 +440,9 @@ class FacePrioritySorter {
 		if (color3 == -1)
 			color2 = color3 = color1;
 
-		if (plugin.configUndoVanillaShading && hasVertexNormals) {
+		if (unlitFaceColors != null) {
+			color1 = color2 = color3 = unlitFaceColors[face] & 0xFFFF;
+		} else if (plugin.configUndoVanillaShading && hasVertexNormals) {
 			int color1H = color1 >> 10 & 0x3F;
 			int color1S = color1 >> 7 & 0x7;
 			int color1L = color1 & 0x7F;

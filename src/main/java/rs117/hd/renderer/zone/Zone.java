@@ -12,6 +12,7 @@ import javax.annotation.Nullable;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
+import rs117.hd.HdPlugin;
 import rs117.hd.scene.MaterialManager;
 import rs117.hd.scene.SceneContext;
 import rs117.hd.scene.materials.Material;
@@ -354,6 +355,7 @@ class Zone {
 	static final Queue<AlphaModel> modelCache = new ArrayDeque<>();
 
 	void addAlphaModel(
+		HdPlugin plugin,
 		MaterialManager materialManager,
 		int vao,
 		Model model,
@@ -391,6 +393,7 @@ class Zone {
 		}
 
 		int faceCount = model.getFaceCount();
+		short[] unlitColor = plugin.configVanillaShading ? null : model.getUnlitFaceColors();
 		int[] color1 = model.getFaceColors1();
 		int[] color3 = model.getFaceColors3();
 		byte[] transparencies = model.getFaceTransparencies();
@@ -467,7 +470,8 @@ class Zone {
 					}
 				}
 			} else if (modelOverride.colorOverrides != null) {
-				int ahsl = (0xFF - transparency) << 16 | color1[f];
+				int ahsl = unlitColor != null ? unlitColor[f] & 0xFFFF : color1[f];
+				ahsl |= (0xFF - transparency) << 16;
 				for (var override : modelOverride.colorOverrides) {
 					if (override.ahslCondition.test(ahsl)) {
 						material = override.baseMaterial;

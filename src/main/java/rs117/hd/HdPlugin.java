@@ -363,6 +363,7 @@ public class HdPlugin extends Plugin {
 	public boolean configRoofShadows;
 	public boolean configExpandShadowDraw;
 	public boolean configUseFasterModelHashing;
+	public boolean configVanillaShading;
 	public boolean configUndoVanillaShading;
 	public boolean configPreserveVanillaNormals;
 	public boolean configAsyncUICopy;
@@ -594,6 +595,8 @@ public class HdPlugin extends Plugin {
 				int gpuFlags = DrawCallbacks.GPU | renderer.gpuFlags();
 				if (config.removeVertexSnapping())
 					gpuFlags |= DrawCallbacks.NO_VERTEX_SNAPPING;
+				if (!configVanillaShading)
+					gpuFlags |= DrawCallbacks.UNLIT_FACE_COLORS;
 
 				initializeShaders();
 				initializeShaderHotswapping();
@@ -1499,7 +1502,8 @@ public class HdPlugin extends Plugin {
 		configTiledLightingImageLoadStore = config.tiledLightingImageLoadStore();
 		configExpandShadowDraw = config.expandShadowDraw();
 		configUseFasterModelHashing = config.fasterModelHashing();
-		configUndoVanillaShading = config.shadingMode() != ShadingMode.VANILLA;
+		configVanillaShading = config.vanillaShading();
+		configUndoVanillaShading = configVanillaShading && config.shadingMode() != ShadingMode.VANILLA;
 		configPreserveVanillaNormals = config.preserveVanillaNormals();
 		configAsyncUICopy = config.asyncUICopy();
 		configWindDisplacement = config.windDisplacement();
@@ -1599,6 +1603,7 @@ public class HdPlugin extends Plugin {
 							case KEY_REMOVE_VERTEX_SNAPPING:
 							case KEY_LEGACY_RENDERER:
 							case KEY_FORCE_INDIRECT_DRAW:
+							case KEY_VANILLA_SHADING:
 								restartPlugin();
 								// since we'll be restarting the plugin anyway, skip pending changes
 								return;

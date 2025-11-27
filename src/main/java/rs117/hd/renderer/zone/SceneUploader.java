@@ -637,10 +637,12 @@ class SceneUploader {
 				alphaBuffer
 			);
 		} catch (Throwable ex) {
-			throw new RuntimeException(
+			log.error(
 				String.format(
-					"Error uploading static %s %s (ID %d), override=\"%s\", opaque=%s, alpha=%s",
+					"Error uploading %s %s %d %s (ID %d), override=\"%s\", opaque=%s, alpha=%s",
+					r instanceof DynamicObject ? "dynamic" : "static",
 					ModelHash.getTypeName(ModelHash.getUuidType(uuid)),
+					ModelHash.getUuidSubType(uuid),
 					gamevalManager.getObjectName(id),
 					id,
 					modelOverride.description,
@@ -664,6 +666,7 @@ class SceneUploader {
 				assert uz < 25 : uz;
 			}
 			zone.addAlphaModel(
+				plugin,
 				materialManager,
 				zone.glVaoA, model, modelOverride, alphaStart, alphaEnd,
 				x - basex, y, z - basez,
@@ -1198,7 +1201,7 @@ class SceneUploader {
 		GpuIntBuffer alphaBuffer
 	) {
 		final int[][][] tileHeights = ctx.scene.getTileHeights();
-		final int triangleCount = model.getFaceCount();
+		final int faceCount = model.getFaceCount();
 		final int vertexCount = model.getVerticesCount();
 
 		final float[] vertexX = model.getVerticesX();
@@ -1209,6 +1212,7 @@ class SceneUploader {
 		final int[] indices2 = model.getFaceIndices2();
 		final int[] indices3 = model.getFaceIndices3();
 
+		final short[] unlitFaceColors = plugin.configVanillaShading ? null : model.getUnlitFaceColors();
 		final int[] color1s = model.getFaceColors1();
 		final int[] color2s = model.getFaceColors2();
 		final int[] color3s = model.getFaceColors3();
@@ -1284,7 +1288,7 @@ class SceneUploader {
 		final Material textureMaterial = modelOverride.textureMaterial;
 
 		int len = 0;
-		for (int face = 0; face < triangleCount; ++face) {
+		for (int face = 0; face < faceCount; ++face) {
 			int color1 = color1s[face];
 			int color2 = color2s[face];
 			int color3 = color3s[face];
@@ -1294,6 +1298,9 @@ class SceneUploader {
 			} else if (color3 == -2) {
 				continue;
 			}
+
+			if (unlitFaceColors != null)
+				color1 = color2 = color3 = unlitFaceColors[face] & 0xFFFF;
 
 			int triangleA = indices1[face];
 			int triangleB = indices2[face];
@@ -1545,6 +1552,7 @@ class SceneUploader {
 		final int[] indices2 = model.getFaceIndices2();
 		final int[] indices3 = model.getFaceIndices3();
 
+		final short[] unlitFaceColors = plugin.configVanillaShading ? null : model.getUnlitFaceColors();
 		final int[] color1s = model.getFaceColors1();
 		final int[] color2s = model.getFaceColors2();
 		final int[] color3s = model.getFaceColors3();
@@ -1619,6 +1627,9 @@ class SceneUploader {
 			} else if (color3 == -2) {
 				continue;
 			}
+
+			if (unlitFaceColors != null)
+				color1 = color2 = color3 = unlitFaceColors[face] & 0xFFFF;
 
 			// HSL override is not applied to textured faces
 			if (overrideAmount > 0 && (!isVanillaTextured || faceTextures[face] == -1)) {
