@@ -28,8 +28,8 @@ import static org.lwjgl.opengl.GL33C.*;
 import static rs117.hd.HdPlugin.GL_CAPS;
 import static rs117.hd.HdPlugin.SUPPORTS_INDIRECT_DRAW;
 import static rs117.hd.HdPlugin.checkGLErrors;
-import static rs117.hd.renderer.zone.FacePrioritySorter.distanceFaceCount;
-import static rs117.hd.renderer.zone.FacePrioritySorter.distanceToFaces;
+import static rs117.hd.renderer.zone.FacePrioritySorter.MAX_DIAMETER;
+import static rs117.hd.renderer.zone.FacePrioritySorter.ZSORT_GROUP_SIZE;
 import static rs117.hd.utils.MathUtils.*;
 
 @Slf4j
@@ -652,8 +652,17 @@ public class Zone {
 	private static int lastVao;
 	private static int lastzx, lastzz;
 
-	private static final int[] numOfPriority = FacePrioritySorter.numOfPriority;
-	private static final int[][] orderedFaces = FacePrioritySorter.orderedFaces;
+	private static final char[] distanceFaceCount;
+	private static final char[][] distanceToFaces;
+	private static final int[] numOfPriority;
+	private static final int[][] orderedFaces;
+
+	static {
+		distanceFaceCount = new char[MAX_DIAMETER];
+		distanceToFaces = new char[MAX_DIAMETER][ZSORT_GROUP_SIZE];
+		numOfPriority = new int[12];
+		orderedFaces = new int[12][FacePrioritySorter.MAX_FACES_PER_PRIORITY];
+	}
 
 	private Camera alphaSort_Camera;
 	private int alphaSort_zx, alphaSort_zz;

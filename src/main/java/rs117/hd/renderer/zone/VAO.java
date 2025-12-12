@@ -3,10 +3,13 @@ package rs117.hd.renderer.zone;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import javax.annotation.Nullable;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
+import net.runelite.client.callback.ClientThread;
 import rs117.hd.utils.CommandBuffer;
 
 import static org.lwjgl.opengl.GL33C.*;
@@ -155,19 +158,35 @@ class VAO {
 		// this needs to be larger than the largest single model
 		private static final int VAO_SIZE = 4 * 1024 * 1024;
 
+		private final ClientThread clientThread;
+		private final int eboAlpha;
+		private final List<VAO> vaos = new ArrayList<>();
+		private final Semaphore semaphore = new Semaphore(0);
+
 		private int curIdx;
 		private int drawCount;
-		private final List<VAO> vaos = new ArrayList<>();
-		private final int eboAlpha;
 
-		VAO get(int size, @Nullable VBO vboMetadata) {
+		synchronized VAO get(int size, @Nullable VBO vboMetadata) {
 			assert size <= VAO_SIZE;
 
 			while (curIdx < vaos.size()) {
 				VAO vao = vaos.get(curIdx);
 				boolean wasMapped = vao.vbo.mapped;
-				if (!wasMapped)
-					vao.vbo.map();
+				if (!wasMapped) {
+					clientThread.invoke(() -> {
+						try {
+							vao.vbo.map();
+						} finally {
+							semaphore.release();
+						}
+					});
+					try {
+						if (!semaphore.tryAcquire(1, TimeUnit.SECONDS))
+							throw new RuntimeException("Timed out while mapping VAO");
+					} catch (InterruptedException ex) {
+						throw new RuntimeException(ex);
+					}
+				}
 
 				int rem = vao.vbo.vb.remaining() * Integer.BYTES;
 				if (size <= rem) {

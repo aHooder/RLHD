@@ -24,14 +24,18 @@
  */
 package rs117.hd.renderer.zone;
 
+import com.google.inject.Injector;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Set;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import javax.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.events.*;
 import net.runelite.api.hooks.*;
+import net.runelite.client.callback.ClientThread;
 import net.runelite.client.callback.RenderCallbackManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.ui.DrawManager;
@@ -89,7 +93,13 @@ public class ZoneRenderer implements Renderer {
 	public static final int UNIFORM_BLOCK_WORLD_VIEWS = UNIFORM_BLOCK_COUNT++;
 
 	@Inject
+	private Injector injector;
+
+	@Inject
 	private Client client;
+
+	@Inject
+	private ClientThread clientThread;
 
 	@Inject
 	private DrawManager drawManager;
@@ -139,6 +149,11 @@ public class ZoneRenderer implements Renderer {
 	@Inject
 	private UBOWorldViews uboWorldViews;
 
+	private final ThreadLocal<SceneUploader> THREAD_LOCAL_SCENE_UPLOADER =
+		ThreadLocal.withInitial(() -> injector.getInstance(SceneUploader.class));
+	private final ThreadLocal<FacePrioritySorter> THREAD_LOCAL_PRIORITY_SORTER =
+		ThreadLocal.withInitial(() -> injector.getInstance(FacePrioritySorter.class));
+
 	private final Camera sceneCamera = new Camera();
 	private final Camera directionalCamera = new Camera().setOrthographic(true);
 	private final ShadowCasterVolume directionalShadowCasterVolume = new ShadowCasterVolume(directionalCamera);
@@ -174,7 +189,8 @@ public class ZoneRenderer implements Renderer {
 		return
 			DrawCallbacks.ZBUF |
 			DrawCallbacks.ZBUF_ZONE_FRUSTUM_CHECK |
-			DrawCallbacks.NORMALS;
+			DrawCallbacks.NORMALS |
+			DrawCallbacks.RENDER_THREADS(4);
 	}
 
 	@Override
@@ -230,10 +246,10 @@ public class ZoneRenderer implements Renderer {
 		indirectDrawCmds = glGenBuffers();
 		indirectDrawCmdsStaging = new GpuIntBuffer();
 
-		vaoO = new VAO.VAOList(eboAlpha);
-		vaoA = new VAO.VAOList(eboAlpha);
-		vaoPO = new VAO.VAOList(eboAlpha);
-		vaoShadow = new VAO.VAOList(eboAlpha);
+		vaoO = new VAO.VAOList(clientThread, eboAlpha);
+		vaoA = new VAO.VAOList(clientThread, eboAlpha);
+		vaoPO = new VAO.VAOList(clientThread, eboAlpha);
+		vaoShadow = new VAO.VAOList(clientThread, eboAlpha);
 	}
 
 	private void destroyBuffers() {
@@ -935,6 +951,7 @@ public class ZoneRenderer implements Renderer {
 
 	@Override
 	public void drawDynamic(
+		int renderThreadId,
 		Projection projection,
 		Scene scene,
 		TileObject tileObject,
@@ -945,7 +962,8 @@ public class ZoneRenderer implements Renderer {
 		int y,
 		int z
 	) {
-		jobSystem.processPendingClientCallbacks();
+		if (client.isClientThread())
+			jobSystem.processPendingClientCallbacks();
 
 		WorldViewContext ctx = sceneManager.getContext(scene);
 		if (ctx == null || !renderCallbackManager.drawObject(scene, tileObject))
@@ -980,6 +998,7 @@ public class ZoneRenderer implements Renderer {
 				return;
 		}
 
+		int[] worldPos = new int[3];
 		ctx.sceneContext.localToWorld(tileObject.getLocalLocation(), tileObject.getPlane(), worldPos);
 		int uuid = ModelHash.generateUuid(client, tileObject.getHash(), r);
 		ModelOverride modelOverride = modelOverrideManager.getOverride(uuid, worldPos);
@@ -987,7 +1006,7 @@ public class ZoneRenderer implements Renderer {
 			return;
 
 		if (sceneManager.isRoot(ctx)) {
-			try (var ignored = frameTimer.begin(Timer.VISIBILITY_CHECK)) {
+//			try (var ignored = frameTimer.begin(Timer.VISIBILITY_CHECK)) {
 				// Additional Culling checks to help reduce dynamic object perf impact when off screen
 				if (!zone.inSceneFrustum && zone.inShadowFrustum && !modelOverride.castShadows)
 					return;
@@ -998,22 +1017,44 @@ public class ZoneRenderer implements Renderer {
 				if (!zone.inSceneFrustum && zone.inShadowFrustum && modelOverride.castShadows &&
 					!directionalShadowCasterVolume.intersectsPoint(x, y, z))
 					return;
-			}
+//			}
 		}
 
 		int preOrientation = HDUtils.getModelPreOrientation(HDUtils.getObjectConfig(tileObject));
 
-		int size = m.getFaceCount() * 3 * VAO.VERT_SIZE;
-		VAO o = vaoO.get(size, ctx.vboM);
-
 		boolean hasAlpha = m.getFaceTransparencies() != null || modelOverride.mightHaveTransparency;
+		int size = m.getFaceCount() * 3 * VAO.VERT_SIZE;
+
+		var semaphore = new Semaphore(0);
+		VAO[] vaos = { null, null };
+		clientThread.invoke(() -> {
+			vaos[0] = vaoO.get(size, ctx.vboM);
+			if (hasAlpha)
+				vaos[1] = vaoA.get(size, ctx.vboM);
+			semaphore.release();
+		});
+
+		var sceneUploader = THREAD_LOCAL_SCENE_UPLOADER.get();
+
+		try {
+			if (!semaphore.tryAcquire(1, TimeUnit.MILLISECONDS)) {
+				log.warn("Timed out while waiting for VAO mapping");
+				return;
+			}
+		} catch (Throwable ex) {
+			log.error("Error while acquiring VAOs:", ex);
+			return;
+		}
+		VAO o = vaos[0];
+		VAO a = vaos[1];
+
 		if (hasAlpha) {
-			VAO a = vaoA.get(size, ctx.vboM);
 			int start = a.vbo.vb.position();
 
 			if (zone.inSceneFrustum) {
 				try {
-					facePrioritySorter.uploadSortedModel(projection, m, modelOverride, preOrientation, orient, x, y, z, o.vbo.vb, a.vbo.vb);
+					THREAD_LOCAL_PRIORITY_SORTER.get()
+						.uploadSortedModel(projection, m, modelOverride, preOrientation, orient, x, y, z, o.vbo.vb, a.vbo.vb);
 				} catch (Exception ex) {
 					log.debug("error drawing entity", ex);
 				}

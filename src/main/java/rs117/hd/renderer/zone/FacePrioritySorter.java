@@ -44,33 +44,33 @@ import static rs117.hd.utils.MathUtils.*;
 class FacePrioritySorter {
 	private static final int[] EMPTY_NORMALS = new int[9];
 
-	static final int[] distances;
-	static final char[] distanceFaceCount;
-	static final char[][] distanceToFaces;
+	private final int[] distances;
+	private final char[] distanceFaceCount;
+	private final char[][] distanceToFaces;
 
-	private static final float[] modelProjectedX;
-	private static final float[] modelProjectedY;
+	private final float[] modelProjectedX;
+	private final float[] modelProjectedY;
 
-	private static final float[] modelLocalX;
-	private static final float[] modelLocalY;
-	private static final float[] modelLocalZ;
+	private final float[] modelLocalX;
+	private final float[] modelLocalY;
+	private final float[] modelLocalZ;
 
-	private static final float[] workingSpace;
-	private static final float[] modelUvs;
-	private static final int[] modelNormals;
+	private final float[] workingSpace;
+	private final float[] modelUvs;
+	private final int[] modelNormals;
 
-	static final int[] numOfPriority;
-	private static final int[] eq10;
-	private static final int[] eq11;
-	private static final int[] lt10;
-	static final int[][] orderedFaces;
+	private final int[] numOfPriority;
+	private final int[] eq10;
+	private final int[] eq11;
+	private final int[] lt10;
+	private final int[][] orderedFaces;
 
 	private static int orientSin, orientCos;
 
-	private static final int MAX_VERTEX_COUNT = 6500;
-	private static final int MAX_DIAMETER = 6000;
-	private static final int ZSORT_GROUP_SIZE = 1024; // was 512
-	private static final int MAX_FACES_PER_PRIORITY = 4000; // was 2500
+	public static final int MAX_VERTEX_COUNT = 6500;
+	public static final int MAX_DIAMETER = 6000;
+	public static final int ZSORT_GROUP_SIZE = 1024; // was 512
+	public static final int MAX_FACES_PER_PRIORITY = 4000; // was 2500
 
 	private static final int[] MAX_BRIGHTNESS_LOOKUP_TABLE = new int[8];
 	private static final float[] LIGHT_DIR_MODEL = new float[] { 0.57735026f, 0.57735026f, 0.57735026f };
@@ -83,7 +83,7 @@ class FacePrioritySorter {
 	// the minimum amount by which each color will be lightened
 	private static final int BASE_LIGHTEN = 10;
 
-	static {
+	{
 		distances = new int[MAX_VERTEX_COUNT];
 		distanceFaceCount = new char[MAX_DIAMETER];
 		distanceToFaces = new char[MAX_DIAMETER][ZSORT_GROUP_SIZE];

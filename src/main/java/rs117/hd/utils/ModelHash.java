@@ -114,7 +114,7 @@ public class ModelHash {
 			type = ModelHash.getType(hash);
 			id = ModelHash.getIdOrIndex(hash);
 
-			if (renderable instanceof DynamicObject) {
+			if (renderable instanceof DynamicObject && client.isClientThread()) {
 				var def = client.getObjectDefinition(id);
 				if (def.getImpostorIds() != null) {
 					var impostor = def.getImpostor();
