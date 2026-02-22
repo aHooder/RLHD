@@ -336,7 +336,7 @@ void main() {
         vec3 shadowTint = vec3(0);
         float shadow = 0;
         if ((fMaterialData[0] >> MATERIAL_FLAG_DISABLE_SHADOW_RECEIVING & 1) == 0)
-            shadow = sampleShadowMap(fragPos, vec2(0), lightDotNormals, isGroundPlane, shadowTint);
+            shadow = sampleShadowMap(fragPos, normals, vec2(0), lightDotNormals, isGroundPlane, shadowTint);
         shadow = max(shadow, selfShadowing);
         shadowTint *= lightStrength * 18.0;
         float inverseShadow = 1 - shadow;

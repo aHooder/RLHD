@@ -107,7 +107,7 @@ layout (location = 2) in vec3 vNormal;
             fFlatNormal = worldNormal;
         #endif
 
-        vec4 clipPosition = projectionMatrix * vec4(worldPosition, 1.0);
+        vec4 clipPosition = sceneCamera.viewProj * vec4(worldPosition, 1.0);
         int depthBias = (alphaBiasHsl >> 16) & 0xff;
         clipPosition.z += depthBias / 128.0;
 

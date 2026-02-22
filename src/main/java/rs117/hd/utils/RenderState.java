@@ -102,12 +102,13 @@ public final class RenderState {
 		protected void applyValue(int ubo) { glBindBuffer(GL_UNIFORM_BUFFER, ubo); }
 	}
 
-	public static final class GLPolygonOffset extends GLState.PrimitiveArrayState<RenderState, Float> {
+	public static final class GLPolygonOffset extends GLState.FloatArray {
 		private GLPolygonOffset() {
-			super(() -> new Float[2]);
+			super(2);
 		}
+
 		@Override
-		protected void applyValues(Float[] values) { glPolygonOffset(values[0], values[1]); }
+		protected void applyValues(float[] values) { glPolygonOffset(values[0], values[1]); }
 	}
 
 	public static final class GLDepthMask extends GLState.Bool {

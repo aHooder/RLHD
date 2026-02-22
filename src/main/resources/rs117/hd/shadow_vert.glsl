@@ -106,7 +106,7 @@ layout (location = 1) in vec3 vUv;
             fOpacity = opacity;
         #endif
 
-        gl_Position = lightProjectionMatrix * vec4(worldPosition, shouldCastShadow);
+        gl_Position = directionalCamera.viewProj * vec4(worldPosition, shouldCastShadow);
     }
 #else
     layout (location = 3) in int vAlphaBiasHsl;
@@ -158,7 +158,7 @@ layout (location = 1) in vec3 vUv;
                 gOpacity = opacity;
             #endif
         #else
-            gl_Position = lightProjectionMatrix * vec4(vPosition, shouldCastShadow);
+            gl_Position = directionalCamera.viewProj * vec4(vPosition, shouldCastShadow);
             #if SHADOW_TRANSPARENCY
                 fOpacity = opacity;
             #endif
