@@ -6,13 +6,16 @@ import rs117.hd.config.ShadowMode;
 import static org.lwjgl.opengl.GL33C.*;
 import static rs117.hd.HdPlugin.TEXTURE_UNIT_GAME;
 import static rs117.hd.HdPlugin.TEXTURE_UNIT_SHADOW_MAP;
+import static rs117.hd.renderer.zone.ZoneRenderer.TEXTURE_UNIT_TEXTURED_FACES;
 
-public class ShadowShaderProgram extends ShaderProgram {
-	private ShadowMode mode;
-	private final UniformTexture uniTextureArray = addUniformTexture("textureArray");
-	private final UniformTexture uniShadowMap = addUniformTexture("shadowMap");
+public abstract class ShadowShaderProgram extends ShaderProgram {
+	protected final UniformTexture uniTextureArray = addUniformTexture("textureArray");
+	protected final UniformTexture uniTextureFaces = addUniformTexture("textureFaces");
+	protected final UniformTexture uniShadowMap = addUniformTexture("shadowMap");
 
-	public ShadowShaderProgram() {
+	protected ShadowMode mode;
+
+	ShadowShaderProgram() {
 		super(t -> t
 			.add(GL_VERTEX_SHADER, "shadow_vert.glsl")
 			.add(GL_FRAGMENT_SHADER, "shadow_frag.glsl"));
@@ -21,6 +24,7 @@ public class ShadowShaderProgram extends ShaderProgram {
 	@Override
 	protected void initialize() {
 		uniTextureArray.set(TEXTURE_UNIT_GAME);
+		uniTextureFaces.set(TEXTURE_UNIT_TEXTURED_FACES);
 		uniShadowMap.set(TEXTURE_UNIT_SHADOW_MAP);
 	}
 
@@ -29,26 +33,34 @@ public class ShadowShaderProgram extends ShaderProgram {
 		super.compile(includes.copy().define("SHADOW_MODE", mode));
 	}
 
-	public void setMode(ShadowMode mode) {
-		this.mode = mode;
-		if (mode == ShadowMode.DETAILED) {
-			shaderTemplate.add(GL_GEOMETRY_SHADER, "shadow_geom.glsl");
-		} else {
-			shaderTemplate.remove(GL_GEOMETRY_SHADER);
-		}
-	}
-
 	public static class Fast extends ShadowShaderProgram {
 		public Fast() {
-			super();
-			setMode(ShadowMode.FAST);
+			mode = ShadowMode.FAST;
+			uniTextureArray.ignoreMissing = true;
 		}
 	}
 
 	public static class Detailed extends ShadowShaderProgram {
 		public Detailed() {
-			super();
-			setMode(ShadowMode.DETAILED);
+			mode = ShadowMode.DETAILED;
+		}
+	}
+
+	public static class Legacy extends ShadowShaderProgram {
+		public Legacy setMode(ShadowMode mode) {
+			this.mode = mode;
+			uniTextureArray.ignoreMissing = mode != ShadowMode.DETAILED;
+			return this;
+		}
+
+		@Override
+		public void compile(ShaderIncludes includes) throws ShaderException, IOException {
+			if (mode == ShadowMode.DETAILED) {
+				shaderTemplate.add(GL_GEOMETRY_SHADER, "shadow_geom.glsl");
+			} else {
+				shaderTemplate.remove(GL_GEOMETRY_SHADER);
+			}
+			super.compile(includes);
 		}
 	}
 }

@@ -6,18 +6,19 @@ import static rs117.hd.HdPlugin.TEXTURE_UNIT_GROUND_MAP;
 import static rs117.hd.HdPlugin.TEXTURE_UNIT_SHADOW_MAP;
 import static rs117.hd.HdPlugin.TEXTURE_UNIT_TILED_LIGHTING_MAP;
 import static rs117.hd.HdPlugin.TEXTURE_UNIT_TRANSPARENCY_MAP;
+import static rs117.hd.renderer.zone.ZoneRenderer.TEXTURE_UNIT_TEXTURED_FACES;
 
 public class SceneShaderProgram extends ShaderProgram {
-	private final UniformTexture uniTextureArray = addUniformTexture("textureArray");
-	private final UniformTexture uniShadowMap = addUniformTexture("shadowMap");
-	private final UniformTexture uniShadowTransparencyMap = addUniformTexture("shadowTransparencyMap");
-	private final UniformTexture uniTiledLightingTextureArray = addUniformTexture("tiledLightingArray");
-	private final UniformTexture uniShadowGroundMask = addUniformTexture("shadowGroundMask");
+	protected final UniformTexture uniTextureArray = addUniformTexture("textureArray");
+	protected final UniformTexture uniShadowMap = addUniformTexture("shadowMap");
+	protected final UniformTexture uniTiledLightingTextureArray = addUniformTexture("tiledLightingArray");
+	protected final UniformTexture uniTextureFaces = addUniformTexture("textureFaces");
+	protected final UniformTexture uniShadowTransparencyMap = addUniformTexture("shadowTransparencyMap");
+	protected final UniformTexture uniShadowGroundMask = addUniformTexture("shadowGroundMask");
 
 	public SceneShaderProgram() {
 		super(t -> t
 			.add(GL_VERTEX_SHADER, "scene_vert.glsl")
-			.add(GL_GEOMETRY_SHADER, "scene_geom.glsl")
 			.add(GL_FRAGMENT_SHADER, "scene_frag.glsl"));
 		uniTiledLightingTextureArray.ignoreMissing = true;
 	}
@@ -29,5 +30,13 @@ public class SceneShaderProgram extends ShaderProgram {
 		uniShadowGroundMask.set(TEXTURE_UNIT_GROUND_MAP);
 		uniShadowTransparencyMap.set(TEXTURE_UNIT_TRANSPARENCY_MAP);
 		uniTiledLightingTextureArray.set(TEXTURE_UNIT_TILED_LIGHTING_MAP);
+		uniTextureFaces.set(TEXTURE_UNIT_TEXTURED_FACES);
+	}
+
+	public static class Legacy extends SceneShaderProgram {
+		Legacy() {
+			shaderTemplate.add(GL_GEOMETRY_SHADER, "scene_geom.glsl");
+			uniTextureFaces.ignoreMissing = true;
+		}
 	}
 }

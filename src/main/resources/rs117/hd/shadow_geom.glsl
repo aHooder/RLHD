@@ -42,7 +42,6 @@ flat in vec3 gPosition[3];
 flat in vec3 gUv[3];
 flat in int gMaterialData[3];
 flat in int gCastShadow[3];
-flat in int gWorldViewId[3];
 
 out vec4 fUvw;
 flat out int fMaterialData;
@@ -72,7 +71,7 @@ void main() {
     // MacOS doesn't allow assigning these arrays directly.
     // One of the many wonders of Apple software...
     vec3 uvw[3] = vec3[](gUv[0], gUv[1], gUv[2]);
-    int worldViewIndex = gWorldViewId[0];
+    int worldViewIndex = -1;
     computeUvs(materialData, worldViewIndex, vec3[](gPosition[0], gPosition[1], gPosition[2]), uvw);
 
     fMaterialData = materialData;
@@ -91,12 +90,12 @@ void main() {
         #endif
     #endif
 
-    vec4 pos = getWorldViewProjection(worldViewIndex) * vec4(gPosition[i], 1);
+        vec4 pos = vec4(gPosition[i], 1);
 
-    #if ZONE_RENDERER && GROUND_SHADOWS
-        fFragPos = pos.xyz;
-        fGroundPlane = gGroundPlane[i];
-    #endif
+        #if ZONE_RENDERER && GROUND_SHADOWS
+            fFragPos = pos.xyz;
+            fGroundPlane = gGroundPlane[i];
+        #endif
 
         gl_Position = directionalCamera.viewProj * pos;
         EmitVertex();

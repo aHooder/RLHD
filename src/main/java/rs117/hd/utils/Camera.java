@@ -34,7 +34,7 @@ public final class Camera {
 	private final float[] orientation = new float[2];
 	private final int[] fixedOrientation = new int[2]; // TODO: Is there a reliable way to go from orientation -> Fixed?
 
-	private int dirtyFlags = PROJ_CHANGED | VIEW_CHANGED;
+	private volatile int dirtyFlags = PROJ_CHANGED | VIEW_CHANGED;
 
 	@Getter
 	private int viewportWidth = 10;
@@ -58,7 +58,7 @@ public final class Camera {
 
 	public boolean isViewDirty() { return (dirtyFlags & VIEW_MATRIX_DIRTY) != 0; }
 
-	public boolean getIsOrthographic() {return isOrthographic; }
+	public boolean getIsOrthographic() { return isOrthographic; }
 
 	public Camera setOrthographic(boolean newOrthographic) {
 		if (isOrthographic != newOrthographic) {
@@ -275,7 +275,13 @@ public final class Camera {
 	public float[] getForwardDirection() { return getForwardDirection(new float[3]); }
 
 	private void calculateViewMatrix() {
-		if ((dirtyFlags & VIEW_MATRIX_DIRTY) != 0) {
+		if ((dirtyFlags & VIEW_MATRIX_DIRTY) == 0)
+			return;
+
+		synchronized (this) {
+			if ((dirtyFlags & VIEW_MATRIX_DIRTY) == 0)
+				return;
+
 			viewMatrix = Mat4.identity();
 			Mat4.mul(viewMatrix, Mat4.rotateX(orientation[1]));
 			Mat4.mul(viewMatrix, Mat4.rotateY(orientation[0]));
@@ -330,7 +336,13 @@ public final class Camera {
 	}
 
 	private void calculateProjectionMatrix() {
-		if ((dirtyFlags & PROJECTION_MATRIX_DIRTY) != 0) {
+		if ((dirtyFlags & PROJECTION_MATRIX_DIRTY) == 0)
+			return;
+
+		synchronized (this) {
+			if ((dirtyFlags & PROJECTION_MATRIX_DIRTY) == 0)
+				return;
+
 			final float zoomedViewportWidth = (viewportWidth / zoom);
 			final float zoomedViewportHeight = (viewportHeight / zoom);
 			if (isOrthographic) {
@@ -373,7 +385,13 @@ public final class Camera {
 	}
 
 	private void calculateViewProjMatrix() {
-		if ((dirtyFlags & VIEW_PROJ_MATRIX_DIRTY) != 0) {
+		if ((dirtyFlags & VIEW_PROJ_MATRIX_DIRTY) == 0)
+			return;
+
+		synchronized (this) {
+			if ((dirtyFlags & VIEW_PROJ_MATRIX_DIRTY) == 0)
+				return;
+
 			calculateViewMatrix();
 			calculateProjectionMatrix();
 
@@ -396,10 +414,19 @@ public final class Camera {
 	}
 
 	private void calculateInvViewProjMatrix() {
-		if ((dirtyFlags & INV_VIEW_PROJ_MATRIX_DIRTY) != 0) {
+		if ((dirtyFlags & INV_VIEW_PROJ_MATRIX_DIRTY) == 0)
+			return;
+
+		synchronized (this) {
+			if ((dirtyFlags & INV_VIEW_PROJ_MATRIX_DIRTY) == 0)
+				return;
+
 			calculateViewProjMatrix();
 			try {
-				invViewProjMatrix = Mat4.inverse(viewProjMatrix);
+				float[] invView = Mat4.inverse(viewMatrix);
+				float[] invProj = Mat4.inverse(projectionMatrix);
+				Mat4.mul(invView, invProj);
+				invViewProjMatrix = invView;
 			} catch (Exception ex) {
 				log.warn("Encountered an exception whilst solving inverse of camera ViewProj: ", ex);
 			}
@@ -421,9 +448,15 @@ public final class Camera {
 	private void calculateFrustumPlanes() {
 		if ((dirtyFlags & FRUSTUM_PLANES_DIRTY) == 0)
 			return;
-		calculateViewProjMatrix();
-		Mat4.extractPlanes(viewProjMatrix, frustumPlanes);
-		dirtyFlags &= ~FRUSTUM_PLANES_DIRTY;
+
+		synchronized (this) {
+			if ((dirtyFlags & FRUSTUM_PLANES_DIRTY) == 0)
+				return;
+
+			calculateViewProjMatrix();
+			Mat4.extractPlanes(viewProjMatrix, frustumPlanes);
+			dirtyFlags &= ~FRUSTUM_PLANES_DIRTY;
+		}
 	}
 
 	public float[][] getFrustumPlanes(float[][] out) {
@@ -440,9 +473,15 @@ public final class Camera {
 	private void calculateFrustumCorners() {
 		if ((dirtyFlags & FRUSTUM_CORNERS_DIRTY) == 0)
 			return;
-		calculateInvViewProjMatrix();
-		Mat4.extractFrustumCorners(invViewProjMatrix, frustumCorners);
-		dirtyFlags &= ~FRUSTUM_CORNERS_DIRTY;
+
+		synchronized (this) {
+			if ((dirtyFlags & FRUSTUM_CORNERS_DIRTY) == 0)
+				return;
+
+			calculateInvViewProjMatrix();
+			Mat4.extractFrustumCorners(invViewProjMatrix, frustumCorners);
+			dirtyFlags &= ~FRUSTUM_CORNERS_DIRTY;
+		}
 	}
 
 	public float[][] getFrustumCorners(float[][] out) {
@@ -464,6 +503,11 @@ public final class Camera {
 	public boolean intersectsSphere(int x, int y, int z, int radius) {
 		calculateFrustumPlanes();
 		return HDUtils.isSphereIntersectingFrustum(x, y, z, radius, frustumPlanes, frustumPlanes.length);
+	}
+
+	public int classifySphere(float x, float y, float z, float radius) {
+		calculateFrustumPlanes();
+		return HDUtils.classifySphereFrustum(x, y, z, radius, frustumPlanes, frustumPlanes.length);
 	}
 
 	public static class CameraStruct extends UniformBuffer.StructProperty {

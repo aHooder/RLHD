@@ -92,6 +92,26 @@ void undoVanillaShading(inout int hsl, vec3 unrotatedNormal) {
     hsl |= lightness;
 }
 
+#if SHADER_TYPE == FRAGMENT_SHADER
+    mat3 cotangent_frame(vec3 N, vec3 p, vec2 uv) {
+        // get edge vectors of the pixel triangle
+        vec3 dpdx = dFdx(p);
+        vec3 dpdy = dFdy(p);
+        vec2 duvdx = dFdx(uv);
+        vec2 duvdy = dFdy(uv);
+
+        // solve the linear system
+        vec3 a = cross(dpdy, N);
+        vec3 b = cross(N, dpdx);
+        vec3 T = a * duvdx.x + b * duvdy.x;
+        vec3 B = a * duvdx.y + b * duvdy.y;
+
+        // construct a scale-invariant frame
+        float invmax = inversesqrt(max(dot(T, T), dot(B, B)));
+        return mat3(T * invmax, B * invmax, N);
+    }
+#endif
+
 // 2D Random
 float hash(in vec2 st) {
     return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
