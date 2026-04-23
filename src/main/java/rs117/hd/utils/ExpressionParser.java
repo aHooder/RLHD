@@ -16,13 +16,17 @@ import lombok.extern.slf4j.Slf4j;
 
 import static rs117.hd.utils.MathUtils.*;
 
+@Slf4j
 public class ExpressionParser {
 	public static ExpressionPredicate parsePredicate(String expression) {
 		return parsePredicate(expression, null);
 	}
 
 	public static ExpressionPredicate parsePredicate(String expression, @Nullable VariableSupplier constants) {
-		return asExpression(parseExpression(expression, constants)).toPredicate();
+		var result = asExpression(parseExpression(expression, constants)).toPredicate();
+		if (result instanceof Expression)
+			((Expression) result).rawExpression = expression;
+		return result;
 	}
 
 	public static Function<VariableSupplier, Object> parseFunction(String expression) {
@@ -459,6 +463,7 @@ public class ExpressionParser {
 		Object ternary;
 		boolean isInParentheses;
 		public final HashSet<String> variables = new HashSet<>();
+		String rawExpression;
 
 		Expression(Object value) {
 			this(null, value, null, null, false);
@@ -549,7 +554,12 @@ public class ExpressionParser {
 				throw new IllegalArgumentException("Expression does not result in a boolean");
 
 			var func = toFunction();
-			return vars -> (boolean) func.apply(vars);
+			try {
+				return vars -> (boolean) func.apply(vars);
+			} catch (Exception ex) {
+				log.debug("Cast error for expression: {}", rawExpression);
+				throw ex;
+			}
 		}
 
 		boolean isBoolean() {
