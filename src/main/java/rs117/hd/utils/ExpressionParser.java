@@ -544,61 +544,6 @@ public class ExpressionParser {
 			return value;
 		}
 
-		private Function<VariableSupplier, Object> toFunctionInternal() {
-			if (op == null)
-				return asFunction(left);
-
-			// Convert variables and constants into functions
-			var l = asFunction(left);
-			var r = asFunction(right);
-
-			switch (op) {
-				case AND:
-					return vars -> (boolean) l.apply(vars) && (boolean) r.apply(vars);
-				case OR:
-					return vars -> (boolean) l.apply(vars) || (boolean) r.apply(vars);
-				case NOTEQUAL:
-				case EQUAL:
-					boolean isBoolean =
-						left instanceof Boolean || left instanceof Expression && ((Expression) left).isBoolean() ||
-						right instanceof Boolean || right instanceof Expression && ((Expression) right).isBoolean();
-					if (isBoolean) {
-						return op == Operator.EQUAL ?
-							vars -> (boolean) l.apply(vars) == (boolean) r.apply(vars) :
-							vars -> (boolean) l.apply(vars) != (boolean) r.apply(vars);
-					} else {
-						return op == Operator.EQUAL ?
-							vars -> (float) l.apply(vars) == (float) r.apply(vars) :
-							vars -> (float) l.apply(vars) != (float) r.apply(vars);
-					}
-				case GEQUAL:
-					return vars -> (float) l.apply(vars) >= (float) r.apply(vars);
-				case GREATER:
-					return vars -> (float) l.apply(vars) > (float) r.apply(vars);
-				case LEQUAL:
-					return vars -> (float) l.apply(vars) <= (float) r.apply(vars);
-				case LESS:
-					return vars -> (float) l.apply(vars) < (float) r.apply(vars);
-				case ADD:
-					return vars -> (float) l.apply(vars) + (float) r.apply(vars);
-				case SUB:
-					return vars -> (float) l.apply(vars) - (float) r.apply(vars);
-				case MUL:
-					return vars -> (float) l.apply(vars) * (float) r.apply(vars);
-				case DIV:
-					return vars -> (float) l.apply(vars) / (float) r.apply(vars);
-				case MOD:
-					return vars -> (float) l.apply(vars) % (float) r.apply(vars);
-				case NOT:
-					return vars -> !(boolean) r.apply(vars);
-				case TERNARY:
-					var condition = asExpression(ternary).toPredicate();
-					return vars -> condition.test(vars) ? l.apply(vars) : r.apply(vars);
-			}
-
-			throw new UnsupportedOperationException("Unsupported operands: " + l + " " + op + " " + r);
-		}
-
 		public ExpressionPredicate toPredicate() {
 			if (!isBoolean())
 				throw new IllegalArgumentException("Expression does not result in a boolean");
@@ -644,6 +589,255 @@ public class ExpressionParser {
 			} else if (dependency instanceof Expression) {
 				variables.addAll(((Expression) dependency).variables);
 			}
+		}
+
+		enum OpCode {
+			PUSH_CONST,
+			PUSH_VAR,
+
+			ADD, SUB, MUL, DIV, MOD,
+
+			EQ, NEQ,
+			GT, GTE, LT, LTE,
+
+			AND, OR, NOT,
+
+			TERNARY
+		}
+
+		@AllArgsConstructor
+		static class Instruction {
+			final OpCode op;
+			final Object operand; // Float, String (var name), or null
+		}
+
+		private void compile(ArrayList<Instruction> out) {
+			if (op == null) {
+				if (left instanceof String)
+					out.add(new Instruction(OpCode.PUSH_VAR, left));
+				else
+					out.add(new Instruction(OpCode.PUSH_CONST, left));
+				return;
+			}
+
+			var left = asExpression(this.left);
+			var right = asExpression(this.right);
+
+			switch (op) {
+				case ADD:
+					left.compile(out);
+					right.compile(out);
+					out.add(new Instruction(OpCode.ADD, null));
+					break;
+
+				case SUB:
+					left.compile(out);
+					right.compile(out);
+					out.add(new Instruction(OpCode.SUB, null));
+					break;
+
+				case MUL:
+					left.compile(out);
+					right.compile(out);
+					out.add(new Instruction(OpCode.MUL, null));
+					break;
+
+				case DIV:
+					left.compile(out);
+					right.compile(out);
+					out.add(new Instruction(OpCode.DIV, null));
+					break;
+
+				case MOD:
+					left.compile(out);
+					right.compile(out);
+					out.add(new Instruction(OpCode.MOD, null));
+					break;
+
+				case AND:
+					left.compile(out);
+					right.compile(out);
+					out.add(new Instruction(OpCode.AND, null));
+					break;
+
+				case OR:
+					left.compile(out);
+					right.compile(out);
+					out.add(new Instruction(OpCode.OR, null));
+					break;
+
+				case NOT:
+					right.compile(out);
+					out.add(new Instruction(OpCode.NOT, null));
+					break;
+
+				case EQUAL:
+				case NOTEQUAL:
+				case GREATER:
+				case GEQUAL:
+				case LESS:
+				case LEQUAL:
+					left.compile(out);
+					right.compile(out);
+					out.add(new Instruction(mapComparison(op), null));
+					break;
+
+				case TERNARY:
+					asExpression(ternary).compile(out); // condition
+					left.compile(out);    // true
+					right.compile(out);   // false
+					out.add(new Instruction(OpCode.TERNARY, null));
+					break;
+			}
+		}
+
+		private OpCode mapComparison(Operator op) {
+			switch (op) {
+				case EQUAL:
+					return OpCode.EQ;
+				case NOTEQUAL:
+					return OpCode.NEQ;
+				case GREATER:
+					return OpCode.GT;
+				case GEQUAL:
+					return OpCode.GTE;
+				case LESS:
+					return OpCode.LT;
+				case LEQUAL:
+					return OpCode.LTE;
+			}
+			throw new IllegalStateException();
+		}
+
+		private Function<VariableSupplier, Object> toFunctionInternal() {
+			ArrayList<Instruction> list = new ArrayList<>();
+			compile(list);
+
+			Instruction[] instructions = list.toArray(new Instruction[0]);
+
+			return vars -> {
+				Object[] stack = new Object[32];
+				int sp = 0;
+
+				for (Instruction ins : instructions) {
+					switch (ins.op) {
+						case PUSH_CONST:
+							stack[sp++] = ins.operand;
+							break;
+
+						case PUSH_VAR:
+							stack[sp++] = sanitizeValue(vars.get((String) ins.operand));
+							break;
+
+						case ADD: {
+							float b = (float) stack[--sp];
+							float a = (float) stack[--sp];
+							stack[sp++] = a + b;
+							break;
+						}
+
+						case SUB: {
+							float b = (float) stack[--sp];
+							float a = (float) stack[--sp];
+							stack[sp++] = a - b;
+							break;
+						}
+
+						case MUL: {
+							float b = (float) stack[--sp];
+							float a = (float) stack[--sp];
+							stack[sp++] = a * b;
+							break;
+						}
+
+						case DIV: {
+							float b = (float) stack[--sp];
+							float a = (float) stack[--sp];
+							stack[sp++] = a / b;
+							break;
+						}
+
+						case MOD: {
+							float b = (float) stack[--sp];
+							float a = (float) stack[--sp];
+							stack[sp++] = a % b;
+							break;
+						}
+
+						case AND: {
+							boolean b = (boolean) stack[--sp];
+							boolean a = (boolean) stack[--sp];
+							stack[sp++] = a && b;
+							break;
+						}
+
+						case OR: {
+							boolean b = (boolean) stack[--sp];
+							boolean a = (boolean) stack[--sp];
+							stack[sp++] = a || b;
+							break;
+						}
+
+						case NOT: {
+							boolean a = (boolean) stack[--sp];
+							stack[sp++] = !a;
+							break;
+						}
+
+						case EQ: {
+							Object b = stack[--sp];
+							Object a = stack[--sp];
+							stack[sp++] = a.equals(b);
+							break;
+						}
+
+						case NEQ: {
+							Object b = stack[--sp];
+							Object a = stack[--sp];
+							stack[sp++] = !a.equals(b);
+							break;
+						}
+
+						case GT: {
+							float b = (float) stack[--sp];
+							float a = (float) stack[--sp];
+							stack[sp++] = a > b;
+							break;
+						}
+
+						case GTE: {
+							float b = (float) stack[--sp];
+							float a = (float) stack[--sp];
+							stack[sp++] = a >= b;
+							break;
+						}
+
+						case LT: {
+							float b = (float) stack[--sp];
+							float a = (float) stack[--sp];
+							stack[sp++] = a < b;
+							break;
+						}
+
+						case LTE: {
+							float b = (float) stack[--sp];
+							float a = (float) stack[--sp];
+							stack[sp++] = a <= b;
+							break;
+						}
+
+						case TERNARY: {
+							Object falseVal = stack[--sp];
+							Object trueVal = stack[--sp];
+							boolean cond = (boolean) stack[--sp];
+							stack[sp++] = cond ? trueVal : falseVal;
+							break;
+						}
+					}
+				}
+
+				return stack[0];
+			};
 		}
 	}
 
