@@ -337,7 +337,8 @@ public class ExpressionParser {
 
 				// Parse all following operations with higher precedence than the current, and return that as the operand
 				if (op != null) {
-					var higherPrecedenceParser = new ParserContext(expr, index, endIndex, false, op.precedence + 1);
+					int nextPrecedence = op.precedence + (op == Operator.NOT ? 0 : 1);
+					var higherPrecedenceParser = new ParserContext(expr, index, endIndex, false, nextPrecedence);
 					var expr = parseExpression(higherPrecedenceParser);
 					if (expr != null) {
 						index = higherPrecedenceParser.index;
@@ -547,23 +548,6 @@ public class ExpressionParser {
 			if (op == null)
 				return asFunction(left);
 
-			if (op == Operator.TERNARY) {
-				var condition = asExpression(ternary).toPredicate();
-				if (left instanceof Expression) {
-					var ifTrue = ((Expression) left).toFunction();
-					if (right instanceof Expression) {
-						var ifFalse = ((Expression) right).toFunction();
-						return vars -> condition.test(vars) ? ifTrue.apply(vars) : ifFalse.apply(vars);
-					}
-					return vars -> condition.test(vars) ? ifTrue.apply(vars) : right;
-				} else if (right instanceof Expression) {
-					var ifFalse = ((Expression) right).toFunction();
-					return vars -> condition.test(vars) ? left : ifFalse.apply(vars);
-				} else {
-					return vars -> condition.test(vars) ? left : right;
-				}
-			}
-
 			// Convert variables and constants into functions
 			var l = asFunction(left);
 			var r = asFunction(right);
@@ -607,6 +591,9 @@ public class ExpressionParser {
 					return vars -> (float) l.apply(vars) % (float) r.apply(vars);
 				case NOT:
 					return vars -> !(boolean) r.apply(vars);
+				case TERNARY:
+					var condition = asExpression(ternary).toPredicate();
+					return vars -> condition.test(vars) ? l.apply(vars) : r.apply(vars);
 			}
 
 			throw new UnsupportedOperationException("Unsupported operands: " + l + " " + op + " " + r);
@@ -723,7 +710,7 @@ public class ExpressionParser {
 			if (ctx.op == null)
 				break;
 
-			if (ctx.op != Operator.NOT && ctx.operands[0] == null)
+			if (ctx.operands[0] == null && ctx.op != Operator.NOT)
 				throw new SyntaxError(ctx, "Missing left operand for operator '" + ctx.op.symbol + "'");
 
 			// Will parse all following higher precedence operations, or a single value or identifier
