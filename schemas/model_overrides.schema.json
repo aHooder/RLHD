@@ -218,6 +218,13 @@
         "type": "boolean",
         "description": "Disable priority sorting, instead sorting solely based on distance. Useful for new models where Jagex provide incorrect priorities."
       },
+      "modelOffset": {
+        "type": "array",
+        "description": "xyz offset",
+        "items": {
+          "type": "integer"
+        }
+      },
       "materialOverrides": {
         "type": "object",
         "description": "A subset of options can be tweaked separately for specific materials of the model.",

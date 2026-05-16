@@ -739,7 +739,7 @@ public class SceneUploader implements AutoCloseable {
 			uploadStaticModel(
 				ctx, tile, model, modelOverride, uuid,
 				preOrientation, orient,
-				x - basex, y, z - basez,
+				x - basex + modelOverride.modelOffset[0], y + modelOverride.modelOffset[1], z - basez + modelOverride.modelOffset[2],
 				opaqueBuffer,
 				alphaBuffer,
 				textureBuffer
