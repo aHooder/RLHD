@@ -905,10 +905,6 @@ public class SceneUploader implements AutoCloseable {
 					nwColor = override.modifyColor(nwColor);
 					neColor = override.modifyColor(neColor);
 				}
-				swHeight -= override.heightOffset;
-				seHeight -= override.heightOffset;
-				neHeight -= override.heightOffset;
-				nwHeight -= override.heightOffset;
 			} else if (textureId == -1) {
 				// Fall back to the default ground material if the tile is untextured
 				groundMaterial = override.groundMaterial;
@@ -983,6 +979,11 @@ public class SceneUploader implements AutoCloseable {
 			nwTerrainData = HDUtils.packTerrainData(true, max(1, nwDepth), waterType, tileZ);
 			neTerrainData = HDUtils.packTerrainData(true, max(1, neDepth), waterType, tileZ);
 		}
+
+		swHeight -= override.heightOffset;
+		seHeight -= override.heightOffset;
+		neHeight -= override.heightOffset;
+		nwHeight -= override.heightOffset;
 
 		int swMaterialData = swMaterial.packMaterialData(ModelOverride.NONE, UvType.GEOMETRY, swVertexIsOverlay);
 		int seMaterialData = seMaterial.packMaterialData(ModelOverride.NONE, UvType.GEOMETRY, seVertexIsOverlay);
