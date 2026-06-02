@@ -21,6 +21,7 @@ import rs117.hd.renderer.zone.SceneManager;
 import rs117.hd.renderer.zone.WorldViewContext;
 import rs117.hd.renderer.zone.ZoneRenderer;
 import rs117.hd.utils.FrameTimingsRecorder;
+import rs117.hd.utils.GCMonitor;
 import rs117.hd.utils.NpcDisplacementCache;
 import rs117.hd.utils.collections.PooledArrayType;
 import rs117.hd.utils.jobs.JobSystem;
@@ -47,6 +48,9 @@ public class FrameTimerOverlay extends OverlayPanel implements FrameTimer.Listen
 
 	@Inject
 	private JobSystem jobSystem;
+
+	@Inject
+	private GCMonitor gcMonitor;
 
 	@Inject
 	private SceneManager sceneManager;
@@ -159,7 +163,7 @@ public class FrameTimerOverlay extends OverlayPanel implements FrameTimer.Listen
 
 			children.add(LineComponent.builder()
 				.left("Garbage collection count:")
-				.right(String.valueOf(plugin.getGarbageCollectionCount()))
+				.right(String.valueOf(gcMonitor.getGcCount()))
 				.build());
 
 			children.add(LineComponent.builder()
