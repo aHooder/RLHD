@@ -197,7 +197,7 @@ void main() {
 
         // Fade out stars and nebula near the horizon so the sky converges
         // to the plain gradient color that the fog uses, hiding the world edge
-        float horizonStarFade = smoothstep(-0.1, 0.07, upAmount);
+        float horizonStarFade = smoothstep(-0.5, -0.2, upAmount);
         skyColor = mix(skyColor, nightSkyColor, nightSkyBlend * horizonStarFade);
 
         // Shooting stars (atmospheric, use un-rotated viewDir)
