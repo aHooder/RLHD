@@ -596,20 +596,6 @@ void main() {
         float fogAmount = calculateFogAmount(IN.position);
         float combinedFog = 1 - (1 - fogAmount) * (1 - groundFog);
 
-        #if LINEAR_ALPHA_BLENDING
-            if (isWaterSurface) {
-                outputColor.rgb = mix(outputColor.rgb * outputColor.a, srgbToLinear(fogColor), srgbToLinear(combinedFog));
-                outputColor.a = mix(outputColor.a, 1, combinedFog);
-                outputColor.rgb /= outputColor.a;
-            } else {
-                outputColor.rgb = srgbToLinear(mix(linearToSrgb(outputColor.rgb), fogColor, combinedFog));
-            }
-        #else
-            if (isWaterSurface)
-                outputColor.a = combinedFog + outputColor.a * (1 - combinedFog);
-            outputColor.rgb = mix(outputColor.rgb, fogColor, combinedFog);
-        #endif
-
         if (skyGradientEnabled == 1) {
             // Default to the fragment's own color so the mix below is a no-op
             // when there's no fog. The full sky-gradient reconstruction is only
@@ -690,7 +676,21 @@ void main() {
                 }
             }
 
-            outputColor.rgb = mix(outputColor.rgb, skyColorAtFragment, combinedFog);
+            #if LINEAR_ALPHA_BLENDING
+                if (isWaterSurface) {
+                    outputColor.rgb = mix(outputColor.rgb * outputColor.a, srgbToLinear(skyColorAtFragment), srgbToLinear(combinedFog));
+                    outputColor.a = mix(outputColor.a, 1, combinedFog);
+                    outputColor.rgb /= outputColor.a;
+                } else {
+                    outputColor.rgb = srgbToLinear(mix(linearToSrgb(outputColor.rgb), skyColorAtFragment, combinedFog));
+                }
+            #else
+                if (isWaterSurface)
+                    outputColor.a = combinedFog + outputColor.a * (1 - combinedFog);
+                outputColor.rgb = mix(outputColor.rgb, fogColor, combinedFog);
+            #endif
+
+//            outputColor.rgb = mix(outputColor.rgb, skyColorAtFragment, combinedFog);
 
             // Dithering to reduce color banding. Kept OUTSIDE the fog gate above:
             // this is the scene's only anti-banding noise and is independent of fog,
