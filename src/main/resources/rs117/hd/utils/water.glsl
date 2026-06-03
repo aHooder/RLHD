@@ -500,8 +500,8 @@ vec4 sampleWater(int waterTypeIndex, float waterDepth, vec3 viewDir) {
     vec3 omega_h = normalize(omega_o + omega_i); // Half-way vector
     vec3 omega_n = N; // Surface normal
 
-    vec3 sunSpecular = pow(max(0, dot(N, omega_h)), 2e3) * directionalLight;
-    additionalLight += sunSpecular;
+//    vec3 sunSpecular = pow(max(0, dot(N, omega_h)), 2e3) * directionalLight;
+//    additionalLight += sunSpecular;
 
     // Begin constructing final output color
     vec4 dst = reflection;

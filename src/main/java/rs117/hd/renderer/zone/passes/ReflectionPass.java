@@ -358,16 +358,55 @@ public final class ReflectionPass implements RenderPass {
 			glFramebufferTextureLayer(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, texWaterReflection, 0, layer);
 			glFramebufferTextureLayer(GL_DRAW_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, texWaterReflectionDepthMap, 0, layer);
 
-			float[] fogColor = ColorUtils.linearToSrgb(environmentManager.currentFogColor);
-			if (plugin.configLinearAlphaBlending) {
-				glEnable(GL_FRAMEBUFFER_SRGB);
-				// This is kind of stupid, but our shader expects fogColor in sRGB, so we transform it back here
-				fogColor = ColorUtils.srgbToLinear(fogColor);
-			}
-			glClearColor(fogColor[0], fogColor[1], fogColor[2], 1f);
-
+			// Clear depth buffer
 			glClearDepth(0);
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+			glClear(GL_DEPTH_BUFFER_BIT);
+
+			if (plugin.configLinearAlphaBlending)
+				glEnable(GL_FRAMEBUFFER_SRGB);
+
+			// TODO: Hacky
+			var sceneMainProgram = zoneRenderer.getSceneMainProgram();
+			var skyProgram = zoneRenderer.getSkyProgram();
+			var skyGradientEnabled = zoneRenderer.isSkyGradientEnabled();
+			var calculatedFogColorSrgb = zoneRenderer.getCalculatedFogColorSrgb();
+
+			// Render sky gradient if Day/Night Cycle is enabled, otherwise use solid color clear
+			if (skyGradientEnabled && skyProgram.isValid()) {
+				// Render sky gradient using fullscreen triangle
+				renderState.disable.set(GL_DEPTH_TEST);
+				renderState.disable.set(GL_CULL_FACE);
+				renderState.apply();
+
+				skyProgram.use();
+
+				renderState.vao.setVao(plugin.vaoTri);
+				renderState.apply();
+				glDrawArrays(GL_TRIANGLES, 0, 3);
+
+				// Switch back to scene program
+				sceneMainProgram.use();
+			} else {
+				// Use Day/Night Cycle fog color if available, otherwise use environment manager's fog color
+				float[] fogColor =
+					calculatedFogColorSrgb != null ? calculatedFogColorSrgb : ColorUtils.linearToSrgb(environmentManager.currentFogColor);
+
+				if (plugin.configLinearAlphaBlending) {
+					// This is kind of stupid, but our shader expects fogColor in sRGB, so we transform it back here
+					fogColor = ColorUtils.srgbToLinear(fogColor);
+				}
+
+				float[] gammaCorrectedFogColor = pow(fogColor, plugin.getGammaCorrection());
+				glClearColor(
+					gammaCorrectedFogColor[0],
+					gammaCorrectedFogColor[1],
+					gammaCorrectedFogColor[2],
+					1f
+				);
+				glClear(GL_COLOR_BUFFER_BIT);
+			}
+
+			zoneRenderer.sceneReflectionProgram.use();
 
 			// Since the game was never designed to be viewed from below, a lot of
 			// things are missing triangles underneath. In most cases, it's fine
