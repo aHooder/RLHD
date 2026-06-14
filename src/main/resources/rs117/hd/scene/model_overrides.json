@@ -30731,6 +30731,7 @@
   {
     "description": "Object - Wooden - Support Post",
     "baseMaterial": "WOOD_GRAIN_2",
+    "terrainVertexSnap": true,
     "objectIds": [
       "WOODENSUPPORT1",
       "FAI_BARBARIAN_WOODENSUPPORT",
@@ -55001,6 +55002,16 @@
     ]
   },
   {
+    "description": "Post with rope",
+    "baseMaterial": "WOOD_GRAIN_3",
+    "uvType": "BOX",
+    "objectIds": [
+      "PISCARILIUS_PIER_POST_01"
+    ],
+    "terrainVertexSnap": true,
+    "terrainVertexSnapThreshold": 1
+  },
+  {
     "description": "Textured brick wooden post wall",
     "baseMaterial": "WOOD_GRAIN_3",
     "uvType": "BOX",
@@ -77035,6 +77046,8 @@
   {
     "description": "The Pandemonium - Dock Support",
     "baseMaterial": "WOOD_GRAIN_3_LIGHT",
+    "terrainVertexSnap": true,
+    "terrainVertexSnapThreshold": 0.008,
     "objectIds": [
       "PANDEMONIUM_PIER_SUPPORT_PILLAR",
       "PANDEMONIUM_PIER_SUPPORT_STRAIGHT01",

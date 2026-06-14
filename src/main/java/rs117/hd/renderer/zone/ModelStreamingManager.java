@@ -87,9 +87,9 @@ public class ModelStreamingManager {
 	}
 
 	public void addModelCullingFrustums(Camera camera) {
-		if(modelCullingFrustumCount >= modelCullingFrustums.length) {
+		if (modelCullingFrustumCount >= modelCullingFrustums.length) {
 			float[][][] newCullingFrustums = new float[modelCullingFrustums.length + 1][6][4];
-			for(int i = 0; i < modelCullingFrustumCount; i++) {
+			for (int i = 0; i < modelCullingFrustumCount; i++) {
 				for (int j = 0; j < 6; j++)
 					System.arraycopy(modelCullingFrustums[i][j], 0, newCullingFrustums[i + 1][j], 0, 4);
 			}
@@ -325,6 +325,7 @@ public class ModelStreamingManager {
 		) {
 			final int[] faceDistances = shouldSort ? PooledArrayType.INT.borrow(m.getFaceCount()) : null;
 			shouldSort &= sceneUploader.preprocessTempModel(
+				ctx.sceneContext,
 				worldProjection,
 				modelCullingFrustums,
 				modelCullingFrustumCount,
@@ -334,6 +335,7 @@ public class ModelStreamingManager {
 				isModelPartiallyVisible,
 				modelOverride,
 				m,
+				gameObject,
 				isPlayer,
 				orientation,
 				x, y, z
@@ -596,6 +598,7 @@ public class ModelStreamingManager {
 		) {
 			final int[] faceDistances = shouldSort ? PooledArrayType.INT.borrow(m.getFaceCount()) : null;
 			shouldSort &= sceneUploader.preprocessTempModel(
+				ctx.sceneContext,
 				projection,
 				modelCullingFrustums,
 				modelCullingFrustumCount,
@@ -605,6 +608,7 @@ public class ModelStreamingManager {
 				isModelPartiallyVisible,
 				modelOverride,
 				m,
+				tileObject,
 				false,
 				orient,
 				x, y, z

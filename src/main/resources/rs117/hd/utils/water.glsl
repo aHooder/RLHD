@@ -41,9 +41,9 @@
 
 vec3 sampleWaterSurfaceNormal(int waterTypeIndex, vec3 position) {
     WaterType waterType = getWaterType(waterTypeIndex);
-    vec2 worldUv = -position.xz / 128;
+    vec2 worldUv = worldBase + position.xz / 128;
 
-    float waveHeight = 1;
+    float waveHeight = 2;
     float waveSpeed = .0072;
     switch (waterTypeIndex) {
         case WATER_TYPE_BLACK_TAR_FLAT:
@@ -66,8 +66,8 @@ vec3 sampleWaterSurfaceNormal(int waterTypeIndex, vec3 position) {
             break;
     }
 
-    vec2 uv1 = worldUv / 26 + waveSpeed * elapsedTime * vec2( 1, -4);
-    vec2 uv2 = worldUv /  6 + waveSpeed * elapsedTime * vec2(-2,  1);
+    vec2 uv1 = -worldUv / 26 + waveSpeed * elapsedTime * vec2( 1, -4);
+    vec2 uv2 = -worldUv /  6 + waveSpeed * elapsedTime * vec2(-2,  1);
 
     vec3 n1 = texture(waterNormalMaps, vec3(uv1, 0)).xyz;
     vec3 n2 = texture(waterNormalMaps, vec3(uv2, 1)).xyz;
@@ -95,7 +95,6 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
     // Ignore refraction for the underwater position, since it would require computing a quartic equation
     vec3 cameraPos = sceneCamera.position;
     vec3 fragPos = IN.position;
-    float fragDist = length(fragPos - cameraPos);
     vec3 underwaterNormal = normalize(IN.normal);
     vec3 surfaceNormal = vec3(0, -1, 0); // Assume a flat surface
 
@@ -155,6 +154,11 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
             sigma_a_particles = vec3(.228, .062, .018);
             sigma_s_particles = vec3(1.22E-03, 1.70E-03, 3.81E-03);
             g = .88;
+
+            // Jerlov 1C
+            sigma_a_particles = vec3(.236, .076, .105);
+            sigma_s_particles = vec3(.314, .365, .514);
+            g = .89;
             break;
         case WATER_TYPE_BLOOD:
             sigma_a_particles = (1 - vec3(.9, .1, .2)) * 7;
@@ -184,6 +188,11 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
             g = .89;
             break;
     }
+
+    sigma_a_pureWater *= max(COLOR_PICKER.r, 1e-7);
+    sigma_s_pureWater *= max(COLOR_PICKER.g, 1e-7);
+    sigma_a_particles *= max(COLOR_PICKER.b, 1e-7);
+    sigma_s_particles *= max(COLOR_PICKER.a, 1e-7);
 
     // Kind of hacky way to fix the edges for some water types
     switch (waterTypeIndex) {
@@ -235,7 +244,10 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
 
     // Add underwater caustics as additional directional light
     if (SHORELINE_CAUSTICS == 1) {
-        vec2 causticsUv = worldUvs(3.333);
+        vec2 causticsUv = worldBase + IN.position.xz / 128;
+        causticsUv += lightDir.xz * IN.position.y / 128 * 0.5;
+        causticsUv /= 3.333;
+
         const vec2 direction = vec2(1, -2);
         vec2 flow1 = causticsUv + animationFrame(13) * direction;
         vec2 flow2 = causticsUv * 1.5 + animationFrame(17) * -direction;
@@ -272,34 +284,22 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
             distortion = uvFlow * .001 * (1 - exp(-.01 * depth));
         }
 
-//        // TODO: This would be nicer if blurred based on optical depth
-//        float shadow = sampleShadowMap(surfaceSunPos, distortion, dot(-sunDir, underwaterNormal));
-//        // Apply shadow to directional light
-//        L_directional *= 1 - shadow;
-
-
         const float SHADOW_FALLBACK_DIST = 8192.0;
         const float SHADOW_FALLBACK_BLEND = 512.0;
-        float fallbackWeight = saturate((fragDist - SHADOW_FALLBACK_DIST) / SHADOW_FALLBACK_BLEND);
+        float fallbackWeight = saturate((sunToFragDist - SHADOW_FALLBACK_DIST) / SHADOW_FALLBACK_BLEND);
         float shadow = 0.0;
-        if(fallbackWeight < 1.0) {
+        if (fallbackWeight < 1.0) {
             // Calculate optical depth using relative luminance to avoid over bluring
             float opticalDepth = dot(sigma_t, vec3(0.2126, 0.7152, 0.0722)) * sunToFragDist;
 
             // Blur radius in shadow map UV space
-            const float SHADOW_MAX_BLUR = 0.009;
-            const float SHADOW_BLUR_OPTICAL_DEPTH_INV = 1.0 / 6.0;
+            const float SHADOW_MAX_BLUR = 0.1;
+            const float SHADOW_BLUR_OPTICAL_DEPTH_INV = 1.0 / 10.0;
             float blurRadius = SHADOW_MAX_BLUR * saturate(opticalDepth * SHADOW_BLUR_OPTICAL_DEPTH_INV);
 
-            // Rotate the Poisson disk per fragment to break up repeated patterns.
-            float angle = noise * 2.0 * PI;
-            float s = sin(angle);
-            float c = cos(angle);
-            mat2 rot = mat2(c, -s, s, c);
-
-            int numSamples = 1 + int(floor(float(POISSON_DISK_LENGTH - 1) * saturate(opticalDepth * SHADOW_BLUR_OPTICAL_DEPTH_INV)));
+            int numSamples = 64; // TODO: optimize sample count
             for (int i = 0; i < numSamples; i++) {
-                vec2 offset = rot * getPoissonDisk(i) * blurRadius;
+                vec2 offset = getPoissonDisk64(i) * blurRadius;
                 shadow += sampleShadowMap(surfaceSunPos, distortion + offset, dot(-sunDir, underwaterNormal));
             }
             shadow /= float(numSamples);
@@ -308,7 +308,7 @@ void sampleUnderwater(inout vec3 outputColor, int waterTypeIndex, float depth) {
         }
 
         // Apply shadow to directional light
-        L_directional *= 1.0 - shadow * 0.9; // Clamp Shadow to avoid being fully black
+        L_directional *= 1.0 - shadow; // Clamp Shadow to avoid being fully black
     }
 
     // Wrap lighting around to add a fraction of ambient lighting to side which are perpendicular
@@ -483,6 +483,7 @@ vec4 sampleWater(int waterTypeIndex, float waterDepth, vec3 viewDir) {
         sampleWaterReflection(flatR, R, distortionFactor),
         calculateFresnel(dot(fragToCam, N), IOR_WATER)
     );
+//    if (true) return vec4(0);
 
     switch (waterTypeIndex) {
         case WATER_TYPE_BLOOD:
