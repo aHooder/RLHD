@@ -16,7 +16,10 @@
     "foamColor": "#737865",
     "depthColor": "#29521a",
     "duration": 1.2,
-    "fishingSpotRecolor": 23454
+    "fishingSpotRecolor": 23454,
+    "waveHeight": 1.349,
+    "scattering": "#FEFEFE",
+    "absorption": "#FE00FE"
   },
   {
     "name": "MLM_WATER",
@@ -739,7 +742,14 @@
   {
     "name": "WATER_OUT_OF_BOUNDS",
     "vanillaTextureIndex": 208,
-    "surfaceColor": "#262D45",
-    "fresnelAmount": 0.85
+    "surfaceColor": "#262B45",
+    "fresnelAmount": 0.85,
+    "scattering": "#000000",
+    "depth": 800,
+    "flat": true,
+    "scatteringAnisotropy": 0.545,
+    "absorption": "#FEFEFE",
+    "waveSpeed": 0.001,
+    "waveHeight": 0.787
   }
 ]

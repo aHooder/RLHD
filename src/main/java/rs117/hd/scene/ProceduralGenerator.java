@@ -861,21 +861,17 @@ public class ProceduralGenerator {
 							if (tile == null)
 								continue;
 
-//							if (checkBridge == 1) {
-//								tile = tile.getBridge();
-//								if (tile == null)
-//									continue;
-//							}
+							if (checkBridge == 1) {
+								tile = tile.getBridge();
+								if (tile == null)
+									continue;
+							}
 
 							// Explicitly handling only bridge tiles works around shoreline issues south of Kastori
-							if (checkBridge == 1)
-								continue;
-							if (tile.getBridge() != null)
-								tile = tile.getBridge();
-
-							// Handling higher planes breaks, e.g. Port Piscarilius south-west
-							if (z > 0)
-								break;
+//							if (checkBridge == 1)
+//								continue;
+//							if (tile.getBridge() != null)
+//								tile = tile.getBridge();
 
 							final int tileZ = tile.getRenderLevel();
 							final SceneTilePaint tilePaint = tile.getSceneTilePaint();
@@ -886,11 +882,11 @@ public class ProceduralGenerator {
 
 								var override = sceneContext.getTileOverride(tileZ, x, y, TILE_OVERRIDE_MAIN);
 								// TODO: Skipping these breaks at the Shipyard
-//								if (tilePaint.getNeColor() == HIDDEN_HSL && !override.forced)
-//									continue;
 
 								var waterType = seasonalWaterType(override, tilePaint.getTexture());
 								if (waterType == WaterType.NONE) {
+									if (tilePaint.getNeColor() == HIDDEN_HSL && !override.forced)
+										continue;
 									for (int i = 0; i < hashes.length; i++)
 										sceneContext.setVertexIsLand(hashes[i]);
 								} else {
@@ -915,7 +911,7 @@ public class ProceduralGenerator {
 											tileHeights[z][x + 1][y] * tx * (1 - ty) +
 											tileHeights[z][x][y + 1] * (1 - tx) * ty +
 											tileHeights[z][x + 1][y + 1] * tx * ty;
-										solver.setVertex(x * 4 + sx, y * 4 + sy, interpolatedHeight, waterType);
+										solver.setVertex(z + checkBridge, x * 4 + sx, y * 4 + sy, round(interpolatedHeight), waterType);
 									}
 								}
 							} else if (tileModel != null) {
@@ -927,13 +923,13 @@ public class ProceduralGenerator {
 									faceVertexKeys(tile, face, vertices, hashes);
 
 									var override = ProceduralGenerator.isOverlayFace(tile, face) ? overlayOverride : underlayOverride;
-									if (tileModel.getTriangleColorA()[face] == HIDDEN_HSL && !override.forced)
-										continue;
 
 									int textureId = tileModel.getTriangleTextureId() == null ? -1 :
 										tileModel.getTriangleTextureId()[face];
 									var waterType = seasonalWaterType(override, textureId);
 									if (waterType == WaterType.NONE) {
+										if (tileModel.getTriangleColorA()[face] == HIDDEN_HSL && !override.forced)
+											continue;
 										for (int vertex = 0; vertex < VERTICES_PER_FACE; vertex++)
 											sceneContext.setVertexIsLand(hashes[vertex]);
 									} else {
@@ -952,7 +948,7 @@ public class ProceduralGenerator {
 									for (int vertex = 0; vertex < VERTICES_PER_FACE; vertex++) {
 										int vX = vertices[vertex][0] / 32 + sceneContext.sceneOffset * 4;
 										int vY = vertices[vertex][2] / 32 + sceneContext.sceneOffset * 4;
-										solver.setVertex(vX, vY, vertices[vertex][1], waterType);
+										solver.setVertex(z + checkBridge, vX, vY, vertices[vertex][1], waterType);
 									}
 								}
 							}
@@ -978,30 +974,31 @@ public class ProceduralGenerator {
 							if (!sceneContext.isTileFlagSet(z, x, y, TILE_WATER_FLAG))
 								continue;
 
-							// Explicitly handling only bridge tiles works around shoreline issues south of Kastori
-							if (checkBridge == 1)
-								continue;
-							if (tile.getBridge() != null)
-								tile = tile.getBridge();
-
-							// Handling higher planes breaks, e.g. Port Piscarilius south-west
-							if (z > 0)
-								break;
-
-//							if (checkBridge == 1) {
+//							// Explicitly handling only bridge tiles works around shoreline issues south of Kastori
+//							if (checkBridge == 1)
+//								continue;
+//							if (tile.getBridge() != null)
 //								tile = tile.getBridge();
-//								if (tile == null)
-//									continue;
-//							}
+
+							if (checkBridge == 1) {
+								tile = tile.getBridge();
+								if (tile == null)
+									continue;
+							}
 
 							if (tile.getSceneTilePaint() != null) {
 								int tileZ = tile.getRenderLevel();
 								tileVertexKeys(sceneContext, x, y, tileZ, vertices, hashes);
 
-								final int swVertex = solver.getHeight(x * 4, y * 4) - tileHeights[z][x][y];
-								final int seVertex = solver.getHeight((x + 1) * 4, y * 4) - tileHeights[z][x + 1][y];
-								final int nwVertex = solver.getHeight(x * 4, (y + 1) * 4) - tileHeights[z][x][y + 1];
-								final int neVertex = solver.getHeight((x + 1) * 4, (y + 1) * 4) - tileHeights[z][x + 1][y + 1];
+								final int swVertex = solver.getDepth(z + checkBridge, x * 4, y * 4, tileHeights[z][x][y]);
+								final int seVertex = solver.getDepth(z + checkBridge, (x + 1) * 4, y * 4, tileHeights[z][x + 1][y]);
+								final int nwVertex = solver.getDepth(z + checkBridge, x * 4, (y + 1) * 4, tileHeights[z][x][y + 1]);
+								final int neVertex = solver.getDepth(
+									z + checkBridge,
+									(x + 1) * 4,
+									(y + 1) * 4,
+									tileHeights[z][x + 1][y + 1]
+								);
 
 								sceneContext.setVertexUnderwaterDepth(hashes[0], swVertex);
 								sceneContext.setVertexUnderwaterDepth(hashes[1], seVertex);
@@ -1017,7 +1014,7 @@ public class ProceduralGenerator {
 									for (int vertex = 0; vertex < VERTICES_PER_FACE; vertex++) {
 										int vX = vertices[vertex][0] / 32 + sceneContext.sceneOffset * 4;
 										int vY = vertices[vertex][2] / 32 + sceneContext.sceneOffset * 4;
-										int depth = solver.getHeight(vX, vY) - vertices[vertex][1];
+										int depth = solver.getDepth(z + checkBridge, vX, vY, vertices[vertex][1]);
 										sceneContext.setVertexUnderwaterDepth(hashes[vertex], depth);
 									}
 								}
