@@ -32,7 +32,6 @@ import javax.swing.SwingUtilities;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
-import net.runelite.api.coords.*;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.input.MouseListener;
 import net.runelite.client.input.MouseManager;
@@ -55,6 +54,7 @@ import rs117.hd.scene.TileOverrideManager;
 import rs117.hd.scene.areas.AABB;
 import rs117.hd.scene.areas.Area;
 import rs117.hd.scene.materials.Material;
+import rs117.hd.scene.tile_overrides.TileOverride;
 import rs117.hd.utils.ColorUtils;
 import rs117.hd.utils.HDUtils;
 import rs117.hd.utils.ModelHash;
@@ -70,7 +70,6 @@ import static rs117.hd.utils.MathUtils.*;
 @Slf4j
 @Singleton
 public class TileInfoOverlay extends Overlay implements MouseListener, MouseWheelListener {
-	private static final Font MONOSPACE_FONT = new Font("Courier New", Font.PLAIN, 12);
 	private static final Color BACKDROP_COLOR = new Color(0, 0, 0, 100);
 	private static final Color TRANSPARENT_YELLOW_50 = new Color(255, 255, 0, 50);
 	private static final Color TRANSPARENT_YELLOW_100 = new Color(255, 255, 0, 100);
@@ -106,17 +105,20 @@ public class TileInfoOverlay extends Overlay implements MouseListener, MouseWhee
 	@Getter
 	private boolean active;
 
+	private float uiScale;
+	private Font regularFont;
+	private Font monospaceFont;
+
 	private float[] mousePos;
 	private boolean ctrlHeld;
 	private boolean ctrlToggled;
 	private boolean shiftHeld;
 	private boolean altHeld;
-	private float zoom = 1;
 
 	private static final int MODE_TILE_INFO = 0;
 	private static final int MODE_MODEL_INFO = 1;
 	private static final int MODE_SCENE_AABBS = 2;
-	private static final int MODE_OBJECT_IDS = 3;
+	private static final int MODE_COUNT = 3;
 
 	private int mode;
 	private int aabbMarkingStage;
@@ -133,10 +135,10 @@ public class TileInfoOverlay extends Overlay implements MouseListener, MouseWhee
 	private Area[] visibleAreas = new Area[0];
 	private final AABB dummyAabb = new AABB(0, 0);
 	private int[] sceneBase;
-	private final ArrayList<String> hoveredGamevals = new ArrayList<>();
-	private int hoveredGamevalsIndex;
-	private int hoveredGamevalsHash;
-	private int copiedGamevalsHash;
+	private final ArrayList<String> hoveredNames = new ArrayList<>();
+	private int hoveredNameIndex;
+	private int hoveredNameHash;
+	private int copiedNameHash;
 
 	private GamevalManager.Handle gamevals;
 
@@ -173,6 +175,19 @@ public class TileInfoOverlay extends Overlay implements MouseListener, MouseWhee
 		var ctx = plugin.getSceneContext();
 		if (ctx == null)
 			return null;
+
+		float scale = 1;
+		if (client.isStretchedEnabled())
+			scale = (float) client.getCanvasWidth() / client.getStretchedDimensions().width;
+		if (this.uiScale != scale) {
+			uiScale = scale;
+//			regularFont = FontManager.getRunescapeFont().deriveFont(16 * scale);
+//			monospaceFont = new Font("Courier New", Font.PLAIN, 12).deriveFont(12 * scale);
+//			regularFont = FontManager.getDefaultFont().deriveFont(4 * scale);
+//			monospaceFont = FontManager.getDefaultFont().deriveFont(4 * scale);
+//			regularFont = monospaceFont = new Font("Verdana", Font.PLAIN, 8).deriveFont(8 * (1 - scale * scale));
+		}
+		regularFont = monospaceFont = new Font("Courier New", Font.PLAIN, 11);
 
 		if (ctx != currentSceneContext) {
 			currentSceneContext = ctx;
@@ -220,7 +235,7 @@ public class TileInfoOverlay extends Overlay implements MouseListener, MouseWhee
 		if (shiftHeld != shiftPressed) {
 			shiftHeld = shiftPressed;
 			if (shiftPressed)
-				mode = (mode + 1) % 4;
+				mode = (mode + 1) % MODE_COUNT;
 		}
 		altHeld = client.isKeyPressed(KeyCode.KC_ALT);
 
@@ -230,7 +245,7 @@ public class TileInfoOverlay extends Overlay implements MouseListener, MouseWhee
 		mousePos = null;
 		if (canvasMousePos != null && canvasMousePos.getX() != -1 && canvasMousePos.getY() != -1)
 			mousePos = new float[] { canvasMousePos.getX(), canvasMousePos.getY() };
-		hoveredGamevals.clear();
+		hoveredNames.clear();
 
 		int maxPlane = client.getPlane();
 		int minPlane = 0;
@@ -238,7 +253,7 @@ public class TileInfoOverlay extends Overlay implements MouseListener, MouseWhee
 			minPlane = maxPlane = targetPlane;
 
 		if (mousePos != null) {
-			g.setFont(FontManager.getRunescapeFont());
+			g.setFont(regularFont);
 			g.setStroke(new BasicStroke(1, BasicStroke.CAP_BUTT, BasicStroke.JOIN_ROUND));
 
 			tileLoop:
@@ -297,114 +312,108 @@ public class TileInfoOverlay extends Overlay implements MouseListener, MouseWhee
 			}
 		}
 
-		hoveredGamevalsHash = hoveredGamevals.hashCode();
+		hoveredNameHash = hoveredNames.hashCode();
 
-		switch (mode) {
-			case MODE_OBJECT_IDS:
-				drawAllIds(g, ctx);
-				break;
-			case MODE_SCENE_AABBS:
-				g.setFont(FontManager.getRunescapeSmallFont());
+		if (mode == MODE_SCENE_AABBS) {
+			g.setFont(FontManager.getRunescapeSmallFont());
 
-				drawLoadingLines(g);
-				drawRegionBoxes(g, ctx);
+			drawLoadingLines(g);
+			drawRegionBoxes(g, ctx);
 
-				if (mousePos != null) {
-					hoveredAreaAabb[0] = -1;
-					hoveredAreaAabb[1] = 0;
-					float[] v = new float[2];
-					outer:
-					for (int i = 0; i < visibleAreas.length; i++) {
-						var area = visibleAreas[i];
-						for (int j = 0; j < area.aabbs.length; j++) {
-							if (i == selectedAreaAabb[0] && j == selectedAreaAabb[1])
-								continue;
+			if (mousePos != null) {
+				hoveredAreaAabb[0] = -1;
+				hoveredAreaAabb[1] = 0;
+				float[] v = new float[2];
+				outer:
+				for (int i = 0; i < visibleAreas.length; i++) {
+					var area = visibleAreas[i];
+					for (int j = 0; j < area.aabbs.length; j++) {
+						if (i == selectedAreaAabb[0] && j == selectedAreaAabb[1])
+							continue;
 
-							var aabb = toLocalAabb(ctx, cropAabb(ctx, area.aabbs[j]));
-							var p = getAabbCanvasCenter(aabb);
-							if (p != null) {
-								subtract(v, mousePos, p);
-								if (dot(v) < 26 * 26) {
-									hoveredAreaAabb[0] = i;
-									hoveredAreaAabb[1] = j;
-									break outer;
-								}
+						var aabb = toLocalAabb(ctx, cropAabb(ctx, area.aabbs[j]));
+						var p = getAabbCanvasCenter(aabb);
+						if (p != null) {
+							subtract(v, mousePos, p);
+							if (dot(v) < 26 * 26) {
+								hoveredAreaAabb[0] = i;
+								hoveredAreaAabb[1] = j;
+								break outer;
 							}
 						}
 					}
 				}
+			}
 
-				for (int i = 0; i < visibleAreas.length; i++) {
-					var area = visibleAreas[i];
-					if (area.name.equals("ALL"))
+			for (int i = 0; i < visibleAreas.length; i++) {
+				var area = visibleAreas[i];
+				if (area.name.equals("ALL"))
+					continue;
+
+				boolean areaHovered = i == hoveredAreaAabb[0];
+				boolean areaSelected = i == selectedAreaAabb[0];
+				for (int j = 0; j < area.aabbs.length; j++) {
+					AABB aabb = area.aabbs[j];
+					if (aabb == dummyAabb)
 						continue;
 
-					boolean areaHovered = i == hoveredAreaAabb[0];
-					boolean areaSelected = i == selectedAreaAabb[0];
-					for (int j = 0; j < area.aabbs.length; j++) {
-						AABB aabb = area.aabbs[j];
-						if (aabb == dummyAabb)
-							continue;
+					boolean hovered = areaHovered && j == hoveredAreaAabb[1];
+					boolean selected = areaSelected && j == selectedAreaAabb[1];
+					if (hovered || selected)
+						continue;
 
-						boolean hovered = areaHovered && j == hoveredAreaAabb[1];
-						boolean selected = areaSelected && j == selectedAreaAabb[1];
-						if (hovered || selected)
-							continue;
+					String label = aabb.toArgs();
+					if (aabb.isVolume())
+						label = area.name + "[" + j + "]\n" + label;
+					if (ctx.currentArea != null && ctx.currentArea.name.equals(area.name))
+						label = "CURRENT\n" + label;
 
-						String label = aabb.toArgs();
-						if (aabb.isVolume())
-							label = area.name + "[" + j + "]\n" + label;
-						if (ctx.currentArea != null && ctx.currentArea.name.equals(area.name))
-							label = "CURRENT\n" + label;
+					// Since we have a bunch of AABBs spanning all planes,
+					// it would be a bit obnoxious to always render the full AABB
+					AABB croppedAabb = cropAabb(ctx, aabb);
+					var localAabb = toLocalAabb(ctx, croppedAabb);
 
-						// Since we have a bunch of AABBs spanning all planes,
-						// it would be a bit obnoxious to always render the full AABB
-						AABB croppedAabb = cropAabb(ctx, aabb);
-						var localAabb = toLocalAabb(ctx, croppedAabb);
-
-						g.setColor(TRANSPARENT_WHITE_100);
-						drawLocalAabb(g, localAabb);
-
-						g.setColor(Color.LIGHT_GRAY);
-						drawLocalAabbLabel(g, localAabb, label, false);
-					}
-
-					for (int j = 0; j < area.unhideAreas.length; j++) {
-						AABB aabb = area.unhideAreas[j];
-						String label = aabb.toArgs();
-						if (aabb.isVolume())
-							label = area.name + ".unhide[" + j + "]\n" + label;
-						if (ctx.currentArea != null && ctx.currentArea.name.equals(area.name))
-							label = "CURRENT\n" + label;
-
-						var localAabb = toLocalAabb(ctx, cropAabb(ctx, aabb));
-						g.setColor(Color.PINK);
-						drawLocalAabb(g, localAabb);
-						drawLocalAabbLabel(g, localAabb, label, false);
-					}
-				}
-
-				if (hoveredAreaAabb[0] != -1) {
-					var area = visibleAreas[hoveredAreaAabb[0]];
-					var aabb = area.aabbs[hoveredAreaAabb[1]];
-					g.setColor(Color.WHITE);
-
-					var localAabb = toLocalAabb(ctx, aabb);
+					g.setColor(TRANSPARENT_WHITE_100);
 					drawLocalAabb(g, localAabb);
-					drawLocalAabbLabel(g, localAabb, area.name + "[" + hoveredAreaAabb[1] + "]\n" + aabb.toArgs(), false);
+
+					g.setColor(Color.LIGHT_GRAY);
+					drawLocalAabbLabel(g, localAabb, label, false);
 				}
 
-				if (selectedAreaAabb[0] != -1) {
-					var area = visibleAreas[selectedAreaAabb[0]];
-					var aabb = area.aabbs[selectedAreaAabb[1]];
-					g.setColor(Color.CYAN);
+				for (int j = 0; j < area.unhideAreas.length; j++) {
+					AABB aabb = area.unhideAreas[j];
+					String label = aabb.toArgs();
+					if (aabb.isVolume())
+						label = area.name + ".unhide[" + j + "]\n" + label;
+					if (ctx.currentArea != null && ctx.currentArea.name.equals(area.name))
+						label = "CURRENT\n" + label;
 
-					var localAabb = toLocalAabb(ctx, aabb);
+					var localAabb = toLocalAabb(ctx, cropAabb(ctx, aabb));
+					g.setColor(Color.PINK);
 					drawLocalAabb(g, localAabb);
-					drawLocalAabbLabel(g, localAabb, area.name + "[" + selectedAreaAabb[1] + "]\n" + aabb.toArgs(), true);
+					drawLocalAabbLabel(g, localAabb, label, false);
 				}
+			}
 
-				break;
+			if (hoveredAreaAabb[0] != -1) {
+				var area = visibleAreas[hoveredAreaAabb[0]];
+				var aabb = area.aabbs[hoveredAreaAabb[1]];
+				g.setColor(Color.WHITE);
+
+				var localAabb = toLocalAabb(ctx, aabb);
+				drawLocalAabb(g, localAabb);
+				drawLocalAabbLabel(g, localAabb, area.name + "[" + hoveredAreaAabb[1] + "]\n" + aabb.toArgs(), false);
+			}
+
+			if (selectedAreaAabb[0] != -1) {
+				var area = visibleAreas[selectedAreaAabb[0]];
+				var aabb = area.aabbs[selectedAreaAabb[1]];
+				g.setColor(Color.CYAN);
+
+				var localAabb = toLocalAabb(ctx, aabb);
+				drawLocalAabb(g, localAabb);
+				drawLocalAabbLabel(g, localAabb, area.name + "[" + selectedAreaAabb[1] + "]\n" + aabb.toArgs(), true);
+			}
 		}
 
 		// Update second selection point each frame
@@ -428,7 +437,7 @@ public class TileInfoOverlay extends Overlay implements MouseListener, MouseWhee
 			// Draw selection boxes
 			g.setColor(Color.YELLOW);
 			drawLocalAabb(g, localAabb);
-			g.setFont(FontManager.getRunescapeFont());
+			g.setFont(regularFont);
 			drawLocalAabbLabel(g, localAabb, "Selection[" + i + "]\n" + aabb.toArgs(), true);
 		}
 
@@ -437,13 +446,13 @@ public class TileInfoOverlay extends Overlay implements MouseListener, MouseWhee
 			// Draw current selection box
 			g.setColor(Color.YELLOW);
 			drawLocalAabb(g, localAabb);
-			g.setFont(FontManager.getRunescapeFont());
+			g.setFont(regularFont);
 			drawLocalAabbLabel(g, localAabb, "Selection[" + selections.size() + "]\n" + pendingSelection.toArgs(), true);
 		}
 
 		if (ctx.sceneBase == null) {
 			g.setColor(Color.RED);
-			g.setFont(FontManager.getRunescapeFont());
+			g.setFont(regularFont);
 			var b = g.getClipBounds();
 			var str = "This is a non-contiguous instance. AABBs may not work.";
 			int w = g.getFontMetrics().stringWidth(str);
@@ -521,10 +530,12 @@ public class TileInfoOverlay extends Overlay implements MouseListener, MouseWhee
 			var overlay = tileOverrideManager.getOverrideBeforeReplacements(worldPos, OVERLAY_FLAG | overlayId);
 			var replacementPath = new StringBuilder(overlay.toString());
 			while (true) {
+				if (overlay != TileOverride.NONE)
+					hoveredNames.add(overlay.toString());
 				var replacement = overlay.resolveNextReplacement(SceneContext.TILE_OVERRIDE_VARIABLES.get());
 				if (replacement == overlay)
 					break;
-				replacementPath.append("\n\t⤷ ").append(replacement);
+				replacementPath.append("\n\t-> ").append(replacement);
 				overlay = replacement;
 			}
 			lines.add(String.format("Overlay: ID %d -> %s", overlayId, replacementPath));
@@ -538,10 +549,12 @@ public class TileInfoOverlay extends Overlay implements MouseListener, MouseWhee
 			var underlay = tileOverrideManager.getOverrideBeforeReplacements(worldPos, underlayId);
 			replacementPath = new StringBuilder(underlay.toString());
 			while (true) {
+				if (underlay != TileOverride.NONE)
+					hoveredNames.add(underlay.toString());
 				var replacement = underlay.resolveNextReplacement(SceneContext.TILE_OVERRIDE_VARIABLES.get());
 				if (replacement == underlay)
 					break;
-				replacementPath.append("\n\t⤷ ").append(replacement);
+				replacementPath.append("\n\t-> ").append(replacement);
 				underlay = replacement;
 			}
 			lines.add(String.format("Underlay: ID %d -> %s", underlayId, replacementPath));
@@ -745,7 +758,7 @@ public class TileInfoOverlay extends Overlay implements MouseListener, MouseWhee
 			int y = lp.getSceneY();
 			if (x - size <= tileX && tileX <= x + size && y - size <= tileY && tileY <= y + size) {
 				var name = gamevals.getNpcName(npc.getId());
-				hoveredGamevals.add(name);
+				hoveredNames.add(name);
 				lines.add(String.format(
 					"NPC: %s (%d) name=%s ori=[%d,%d] anim=%d impostor=?%s",
 					name,
@@ -764,7 +777,7 @@ public class TileInfoOverlay extends Overlay implements MouseListener, MouseWhee
 			if (lp.getSceneX() == tileX && lp.getSceneY() == tileY) {
 				var name = gamevals.getSpotanimName(graphicsObject.getId());
 				var anim = graphicsObject.getAnimation();
-				hoveredGamevals.add(name);
+				hoveredNames.add(name);
 				lines.add(String.format(
 					"Graphics Object: %s (%d) anim=%d frame=%d cycle=%d%s",
 					name,
@@ -797,7 +810,7 @@ public class TileInfoOverlay extends Overlay implements MouseListener, MouseWhee
 		int padding = 4;
 		int xPadding = padding * 2;
 		FontMetrics fm = g.getFontMetrics();
-		int lineHeight = fm.getHeight();
+		int lineHeight = fm.getHeight() - 4;
 		int totalHeight = lineHeight * lines.size() + padding * 3;
 		int space = fm.stringWidth(": ");
 		int indent = fm.stringWidth("{ ");
@@ -838,7 +851,7 @@ public class TileInfoOverlay extends Overlay implements MouseListener, MouseWhee
 				leftWidth = max(leftWidth, fm.stringWidth(Text.removeTags(pair.getLeft())));
 				var rfm = fm;
 				if (pair.getRight().contains("<tt>"))
-					rfm = g.getFontMetrics(MONOSPACE_FONT);
+					rfm = g.getFontMetrics(monospaceFont);
 				rightWidth = max(rightWidth, rfm.stringWidth(Text.removeTags(pair.getRight())));
 			}
 		}
@@ -885,7 +898,7 @@ public class TileInfoOverlay extends Overlay implements MouseListener, MouseWhee
 			{
 				boolean indented = pair.getRight().startsWith("\t");
 				if (pair.getRight().contains("<tt>")) {
-					g.setFont(MONOSPACE_FONT);
+					g.setFont(monospaceFont);
 					dropShadow = false;
 				}
 
@@ -907,12 +920,12 @@ public class TileInfoOverlay extends Overlay implements MouseListener, MouseWhee
 		int impostorId = getIdOrImpostorId(object, renderable);
 		String name = gamevals.getObjectName(id);
 		if (id == impostorId) {
-			hoveredGamevals.add(name);
+			hoveredNames.add(name);
 			return String.format("%s (%d)", name, id);
 		}
 
 		String impostorName = gamevals.getObjectName(impostorId);
-		hoveredGamevals.add(impostorName);
+		hoveredNames.add(impostorName);
 		return String.format("%s (%d) -> %s (%d)", name, id, impostorName, impostorId);
 	}
 
@@ -962,14 +975,14 @@ public class TileInfoOverlay extends Overlay implements MouseListener, MouseWhee
 						var hsl = ColorUtils.unpackRawHsl(ahsl);
 						var alpha = ahsl >> 16;
 						return String.format(
-							"<col=%s>%5d [%3d %2d %1d %3d]</col>",
+							"<col=%s>%3d %2d %1d %3d|</col>",
 							String.format("#%08x", ColorUtils.packSrgb(ColorUtils.packedHslToSrgb(ahsl)) << 8 | alpha),
-							ahsl & 0xFFFF, alpha, hsl[0], hsl[1], hsl[2]
+							alpha, hsl[0], hsl[1], hsl[2]
 						);
 					})
 					.toArray(String[]::new);
 
-				int columns = clamp(round(sqrt(colors.length / 5f)), 3, 8);
+				int columns = clamp(colors.length, 5, 8);
 				int rows = ceil(colors.length / (float) columns);
 
 				StringBuilder str = new StringBuilder("\nFace colors: ").append(colors.length);
@@ -1100,66 +1113,6 @@ public class TileInfoOverlay extends Overlay implements MouseListener, MouseWhee
 		return rawHsl + " " + Arrays.toString(hsl);
 	}
 
-	private void drawAllIds(Graphics2D g, SceneContext ctx) {
-		g.setFont(FontManager.getRunescapeSmallFont());
-		g.setColor(new Color(255, 255, 255, 127));
-
-		Tile[][][] tiles = ctx.scene.getExtendedTiles();
-		int plane = ctrlHeld ? MAX_Z - 1 : client.getPlane();
-		for (int z = plane; z >= 0; z--) {
-			for (int x = 0; x < EXTENDED_SCENE_SIZE; x++) {
-				for (int y = 0; y < EXTENDED_SCENE_SIZE; y++) {
-					Tile tile = tiles[z][x][y];
-					if (tile == null)
-						continue;
-
-					var lp = tile.getLocalLocation();
-					int lines = 0;
-					for (int isBridge = 1; isBridge >= 0; isBridge--) {
-						var t = tile;
-						if (isBridge == 1) {
-							t = tile.getBridge();
-							if (t == null)
-								continue;
-						}
-
-						GroundObject groundObject = t.getGroundObject();
-						if (groundObject != null)
-							drawTileObjectInfo(g, lp, groundObject, groundObject.getRenderable(), lines++);
-
-						WallObject wallObject = t.getWallObject();
-						if (wallObject != null)
-							drawTileObjectInfo(g, lp, wallObject, wallObject.getRenderable1(), lines++);
-
-						for (GameObject gameObject : t.getGameObjects())
-							if (gameObject != null)
-								drawTileObjectInfo(g, lp, gameObject, gameObject.getRenderable(), lines++);
-					}
-				}
-			}
-		}
-	}
-
-	private void drawTileObjectInfo(Graphics2D g, LocalPoint lp, TileObject object, Renderable renderable, int line) {
-		int type = ModelHash.getType(object.getHash());
-		String str;
-		if (zoom > 1.2f) {
-			str = ModelHash.getTypeName(type) + ": " + getIdAndImpostorId(object, renderable);
-		} else {
-			str = ModelHash.getTypeNameShort(type) + ": " + getIdOrImpostorId(object, renderable);
-		}
-		var p = localToCanvas(client, lp.getX(), lp.getY(),
-			Perspective.getTileHeight(client, lp, object.getPlane())
-		);
-		if (p == null)
-			return;
-
-		var fm = g.getFontMetrics();
-		int w = fm.stringWidth(str);
-
-		drawString(g, str, (int) (p[0] - w / 2.f), (int) (p[1] + line * fm.getHeight()), true);
-	}
-
 	private void drawString(Graphics2D g2d, String str, int x, int y, boolean dropShadow) {
 		Color origColor = g2d.getColor();
 
@@ -1220,7 +1173,7 @@ public class TileInfoOverlay extends Overlay implements MouseListener, MouseWhee
 			g2d.setColor(c);
 			int w = fm.stringWidth(withoutBrackets);
 			int h = fm.getHeight();
-			g2d.fillRect(x - 2, y - fm.getAscent() + fm.getLeading() - 2, w + 4, h + 2);
+			g2d.fillRect(x, y - fm.getAscent() + fm.getLeading() + 2, w, h - 4);
 			g2d.setColor(getContrastColor(c));
 			g2d.drawString(withoutBrackets, x, y);
 			g2d.drawString(onlyBrackets, x, y - 1);
@@ -1369,6 +1322,8 @@ public class TileInfoOverlay extends Overlay implements MouseListener, MouseWhee
 	}
 
 	private void setAntiAliasing(Graphics2D g, boolean state) {
+//		if (uiScale != 1)
+//			state = true;
 		g.setRenderingHint(
 			RenderingHints.KEY_TEXT_ANTIALIASING,
 			state ? RenderingHints.VALUE_TEXT_ANTIALIAS_ON : RenderingHints.VALUE_TEXT_ANTIALIAS_OFF
@@ -1642,13 +1597,13 @@ public class TileInfoOverlay extends Overlay implements MouseListener, MouseWhee
 				pendingSelection = null;
 			}
 		} else if (SwingUtilities.isRightMouseButton(e)) {
-			if (!hoveredGamevals.isEmpty()) {
-				if (copiedGamevalsHash != hoveredGamevalsHash) {
-					copiedGamevalsHash = hoveredGamevalsHash;
-					hoveredGamevalsIndex = 0;
+			if (!hoveredNames.isEmpty()) {
+				if (copiedNameHash != hoveredNameHash) {
+					copiedNameHash = hoveredNameHash;
+					hoveredNameIndex = 0;
 				}
-				copyToClipboard('"' + hoveredGamevals.get(hoveredGamevalsIndex) + '"');
-				hoveredGamevalsIndex = (hoveredGamevalsIndex + 1) % hoveredGamevals.size();
+				copyToClipboard('"' + hoveredNames.get(hoveredNameIndex) + '"');
+				hoveredNameIndex = (hoveredNameIndex + (e.isShiftDown() ? -1 : 1)) % hoveredNames.size();
 			}
 		}
 
