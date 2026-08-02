@@ -504,6 +504,7 @@ public class ZoneRenderer implements Renderer {
 				directionalCamera.setViewportHeight(directionalSize);
 
 				plugin.uboGlobal.lightProjectionMatrix.set(directionalCamera.getViewProjMatrix());
+				plugin.uboGlobal.lightProjectionDepthRange.set(directionalCamera.getFarPlane() - directionalCamera.getNearPlane());
 			}
 
 			shouldDrawRoofShadows =

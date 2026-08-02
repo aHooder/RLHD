@@ -113,7 +113,7 @@ layout (location = 0) in vec3 vPosition;
 
         vec4 clipPosition = lightProjectionMatrix * vec4(worldPosition, shouldCastShadow);
         if (getMaterialHasTransparency(material)) // bias face if it has transparency to avoid self-shadowing
-            clipPosition.z += SHADOW_TRANSPARENCY_BIAS;
+            clipPosition.z += SHADOW_TRANSPARENCY_BIAS * lightProjectionDepthRange;
         gl_Position = clipPosition;
     }
 #else

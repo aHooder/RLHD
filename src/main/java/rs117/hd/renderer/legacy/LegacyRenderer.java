@@ -1117,6 +1117,7 @@ public class LegacyRenderer implements Renderer {
 				Mat4.mul(lightProjectionMatrix, Mat4.translate(-(width / 2f + west), 0, -(height / 2f + south)));
 
 				plugin.uboGlobal.lightProjectionMatrix.set(lightProjectionMatrix);
+				plugin.uboGlobal.lightProjectionDepthRange.set(2f * depthScale);
 				plugin.uboGlobal.upload();
 
 				glEnable(GL_CULL_FACE);
