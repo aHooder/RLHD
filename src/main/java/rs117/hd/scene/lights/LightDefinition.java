@@ -32,6 +32,7 @@ public class LightDefinition {
 	public boolean ignoreActorHiding;
 	public int renderableIndex = -1;
 	public boolean waitForAnimation;
+	public boolean omnidirectional;
 
 	@JsonAdapter(AABB.ArrayAdapter.class)
 	public AABB[] areas = {};

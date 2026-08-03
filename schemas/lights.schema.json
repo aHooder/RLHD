@@ -94,6 +94,9 @@
           "type": "number"
         }
       },
+      "omnidirectional": {
+        "type": "boolean"
+      },
       "type": {
         "type": "string",
         "description": "Specify the animation to apply to the light. Defaults to STATIC.",

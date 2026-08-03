@@ -19367,7 +19367,8 @@
       "AHOY_GHOST_CAPTAIN_1",
       "AHOY_GHOST_CAPTAIN_2",
       "AHOY_GHOST_GUARD"
-    ]
+    ],
+    "omnidirectional": true
   },
   {
     "description": "ABERRANT_SPECTRES",

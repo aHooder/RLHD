@@ -22,7 +22,7 @@ void calculateLight(
         vec3 pointLightColor = light.color.rgb * attenuation;
         vec3 pointLightDir = normalize(lightToFrag);
 
-        float pointLightDotNormals = max(dot(normals, pointLightDir), 0);
+        float pointLightDotNormals = light.color.a > 0 ? 1 : max(dot(normals, pointLightDir), 0);
         pointLightsOut += pointLightColor * pointLightDotNormals;
 
         vec3 pointLightReflectDir = reflect(-pointLightDir, normals);
