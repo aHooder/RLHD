@@ -770,10 +770,12 @@ public class ZoneRenderer implements Renderer {
 		renderState.disable.set(GL_CULL_FACE);
 		renderState.depthFunc.set(GL_LEQUAL);
 		renderState.ido.set(indirectDrawCmds.id);
+		renderState.enable.set(GL_DEPTH_CLAMP);
 		directionalCmd.execute(renderState);
 
 		glBindVertexArray(0);
 
+		renderState.disable.set(GL_DEPTH_CLAMP);
 		renderState.disable.set(GL_DEPTH_TEST);
 
 		shouldClearShadowFbo = true;
