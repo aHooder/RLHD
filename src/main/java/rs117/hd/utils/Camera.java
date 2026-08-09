@@ -547,7 +547,7 @@ public final class Camera implements Projection {
 
 	public boolean intersectsAABB(int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
 		calculateFrustumPlanes();
-		return HDUtils.isAABBIntersectingFrustum(minX, minY, minZ, maxX, maxY, maxZ, frustumPlanes);
+		return HDUtils.isAABBIntersectingFrustum(minX, minY, minZ, maxX, maxY, maxZ, frustumPlanes, isOrthographic() ? 6 : 4);
 	}
 
 	public boolean intersectsSphere(float x, float y, float z, float radius) {

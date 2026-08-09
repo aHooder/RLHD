@@ -457,7 +457,20 @@ public final class HDUtils {
 		float maxZ,
 		float[][] cullingPlanes
 	) {
-		for (int i = 0; i < cullingPlanes.length; i++) {
+		return isAABBIntersectingFrustum(minX, minY, minZ, maxX, maxY, maxZ, cullingPlanes, cullingPlanes.length);
+	}
+
+	public static boolean isAABBIntersectingFrustum(
+		float minX,
+		float minY,
+		float minZ,
+		float maxX,
+		float maxY,
+		float maxZ,
+		float[][] cullingPlanes,
+		int numPlanes
+	) {
+		for (int i = 0; i < numPlanes; i++) {
 			final float[] plane = cullingPlanes[i];
 			final float nx = plane[0];
 			final float ny = plane[1];
