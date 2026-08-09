@@ -1108,7 +1108,7 @@ public class ZoneRenderer implements Renderer {
 					int centerX = minX + (maxX - minX) / 2;
 					int centerY = minY + (maxY - minY) / 2;
 					int centerZ = minZ + (maxZ - minZ) / 2;
-					zone.inShadowFrustum = directionalShadowCasterVolume.intersectsPoint(centerX, centerY, centerZ);
+//					zone.inShadowFrustum = directionalShadowCasterVolume.intersectsPoint(centerX, centerY, centerZ);
 				}
 				if (plugin.enableDetailedTimers)
 					frameTimer.end(Timer.VISIBILITY_CHECK);
