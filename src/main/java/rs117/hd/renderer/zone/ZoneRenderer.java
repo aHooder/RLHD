@@ -949,6 +949,7 @@ public class ZoneRenderer implements Renderer {
 		frameTimer.begin(Timer.RENDER_SHADOWS);
 
 		renderState.enable.set(GL_DEPTH_TEST);
+		renderState.enable.set(GL_DEPTH_CLAMP);
 		renderState.disable.set(GL_CULL_FACE);
 		renderState.depthFunc.set(plugin.configShadowTransparency ? GL_LEQUAL : GL_LESS);
 		renderState.enable.set(GL_POLYGON_OFFSET_FILL);
@@ -982,6 +983,7 @@ public class ZoneRenderer implements Renderer {
 		renderState.cullFace.set(GL_BACK);
 		renderState.disable.set(GL_CULL_FACE);
 		renderState.disable.set(GL_DEPTH_TEST);
+		renderState.disable.set(GL_DEPTH_CLAMP);
 		renderState.disable.set(GL_POLYGON_OFFSET_FILL);
 
 		shouldClearShadowFbo = true;
@@ -1183,7 +1185,7 @@ public class ZoneRenderer implements Renderer {
 
 			frameTimer.begin(Timer.DRAW_ZONE_ALPHA);
 			sceneCmd.Enable(GL_BLEND);
-			
+
 			final boolean renderWater = z.inSceneFrustum && level == 0 && z.hasWater;
 			if (renderWater)
 				z.renderOpaqueLevel(sceneCmd, Zone.LEVEL_WATER_SURFACE);
