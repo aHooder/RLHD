@@ -36,10 +36,93 @@ float moonFbm(in vec2 st) {
     float amplitude = 0.5;
     for (int i = 0; i < 6; i++) {
         value += amplitude * moonNoise(st);
-        st *= 2.0;
+        st *= 2;
         amplitude *= 0.5;
     }
     return value;
+}
+
+// https://github.com/EaryChow/AgX/releases
+
+// Source: https://iolite-engine.com/blog_posts/minimal_agx_implementation
+//
+// MIT License
+//
+// Copyright (c) 2024 Missing Deadlines (Benjamin Wrensch)
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+// All values used to derive this implementation are sourced from Troy’s initial
+// AgX implementation/OCIO config file available here:
+//   https://github.com/sobotka/AgX
+
+//// Mean error^2: 3.6705141e-06
+vec3 agxDefaultContrastApprox_blender(vec3 x) {
+    vec3 x2 = x * x;
+    vec3 x4 = x2 * x2;
+    return
+        + 15.5     * x4 * x2
+        - 40.14    * x4 * x
+        + 31.96    * x4
+        - 6.868    * x2 * x
+        + 0.4298   * x2
+        + 0.1191   * x
+        - 0.00232;
+}
+
+vec3 agx_blender(vec3 val) {
+    // Values below zero cause artifacts since log2 then doesn't exist
+    val = abs(val);
+
+    const mat3 agx_mat = mat3(
+        0.856627,   0.137319,  0.111898,
+        0.0951212,  0.761242,  0.0767994,
+        0.0482516,  0.101439,  0.811302
+    );
+
+    const float min_ev = -12.47393f;
+    const float max_ev = 4.026069f;
+
+    // Input transform (inset)
+    val = agx_mat * val;
+
+    // Log2 space encoding
+    val = clamp(log2(val), min_ev, max_ev);
+    val = (val - min_ev) / (max_ev - min_ev);
+
+    // Apply sigmoid function approximation
+    val = agxDefaultContrastApprox_blender(val);
+
+    return val;
+}
+
+vec3 agxEotf_blender(vec3 val) {
+    const mat3 agx_mat_inv = mat3(
+          1.1271,     -0.14133,    -0.14133,
+         -0.110607,    1.15782,    -0.110607,
+         -0.0164939,  -0.0164939,   1.25194
+    );
+
+    // Inverse input transform (outset)
+    val = agx_mat_inv * val;
+
+    return val;
 }
 
 void main() {
@@ -57,9 +140,6 @@ void main() {
 
     SkyGradient sky = computeSkyGradient(viewDir);
     vec3 skyColor = sky.color;
-
-    // The moon's unlit side must not include stars.
-    vec3 skyColorPreStars = skyColor;
 
     // Shift the shared night-sky horizon line.
     float horizonShift = nightHorizonOffset();
@@ -141,15 +221,11 @@ void main() {
                 moonToSun *= skyMoonPhaseReversed > 0.5 ? -1.0 : 1.0;
 
                 vec2 moonLocal = vec2(localX, localY);
-                float phaseX = -dot(moonLocal, moonToSun);
-                float phaseY = dot(moonLocal, vec2(-moonToSun.y, moonToSun.x));
-                float terminatorPosition = 2.0 * skyMoonIllumination - 1.0;
-                float phaseY2 = phaseY * phaseY;
-                float terminatorEdge = terminatorPosition * sqrt(max(0.0, 1.0 - phaseY2));
-                float edgeSoftness = mix(0.05, 0.35, phaseY2 * phaseY2);
-                float isLit = skyMoonIllumination > 0.001
-                    ? smoothstep(terminatorEdge + edgeSoftness, terminatorEdge - edgeSoftness, phaseX)
-                    : 0.0;
+                float moonLocalZ = sqrt(max(0.0, 1.0 - dot(moonLocal, moonLocal)));
+                vec3 moonSurfaceNormal = vec3(moonLocal, moonLocalZ);
+                float phaseCos = 2.0 * skyMoonIllumination - 1.0;
+                float phaseSin = sqrt(max(0.0, 1.0 - phaseCos * phaseCos));
+                vec3 moonLightDir = vec3(moonToSun * phaseSin, phaseCos);
 
                 // Darken the limb slightly.
                 float limbDarkening = mix(0.85, 1.0, normDist);
@@ -158,7 +234,8 @@ void main() {
                 vec2 moonSurface = moonLocal + skyMoonLibration * (2.0 / PI);
                 float librationRoll = (skyMoonLibration.x + skyMoonLibration.y) * 0.25;
                 mat2 librationRotation = mat2(cos(librationRoll), -sin(librationRoll), sin(librationRoll), cos(librationRoll));
-                vec2 moonUV = librationRotation * moonSurface * 4.0 + vec2(50.0, 50.0);
+                vec2 moonDetail = librationRotation * moonSurface;
+                vec2 moonUV = moonDetail * 4.0 + vec2(50.0, 50.0);
 
                 // Large-scale terrain - broad tonal variation
                 float largeTerrain = moonFbm(moonUV * 0.4);
@@ -171,87 +248,129 @@ void main() {
 
                 // Base brightness from blended terrain layers
                 float surfaceBrightness = largeTerrain * 0.4 + medTerrain * 0.4 + fineTerrain * 0.2;
-                surfaceBrightness = mix(0.6, 1.1, surfaceBrightness);
+                surfaceBrightness = mix(0.6, 1, surfaceBrightness);
 
                 // Dark maria (seas) - a few subtle darker patches
                 float seaNoise = moonFbm(moonUV * 0.8 + vec2(30.0, 70.0));
                 float seaMask = smoothstep(0.50, 0.40, seaNoise);
                 surfaceBrightness *= mix(1.0, 0.88, seaMask);
 
-                // Crater ray systems - bright ejecta from impact sites
-                vec2 rayCenters[3] = vec2[3](
-                    vec2(51.0, 47.5),   // lower right
-                    vec2(48.2, 51.0),   // upper left
-                    vec2(50.5, 50.8)    // center-right
+                vec2 impactPositions[3] = vec2[3](
+                    vec2(0.6, -0.25),
+                    vec2(-0.25, -0.1),
+                    vec2(0.55, 0.55)
                 );
-                float rayMaxDist[3] = float[3](2.8, 2.0, 1.6);
-                float craterSize[3] = float[3](0.10, 0.08, 0.07);
-                for (int ri = 0; ri < 3; ri++) {
-                    vec2 toPoint = moonUV - rayCenters[ri];
-                    float dist = length(toPoint);
-                    // Bright crater center
-                    float centerBright = smoothstep(craterSize[ri], craterSize[ri] * 0.2, dist) * 0.15;
-                    // Dark rim around crater
-                    float darkRim = smoothstep(craterSize[ri] * 0.7, craterSize[ri], dist)
-                                  * (1.0 - smoothstep(craterSize[ri], craterSize[ri] * 1.5, dist));
-                    surfaceBrightness += centerBright;
-                    surfaceBrightness -= darkRim * 0.08;
-                    // Ejecta: diffuse bright halo + spiderweb detail near crater
-                    if (dist > craterSize[ri] * 0.8 && dist < rayMaxDist[ri]) {
-                        float distFade = 1.0 - smoothstep(craterSize[ri], rayMaxDist[ri], dist);
-                        // Diffuse bright halo around the crater
-                        float halo = distFade * distFade * 0.08;
-                        // Spiderweb near-field: high-freq noise for irregular bright webbing
-                        float nearDist = smoothstep(craterSize[ri] * 1.5, craterSize[ri] * 10.0, dist);
-                        float webNoise = moonFbm(moonUV * 6.0 + vec2(float(ri) * 17.0));
-                        float webNoise2 = moonFbm(moonUV * 10.0 + vec2(float(ri) * 31.0));
-                        float web = (smoothstep(0.42, 0.62, webNoise) + smoothstep(0.45, 0.65, webNoise2) * 0.6)
-                                  * (1.0 - nearDist) * distFade * 0.12;
-                        // Long rays: wobbly lines using noise offset on perpendicular distance
-                        float rayBright = 0.0;
-                        for (int rj = 0; rj < 14; rj++) {
-                            float rayAngle = moonHash(vec2(float(ri) * 7.0 + float(rj) * 13.0, float(rj) * 3.0 + float(ri) * 11.0)) * 6.2832;
-                            vec2 rayDir = vec2(cos(rayAngle), sin(rayAngle));
-                            float along = dot(toPoint, rayDir);
-                            if (along > 0.0) {
-                                // Wobble the ray path with noise
-                                float wobble = (moonNoise(vec2(along * 3.0 + float(ri) * 20.0, float(rj) * 5.0)) - 0.5) * 0.06;
-                                float perpDist = abs(toPoint.x * rayDir.y - toPoint.y * rayDir.x + wobble);
-                                float rayW = 0.025 + moonNoise(vec2(float(rj) * 9.0, float(ri) * 4.0)) * 0.015;
-                                float ray = smoothstep(rayW, rayW * 0.2, perpDist);
-                                // Vary brightness per ray
-                                float rayIntensity = 0.5 + moonHash(vec2(float(rj) * 11.0, float(ri) * 6.0)) * 0.5;
-                                rayBright = max(rayBright, ray * rayIntensity);
-                            }
-                        }
-                        surfaceBrightness += rayBright * distFade * 0.09 + halo + web;
+                float impactMaxDistance[3] = float[3](1.8, 2.0, 2.8);
+                float impactRadius[3] = float[3](0.10, 0.1, 0.11);
+                float impactLightening = 0.0;
+                for (int impact = 0; impact < 3; impact++) {
+                    vec2 impactDetail = impactPositions[impact];
+                    vec2 impactLocal = transpose(librationRotation) * impactDetail - skyMoonLibration * (2.0 / PI);
+                    float impactLocalZ = sqrt(max(0.0, 1.0 - dot(impactLocal, impactLocal)));
+                    vec3 impactNormal = vec3(impactLocal, impactLocalZ);
+                    float distanceFromImpact = acos(clamp(dot(moonSurfaceNormal, impactNormal), -1.0, 1.0)) * 4.0;
+                    float ejectaStartFade = smoothstep(
+                        impactRadius[impact] * 0.2,
+                        impactRadius[impact] * 0.8,
+                        distanceFromImpact
+                    );
+                    if (distanceFromImpact >= impactMaxDistance[impact])
+                        continue;
+
+                    float distanceFade = 1.0 - smoothstep(impactRadius[impact], impactMaxDistance[impact], distanceFromImpact);
+                    float impactEdgeWidth = fwidth(distanceFromImpact) * 1.5;
+                    float ejectaFade = smoothstep(
+                        impactRadius[impact] * 0.8 - impactEdgeWidth,
+                        impactRadius[impact] * 0.8 + impactEdgeWidth,
+                        distanceFromImpact
+                    );
+                    float halo = distanceFade * distanceFade * 0.08;
+                    float nearImpact = smoothstep(impactRadius[impact] * 1.5, impactRadius[impact] * 10.0, distanceFromImpact);
+                    float webNoise = moonFbm(moonUV * 6.0 + vec2(float(impact) * 17.0));
+                    float webNoise2 = moonFbm(moonUV * 10.0 + vec2(float(impact) * 31.0));
+                    float webbing = (smoothstep(0.42, 0.62, webNoise) + smoothstep(0.45, 0.65, webNoise2) * 0.6) *
+                        (1.0 - nearImpact) * distanceFade * 0.12;
+                    float impactRays = 0.0;
+                    vec3 impactEast = vec3(impactNormal.z, 0.0, -impactNormal.x);
+                    float impactEastLength = length(impactEast);
+                    impactEast = impactEastLength > 1e-4 ? impactEast / impactEastLength : vec3(1.0, 0.0, 0.0);
+                    vec3 impactNorth = normalize(cross(impactNormal, impactEast));
+                    for (int ray = 0; ray < 14; ray++) {
+                        float rayAngle = moonHash(vec2(
+                            float(impact) * 7.0 + float(ray) * 13.0,
+                            float(ray) * 3.0 + float(impact) * 11.0
+                        )) * 6.2832;
+                        vec3 rayDirection = impactEast * cos(rayAngle) + impactNorth * sin(rayAngle);
+                        float alongRay = atan(
+                            dot(moonSurfaceNormal, rayDirection),
+                            dot(moonSurfaceNormal, impactNormal)
+                        ) * 4.0;
+                        if (alongRay <= 0.0)
+                            continue;
+
+                        float wobble = (moonNoise(vec2(
+                            alongRay * 3.0 + float(impact) * 20.0,
+                            float(ray) * 5.0
+                        )) - 0.5) * 0.06;
+                        vec3 rayPlaneNormal = cross(impactNormal, rayDirection);
+                        float perpendicularDistance = abs(
+                            asin(clamp(dot(moonSurfaceNormal, rayPlaneNormal), -1.0, 1.0)) * 4.0 + wobble
+                        );
+                        float rayWidth = 0.025 + moonNoise(vec2(float(ray) * 9.0, float(impact) * 4.0)) * 0.015;
+                        float rayLine = smoothstep(rayWidth, rayWidth * 0.2, perpendicularDistance);
+                        float rayIntensity = 0.5 + moonHash(vec2(float(ray) * 11.0, float(impact) * 6.0)) * 0.5;
+                        impactRays = max(impactRays, rayLine * rayIntensity);
                     }
+                    float impactBrightness = (impactRays * distanceFade * 0.09 + halo + webbing) *
+                        ejectaStartFade * ejectaFade;
+                    float impactDarkness = 1.0 - smoothstep(0.7, 1, surfaceBrightness);
+                    impactLightening = max(impactLightening, impactBrightness * impactDarkness * 8.0);
                 }
+
+                float lambert = dot(moonSurfaceNormal, moonLightDir);
+
+                float terminatorJitter =
+                    (surfaceBrightness - 0.85) * 0.01 +
+                    (fineTerrain - 0.5) * 0.03;
+                // Surface relief only perturbs incidence near the terminator.
+                float terminatorRoughness =
+                    (1.0 - smoothstep(0.05, 0.35, abs(lambert))) *
+                    smoothstep(0.05, 0.25, moonLocalZ);
+                float roughLambert = lambert + terminatorJitter * terminatorRoughness;
+                float lightCos = max(roughLambert, 0.0);
+                float viewCos = moonLocalZ;
+                // Lunar regolith scatters closer to Lommel-Seeliger than ideal Lambertian diffuse.
+                float lommelSeeliger = 2.0 * lightCos / max(lightCos + viewCos, 1e-4);
+                float lunarLambertWeight = mix(0.75, 0.25, max(phaseCos, 0.0));
+                float lunarDiffuse = mix(lommelSeeliger, lightCos, lunarLambertWeight);
+                float terminatorFade = smoothstep(-0.14, 0.08, roughLambert);
+                float isLit = skyMoonIllumination > 0.001
+                    ? clamp(lunarDiffuse, 0.0, 1.0) * terminatorFade
+                    : 0.0;
+                float terminatorProximity = 1.0 - smoothstep(0.02, 0.2, abs(roughLambert));
+                float crescentEdgeFade = smoothstep(0.0, 0.25, moonLocalZ);
+                isLit *= mix(1.0, crescentEdgeFade, terminatorProximity);
 
                 // Warm gray color that shifts subtly with brightness
                 // Darker areas slightly warmer, brighter areas slightly cooler
                 float colorBlend = smoothstep(0.7, 0.95, surfaceBrightness);
-                vec3 darkTone = vec3(0.85, 0.83, 0.79);
-                vec3 brightTone = vec3(1.0, 0.98, 0.95);
+                vec3 darkTone = vec3(0.8);
+                vec3 brightTone = vec3(1.0);
                 vec3 surfaceColor = mix(darkTone, brightTone, colorBlend);
+                surfaceColor = mix(surfaceColor, brightTone, min(impactLightening, 1.0));
 
-                vec3 litColor = skyMoonColor * limbDarkening * surfaceBrightness * surfaceColor;
-                // Dark side: opaque (occludes stars) but matches surrounding sky tone.
-                // When stars are visible, blend toward the starfield background color
-                // (without star points) so the dark side doesn't glow brighter than the sky.
-                vec3 darkSideBase = skyColorPreStars;
-                if (nightSkyBlend > 0.001) {
-                    vec3 moonStarDir = viewDir;
-                    moonStarDir = moonStarDir * celestialCos + cross(celestialAxis, moonStarDir) * celestialSin +
-                        celestialAxis * dot(celestialAxis, moonStarDir) * (1.0 - celestialCos);
-                    vec3 nightBgColor = proceduralStarfieldBackground(moonStarDir);
-                    darkSideBase = mix(skyColorPreStars, nightBgColor, nightSkyBlend);
-                }
-                vec3 darkSideMoon = darkSideBase + skyMoonColor * 0.02 * skyMoonIllumination;
+                float moonBrightness = max(max(skyMoonColor.r, skyMoonColor.g), skyMoonColor.b);
+                vec3 moonLightColor = mix(skyMoonColor, moonBrightness * vec3(1.0, 0.94, 0.84), 0.6);
+                vec3 litColor = moonLightColor * 1.3 * limbDarkening * surfaceBrightness * surfaceColor;
+                // The unlit disk blocks stars and nebulae, but is no brighter than empty night sky.
+                vec3 darkSideMoon = STARFIELD_BACKGROUND_COLOR;
                 vec3 moonFinalColor = mix(darkSideMoon, litColor, isLit);
                 // Fade moon near the horizon to match the star/nebula horizon fade
                 float moonHorizonFade = smoothstep(-0.1 + horizonShift, 0.07 + horizonShift, sky.upAmount);
                 float moonAlpha = moonDisk * moonDayAlpha * moonVisibility * moonHorizonFade;
+
+//                moonFinalColor *= srgbToLinear(vec3(236, 241, 255) / 255) * 43 / 255.f * 5;
+                moonFinalColor *= COLOR_PICKER.rgb * COLOR_PICKER.a * 5;
 
                 skyColor = mix(skyColor, moonFinalColor, moonAlpha);
             }

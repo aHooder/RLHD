@@ -80,6 +80,7 @@ public class DaylightCycleManager {
 	private static final double DRACONIC_MONTH_DAYS = 27.21222;
 	private static final float LONGITUDE_LIBRATION_DEG = 7.9f;
 	private static final float LATITUDE_LIBRATION_DEG = 6.7f;
+	private static final float CUSTOM_NIGHT_MOON_ORBIT_TILT = -.35f;
 
 	// Hand shadows to a still-lit moon before sunset to avoid an orientation pop.
 	private static final float SUN_SHADOW_CUTOFF_DEG = 2;
@@ -101,7 +102,7 @@ public class DaylightCycleManager {
 
 	private final double[] currentLatLong = { 0, 0 };
 	private DaylightCycle currentCycle = DaylightCycle.CUSTOM;
-	private MoonPhase currentMoonPhase = MoonPhase.REALISTIC;
+	private MoonPhase currentMoonPhase = MoonPhase.DYNAMIC;
 
 	private Instant currentInstant;
 
@@ -220,6 +221,8 @@ public class DaylightCycleManager {
 	private float computeMoonIlluminationFraction() {
 		if (currentMoonPhase.isLocked)
 			return currentMoonPhase.illumination;
+		if (usesCustomNightMoonPhase())
+			return (1 - cos(getCustomNightMoonPhase() * TWO_PI)) * .5f;
 		// Real-Time keeps the mirrored moon continuous through daylight-saving changes.
 		if (!configMoonBehavior.mirrorsSun || currentCycle.usesCurrentInstantForMoon || currentCycle.isFixed)
 			return getMoonIllumination(getMoonDate());
@@ -239,13 +242,37 @@ public class DaylightCycleManager {
 		return state.moonAngles[0] * RAD_TO_DEG;
 	}
 
-	/**
-	 * Night hides the sun, but uses Default sun positions for moon phases.
-	 */
 	private float[] computeMoonPhaseLightDirection() {
+		if (usesCustomNightMoonPhase())
+			return computeCustomNightMoonPhaseLightDirection();
+
 		return currentCycle.isPermanentNight()
 			? anglesToSkyDirection(getSunAngles(getMoonDate()))
 			: state.sunDirection;
+	}
+
+	/**
+	 * Keep Night's Custom moon phase on a fixed diagonal orbit around the moon.
+	 */
+	private float[] computeCustomNightMoonPhaseLightDirection() {
+		float[] moonUp = abs(state.moonDirection[1]) < .999f ? vec(0, 1, 0) : vec(0, 0, 1);
+		float[] moonRight = normalize(cross(moonUp, state.moonDirection));
+		moonUp = normalize(cross(state.moonDirection, moonRight));
+		float[] orbitTangent = normalize(add(moonRight, multiply(moonUp, CUSTOM_NIGHT_MOON_ORBIT_TILT)));
+		float phaseCos = state.moonIllumination * 2 - 1;
+		float phaseSin = sqrt(max(0, 1 - phaseCos * phaseCos));
+		if (sin(getCustomNightMoonPhase() * TWO_PI) < 0)
+			phaseSin = -phaseSin;
+
+		return normalize(add(multiply(state.moonDirection, phaseCos), multiply(orbitTangent, phaseSin)));
+	}
+
+	private boolean usesCustomNightMoonPhase() {
+		return currentCycle.isPermanentNight() && configMoonBehavior.usesCustomCycleDuration && !currentMoonPhase.isLocked;
+	}
+
+	private float getCustomNightMoonPhase() {
+		return (float) accumulatedCycleTime;
 	}
 
 	/**
