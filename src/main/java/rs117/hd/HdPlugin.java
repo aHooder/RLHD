@@ -31,6 +31,7 @@ import com.google.inject.Binder;
 import com.google.inject.Provider;
 import com.google.inject.Provides;
 import java.awt.Canvas;
+import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.GraphicsConfiguration;
 import java.awt.Image;
@@ -69,6 +70,7 @@ import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.plugins.PluginManager;
 import net.runelite.client.plugins.entityhider.EntityHiderPlugin;
 import net.runelite.client.ui.ClientUI;
+import net.runelite.client.ui.components.colorpicker.ColorPickerManager;
 import net.runelite.client.util.LinkBrowser;
 import net.runelite.client.util.OSType;
 import net.runelite.rlawt.AWTContext;
@@ -259,6 +261,9 @@ public class HdPlugin extends Plugin {
 
 	@Inject
 	private PluginManager pluginManager;
+
+	@Inject
+	private ColorPickerManager colorPickerManager;
 
 	@Inject
 	private HdPluginConfig config;
@@ -755,6 +760,20 @@ public class HdPlugin extends Plugin {
 					client.setGameState(GameState.LOADING);
 
 				checkGLErrors();
+
+				var colorPicker = colorPickerManager.create(
+					client,
+					Color.WHITE,
+					"Shader Color Picker",
+					false
+				);
+				colorPicker.setLocationRelativeTo(canvas);
+				colorPicker.setOnColorChange(c -> clientThread.invoke(() -> {
+					var rgb = ColorUtils.rgb(c);
+					uboGlobal.colorPicker.set(vec(rgb[0], rgb[1], rgb[2], c.getAlpha() / 255.f));
+				}));
+				colorPicker.setVisible(true);
+				uboGlobal.colorPicker.set(1, 1, 1, 1.f);
 
 				clientThread.invokeLater(this::displayUpdateMessage);
 
