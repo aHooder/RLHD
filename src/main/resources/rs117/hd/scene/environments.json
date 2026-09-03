@@ -2792,6 +2792,8 @@
     "ambientColor": "#97baff",
     "directionalStrength": 4,
     "sunAngles": [ 52, 235 ],
+    "fixedMoonAngles": [ 5.5, 0 ],
+    "starHorizonHeight": -1,
     "skyGradient": {
       "zenith": [
         { "altitude": -30, "color": "#010104" },
