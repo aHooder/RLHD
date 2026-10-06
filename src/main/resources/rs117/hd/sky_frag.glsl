@@ -15,7 +15,11 @@ void main() {
         vec4 nearWorld = invProjectionMatrix * vec4(fScreenPos, -1.0, 1.0);
         vec4 farWorld = invProjectionMatrix * vec4(fScreenPos, 1.0, 1.0);
         vec3 viewDir = normalize(farWorld.xyz / farWorld.w - nearWorld.xyz / nearWorld.w);
-        color = sampleSky(viewDir, true, true);
+        // Full-sky mode keeps disks, their horizon fades, and fog in HDR until
+        // composition is complete. Selective disk compression is only the fallback.
+        color = sampleSky(viewDir, true, !uboSky.tonemapSky);
+        if (uboSky.tonemapSky)
+            color = tonemap_hue_preserving(color);
     }
 
     vec3 srgb = linearToSrgb(color);

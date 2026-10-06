@@ -614,6 +614,17 @@ public interface HdPluginConfig extends Config
 	)
 	String daylightCycleSettings = "daylightCycleSettings";
 
+	@ConfigItem(
+		keyName = "experimentalTonemapSky",
+		name = "dev: tonemap sky",
+		description = "Tone maps the complete procedural sky and composites scene fog using approximate HDR reconstruction.",
+		position = -100,
+		section = daylightCycleSettings
+	)
+	default boolean experimentalTonemapSky() {
+		return false;
+	}
+
 	String KEY_DAYLIGHT_CYCLE = "daylightCycle";
 	@ConfigItem(
 		keyName = KEY_DAYLIGHT_CYCLE,

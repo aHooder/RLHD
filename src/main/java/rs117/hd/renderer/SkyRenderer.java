@@ -392,6 +392,7 @@ public class SkyRenderer {
 	private void updateSkyUbo(SkyConfiguration configuration, SkyState state, GradientSample sky) {
 		var ubo = plugin.uboSky;
 		ubo.enabled.set(1);
+		ubo.tonemapSky.set(config.experimentalTonemapSky() ? 1 : 0);
 		ubo.zenithColor.set(sky.zenith);
 		ubo.horizonColor.set(sky.horizon);
 		ubo.sunColor.set(sky.sunGlow);

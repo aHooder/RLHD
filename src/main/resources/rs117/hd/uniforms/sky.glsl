@@ -4,6 +4,7 @@
 
 layout(std140) uniform UBOSky {
     bool enabled;
+    bool tonemapSky;
     vec3 zenithColor;
     vec3 horizonColor;
     vec3 sunColor;

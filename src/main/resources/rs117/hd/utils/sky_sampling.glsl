@@ -9,6 +9,7 @@
 #include <utils/tone_mapping.glsl>
 #include <utils/moon.glsl>
 
+// Legacy selective compression when the complete sky is not tone-mapped.
 // Compress only the disk contribution, leaving the surrounding sky unchanged.
 // A neutral background prevents sunset fog from shifting the disk's hue.
 vec3 toneMapSkyDisk(vec3 light, vec3 background) {
@@ -93,7 +94,8 @@ SkySample sampleSky(vec3 viewDir, vec3 diskViewDir, bool correctProjection, bool
         mix(mix(0.6, 1.0, sunMu), 0.866667, sunBlurBlend);
     if (toneMap)
         sunLight = toneMapSkyDisk(sunLight, applySkyFog(skyColor, fogTransmittance));
-    // Apply coverage after compression, as for the moon, to retain soft edges.
+    // In selective mode, coverage follows compression to retain soft edges.
+    // Full-sky mode instead carries this entire attenuated contribution into its tone map.
     sunLight *= sunDisk * sunHorizon;
 
     // Apply the same perceived-horizon offset as the sun.

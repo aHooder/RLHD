@@ -546,6 +546,9 @@ void main() {
             if (combinedFog > 1e-4) {
                 vec3 fogViewDir = normalize(IN.position - cameraPos);
                 vec3 distanceFogColor = foggedSkyColor(fogViewDir);
+                vec3 sceneLight = srgbToLinear(outputColor.rgb);
+                if (uboSky.tonemapSky)
+                    sceneLight = inverse_tonemap_hue_preserving(sceneLight);
                 if (groundFog > 1e-4 && fogAmount < 1.0) {
                     // Approximate reduced nighttime color sensitivity without changing luminance.
                     vec3 nightFogColor = mix(uboSky.groundFogLight,
@@ -553,12 +556,18 @@ void main() {
                     // Preserve the regular fog color by day; introduce adapted local
                     // illumination only through civil dusk, from sun altitude 0 to -6 degrees.
                     vec3 groundFogColor = mix(distanceFogColor, nightFogColor, nightFogBlend);
-                    outputColor.rgb = linearToSrgb(mix(srgbToLinear(outputColor.rgb), groundFogColor, groundFog));
+                    sceneLight = mix(sceneLight, groundFogColor, groundFog);
+                    if (!uboSky.tonemapSky)
+                        outputColor.rgb = linearToSrgb(sceneLight);
                 }
-                // Preserve the scene's existing distance-fog composition. It hides
-                // the local haze at the far boundary, matching the sky behind it.
-                if (fogAmount > 1e-4)
+                // Distance fog hides the local haze at the far boundary, matching
+                // the sky behind it. Only the experimental path composites in HDR.
+                if (uboSky.tonemapSky) {
+                    sceneLight = mix(sceneLight, distanceFogColor, fogAmount);
+                    outputColor.rgb = linearToSrgb(tonemap_hue_preserving(sceneLight));
+                } else if (fogAmount > 1e-4) {
                     outputColor.rgb = mix(outputColor.rgb, linearToSrgb(distanceFogColor), fogAmount);
+                }
             }
         } else {
             outputColor.rgb = mix(outputColor.rgb, linearToSrgb(fogColor), combinedFog);
