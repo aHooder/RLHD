@@ -120,15 +120,17 @@ public class WorldViewContext {
 	}
 
 	void updateProjection(WorldView topLevel) {
-		// Update worldview projection, or estimate its trajectory when off-screen, if possible
+		// Update WorldView projection, or estimate its trajectory when off-screen, if possible
 		if (worldViewId == WorldView.TOPLEVEL)
 			return;
+
 		var worldEntity = topLevel.worldEntities().byIndex(worldViewId);
 		isSquashed = worldEntity != null && worldEntity.isHiddenForOverlap();
 		if (worldEntity == null) {
 			projection = null;
 			return;
 		}
+
 		var worldView = worldEntity.getWorldView();
 		if (worldView.getMainWorldProjection() instanceof FloatProjection) {
 			if (projection == null)
@@ -141,7 +143,7 @@ public class WorldViewContext {
 			lastOrigin[2] = origin.getY();
 			lastOrientation = worldEntity.getOrientation();
 		} else if (projection != null) {
-			// Follow translation and yaw off-screen, retaining the last known projection as much as possible
+			// Approximate the WorldView's projection based on the WorldEntity's position & orientation
 			var origin = worldEntity.getLocalLocation();
 			float angle = (worldEntity.getOrientation() - lastOrientation) * JAU_TO_RAD;
 			float sin = sin(angle);
