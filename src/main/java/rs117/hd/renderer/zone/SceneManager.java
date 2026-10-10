@@ -28,7 +28,6 @@ import rs117.hd.scene.AreaManager;
 import rs117.hd.scene.EnvironmentManager;
 import rs117.hd.scene.FishingSpotReplacer;
 import rs117.hd.scene.LightManager;
-import rs117.hd.scene.SceneContext;
 import rs117.hd.scene.ProceduralGenerator;
 import rs117.hd.scene.areas.AABB;
 import rs117.hd.scene.areas.Area;
@@ -130,13 +129,6 @@ public class SceneManager {
 		return getContext(wv.getId());
 	}
 
-	@Nullable
-	public SceneContext getLoadedSceneContext(WorldView worldView) {
-		WorldViewContext ctx = getContext(worldView);
-		return ctx == null || ctx.isLoading || ctx.sceneContext == null || ctx.sceneContext.scene != worldView.getScene() ?
-			null : ctx.sceneContext;
-	}
-
 	public WorldViewContext getContext(int worldViewId) {
 		if (worldViewId != WorldView.TOPLEVEL)
 			return subs[worldViewId];
@@ -153,7 +145,6 @@ public class SceneManager {
 
 	public void destroy() {
 		eventBus.unregister(this);
-		lightManager.clearSceneLights();
 
 		root.free();
 		for (int i = 0; i < subs.length; i++) {
@@ -309,11 +300,12 @@ public class SceneManager {
 		int worldViewId = worldView.getId();
 		if (worldViewId != WorldView.TOPLEVEL) {
 			log.debug("WorldView despawn: {}", worldViewId);
-			if (subs[worldViewId] == null) {
+			var sub = subs[worldViewId];
+			if (sub == null) {
 				log.debug("Attempted to despawn unloaded worldview: {}", worldView);
 			} else {
-				lightManager.unloadWorldViewLights(subs[worldViewId].sceneContext);
-				subs[worldViewId].free();
+				lightManager.unloadWorldViewLights(sub.sceneContext);
+				sub.free();
 				subs[worldViewId] = null;
 			}
 		}
@@ -803,14 +795,14 @@ public class SceneManager {
 		ctx.uploadTime = sw.elapsed(TimeUnit.NANOSECONDS);
 		ctx.sceneSwapTime = sw.elapsed(TimeUnit.NANOSECONDS);
 		ctx.isLoading = false;
-		lightManager.loadWorldViewLights(ctx.sceneContext, ctx.uboWorldViewStruct.worldView);
+		lightManager.loadWorldViewLights(ctx.sceneContext);
 		log.debug("swapSubScene time {} WorldView ready: {}", ctx.sceneSwapTime, scene.getWorldViewId());
 	}
 
 	public void reloadWorldViewLights() {
 		for (WorldViewContext ctx : subs)
 			if (ctx != null && !ctx.isLoading)
-				lightManager.loadWorldViewLights(ctx.sceneContext, ctx.uboWorldViewStruct.worldView);
+				lightManager.loadWorldViewLights(ctx.sceneContext);
 	}
 
 	static class SortedZone implements Comparable<SortedZone> {

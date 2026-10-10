@@ -368,8 +368,8 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 					l.pos[1] = l.origin[1] + l.offset[1];
 					l.pos[2] = l.origin[2] + (int) (-cos * z + sin * x);
 					copyTo(l.sceneLocalPos, l.pos);
-					if (l.sourceScene != null)
-						Mat4.transformVecAffine(l.pos, l.sourceScene.lightProjection, l.sceneLocalPos);
+					if (l.sceneContext != null && l.sceneContext.projection != null)
+						Mat4.transformVecAffine(l.pos, l.sceneContext.projection, l.sceneLocalPos);
 				}
 			}
 
@@ -528,10 +528,10 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 	}
 
 	private static float[] lightProjection(Light light, float[] projection) {
-		if (light.sourceScene == null)
+		if (light.sceneContext == null || light.sceneContext.projection == null)
 			return projection;
 		float[] localProjection = copy(projection);
-		Mat4.mul(localProjection, light.sourceScene.lightProjection);
+		Mat4.mul(localProjection, light.sceneContext.projection);
 		return localProjection;
 	}
 

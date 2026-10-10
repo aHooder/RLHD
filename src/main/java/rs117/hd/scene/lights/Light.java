@@ -28,7 +28,6 @@ public class Light
 
 	public boolean visible;
 	public boolean parentExists;
-	public boolean withinViewingDistance = true;
 	public boolean hiddenTemporarily;
 	public boolean hiddenByPlane;
 	public boolean markedForRemoval;
@@ -59,7 +58,7 @@ public class Light
 	public float daylightCycleRadiusScale = 1;
 
 	@Nullable
-	public SceneContext sourceScene;
+	public SceneContext sceneContext;
 	public Actor actor;
 	public Projectile projectile;
 	public TileObject tileObject;

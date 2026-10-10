@@ -229,7 +229,6 @@ public class LegacyRenderer implements Renderer {
 
 	@Override
 	public synchronized void destroy() {
-		lightManager.clearSceneLights();
 		modelPusher.shutDown();
 		skyRenderer.destroy();
 

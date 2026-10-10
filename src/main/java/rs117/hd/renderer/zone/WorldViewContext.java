@@ -54,14 +54,15 @@ public class WorldViewContext {
 	@Inject
 	private SceneManager sceneManager;
 
+	public ZoneSceneContext sceneContext;
+	public boolean isLoading = true;
+
 	final int worldViewId;
 	final int sizeX, sizeZ;
 	@Nullable
 	WorldViewStruct uboWorldViewStruct;
-	ZoneSceneContext sceneContext;
 	Zone[][] zones;
 	GLBuffer vboM;
-	boolean isLoading = true;
 
 	int minLevel, level, maxLevel;
 	Set<Integer> hideRoofIds;

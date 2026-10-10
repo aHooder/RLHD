@@ -28656,10 +28656,10 @@
     "radius": 170,
     "fixedDespawnTime": true,
     "despawnWithParent": true,
-    "strength": 25,
+    "strength": 1000,
     "color": [
-      252,
-      148,
+      0,
+      255,
       3
     ],
     "type": "FLICKER",
@@ -28670,7 +28670,8 @@
     "despawnDelay": 2200,
     "fadeOutDuration": 150,
     "graphicsObjectIds": [
-      "SPOTANIM_CASTHIGHLVLALCHEMY_FIRE"
+      "SPOTANIM_CASTHIGHLVLALCHEMY_FIRE",
+      113
     ]
   },
   {
@@ -49279,11 +49280,31 @@
     "range": 5.8
   },
   {
+    "description": "Sailing eternal brazier tiny raft 1x3 - bloom",
+    "objectIds": [ "SAILING_BOAT_1X3_ETERNAL_BRAZIER" ],
+    "offset": [ -44, 170, 69 ],
+    "radius": 75,
+    "strength": 25,
+    "color": "#FFA50C",
+    "type": "FLICKER",
+    "range": 5.8
+  },
+  {
     "description": "Sailing eternal brazier small skiff 2x5",
     "objectIds": [ "SAILING_BOAT_SKIFF_ETERNAL_BRAZIER" ],
     "offset": [ -62, 182, 51 ],
     "radius": 1250,
     "strength": 13.5,
+    "color": "#FFA50C",
+    "type": "FLICKER",
+    "range": 5.8
+  },
+  {
+    "description": "Sailing eternal brazier small skiff 2x5 - bloom",
+    "objectIds": [ "SAILING_BOAT_SKIFF_ETERNAL_BRAZIER" ],
+    "offset": [ -62, 259, 51 ],
+    "radius": 75,
+    "strength": 25,
     "color": "#FFA50C",
     "type": "FLICKER",
     "range": 5.8
@@ -49297,5 +49318,42 @@
     "color": "#FFA50C",
     "type": "FLICKER",
     "range": 5.8
+  },
+  {
+    "description": "Sailing eternal brazier medium sloop 3x10 - bloom",
+    "objectIds": [ "SAILING_BOAT_SLOOP_ETERNAL_BRAZIER" ],
+    "offset": [ -61, 295, 53 ],
+    "radius": 75,
+    "strength": 25,
+    "color": "#FFA50C",
+    "type": "FLICKER",
+    "range": 5.8
+  },
+  {
+    "description": "Cabin Boy Jenkins",
+    "height": 80,
+    "radius": 300,
+    "strength": 10,
+    "color": [
+      200,
+      200,
+      255
+    ],
+    "type": "FLICKER",
+    "range": 10,
+    "ignoreActorHiding": true,
+    "npcIds": [
+      "SAILING_CREW_GHOST_JENKINS_DOCK",
+      "SAILING_CREW_GHOST_JENKINS_UNRECRUITED",
+      "SAILING_CREW_GHOST_JENKINS_RECRUITED",
+      "SAILING_CREW_GHOST_JENKINS_WORLD",
+      "SAILING_CREW_GHOST_JENKINS_DOCK",
+      "SAILING_CREW_GHOST_JENKINS_SHIP",
+      "SAILING_CREW_GHOST_JENKINS_SHIP_OP",
+      "SAILING_CREW_GHOST_JENKINS_SHIP_NO_OP",
+      "SAILING_CREW_GHOST_JENKINS_CARGO",
+      "SAILING_CREW_GHOST_JENKINS_CARGO_2",
+      "SAILING_CREW_GHOST_JENKINS_CARGO_3"
+    ]
   }
 ]

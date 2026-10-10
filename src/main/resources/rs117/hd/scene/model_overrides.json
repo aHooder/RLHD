@@ -83429,8 +83429,8 @@
       {
         "description": "Flame",
         "colors": "a < 255",
-        "setAlpha": 255,
-        "baseMaterial": "UNLIT_125",
+        "upwardsNormals": true,
+        "baseMaterial": "NONE",
         "receiveShadows": false
       },
       {
