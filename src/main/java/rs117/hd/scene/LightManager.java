@@ -37,6 +37,7 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.coords.*;
@@ -49,6 +50,8 @@ import rs117.hd.HdPlugin;
 import rs117.hd.config.DynamicLights;
 import rs117.hd.data.ObjectType;
 import rs117.hd.opengl.uniforms.UBOLights;
+import rs117.hd.renderer.zone.SceneManager;
+import rs117.hd.renderer.zone.ZoneRenderer;
 import rs117.hd.scene.daylight_cycle.SkyConfiguration;
 import rs117.hd.scene.daylight_cycle.SkyState;
 import rs117.hd.scene.daylight_cycle.SkyState.LightingSample;
@@ -58,6 +61,7 @@ import rs117.hd.scene.lights.Light;
 import rs117.hd.scene.lights.LightDefinition;
 import rs117.hd.scene.lights.LightType;
 import rs117.hd.utils.HDUtils;
+import rs117.hd.utils.Mat4;
 import rs117.hd.utils.ModelHash;
 import rs117.hd.utils.Props;
 import rs117.hd.utils.ResourcePath;
@@ -102,6 +106,14 @@ public class LightManager {
 
 	@Inject
 	private EnvironmentManager environmentManager;
+
+	@Inject
+	private SceneManager sceneManager;
+
+	@Getter
+	private final ArrayList<Light> lights = new ArrayList<>();
+	@Getter
+	private int numVisibleLights;
 
 	private final ArrayList<Light> WORLD_LIGHTS = new ArrayList<>();
 	private final ListMultimap<Integer, LightDefinition> NPC_LIGHTS = ArrayListMultimap.create();
@@ -171,6 +183,7 @@ public class LightManager {
 	}
 
 	public void shutDown() {
+		clearSceneLights();
 		WORLD_LIGHTS.clear();
 		NPC_LIGHTS.clear();
 		OBJECT_LIGHTS.clear();
@@ -184,21 +197,18 @@ public class LightManager {
 		assert client.isClientThread();
 
 		if (plugin.configDynamicLights == DynamicLights.NONE || client.getGameState() != GameState.LOGGED_IN) {
-			sceneContext.numVisibleLights = 0;
+			numVisibleLights = 0;
 			return;
 		}
 
 		if (reloadLights) {
 			reloadLights = false;
-			sceneContext.lights.clear();
+			lights.clear();
 			sceneContext.knownProjectiles.clear();
 			loadSceneLights(sceneContext);
-			swapSceneLights(sceneContext, null);
-
-			client.getNpcs().forEach(npc -> {
-				addNpcLights(npc);
-				addSpotanimLights(npc);
-			});
+			swapSceneLights(sceneContext);
+			if (plugin.renderer instanceof ZoneRenderer)
+				sceneManager.reloadWorldViewLights();
 		}
 
 		// These should never occur, but just in case...
@@ -206,26 +216,38 @@ public class LightManager {
 			log.warn("Too many projectiles tracked: {}. Clearing...", sceneContext.knownProjectiles.size());
 			sceneContext.knownProjectiles.clear();
 		}
-		if (sceneContext.lights.size() > 10000) {
-			log.warn("Too many lights: {}. Clearing...", sceneContext.lights.size());
-			sceneContext.lights.clear();
+		if (lights.size() > 10000) {
+			log.warn("Too many lights: {}. Clearing...", lights.size());
+			lights.clear();
 		}
 
+		// Missing parents are discarded outright: unreliable despawns must not retain even persistent lights.
+		lights.removeIf(light -> {
+			if (light.sourceScene == null)
+				return false;
+			if (light.tileObject != null)
+				return !containsObject(light.sourceScene, light.tileObject);
+			WorldView view = client.getWorldView(light.sourceScene.scene.getWorldViewId());
+			return light.actor instanceof NPC && view.npcs().byIndex(((NPC) light.actor).getIndex()) != light.actor ||
+				   light.actor instanceof Player && view.players().byIndex(((Player) light.actor).getId()) != light.actor;
+		});
+
 		int drawDistance = plugin.getDrawDistance() * LOCAL_TILE_SIZE;
-		Tile[][][] tiles = sceneContext.scene.getExtendedTiles();
-		int[][][] tileHeights = sceneContext.scene.getTileHeights();
-		var cachedNpcs = client.getTopLevelWorldView().npcs();
-		var cachedPlayers = client.getTopLevelWorldView().players();
 		int gameCycle = client.getGameCycle();
-		final int plane = client.getPlane();
 		boolean changedPlanes = false;
 
-		if (plane != currentPlane) {
-			currentPlane = plane;
+		if (client.getPlane() != currentPlane) {
+			currentPlane = client.getPlane();
 			changedPlanes = true;
 		}
 
-		for (Light light : sceneContext.lights) {
+		for (Light light : lights) {
+			SceneContext source = light.sourceScene == null ? sceneContext : light.sourceScene;
+			WorldView view = light.sourceScene == null ? client.getTopLevelWorldView() :
+				client.getWorldView(source.scene.getWorldViewId());
+			int plane = view.getPlane();
+			Tile[][][] tiles = source.scene.getExtendedTiles();
+			int[][][] tileHeights = source.scene.getTileHeights();
 			// Ways lights may get deleted:
 			// - animation-specific:
 			//   effectively spawn when the animation they're attached to starts playing, and despawns when it stops,
@@ -291,8 +313,8 @@ public class LightManager {
 					}
 				}
 			} else if (light.actor != null && !light.markedForRemoval) {
-				if (light.actor instanceof NPC && light.actor != cachedNpcs.byIndex(((NPC) light.actor).getIndex()) ||
-					light.actor instanceof Player && light.actor != cachedPlayers.byIndex(((Player) light.actor).getId()) ||
+				if (light.actor instanceof NPC && light.actor != view.npcs().byIndex(((NPC) light.actor).getIndex()) ||
+					light.actor instanceof Player && light.actor != view.players().byIndex(((Player) light.actor).getId()) ||
 					light.spotanimId != -1 && !light.actor.hasSpotAnim(light.spotanimId)
 				) {
 					parentExists = false;
@@ -321,13 +343,13 @@ public class LightManager {
 						}
 					}
 
-					int tileExX = ((int) light.origin[0] >> LOCAL_COORD_BITS) + sceneContext.sceneOffset;
-					int tileExY = ((int) light.origin[2] >> LOCAL_COORD_BITS) + sceneContext.sceneOffset;
+					int tileExX = ((int) light.origin[0] >> LOCAL_COORD_BITS) + source.sceneOffset;
+					int tileExY = ((int) light.origin[2] >> LOCAL_COORD_BITS) + source.sceneOffset;
 
 					// Some NPCs, such as Crystalline Hunllef in The Gauntlet, sometimes return scene X/Y values far outside the possible range.
 					Tile tile;
 					if (tileExX >= 0 && tileExY >= 0 &&
-						tileExX < EXTENDED_SCENE_SIZE && tileExY < EXTENDED_SCENE_SIZE &&
+						tileExX < tiles[plane].length && tileExY < tiles[plane][tileExX].length &&
 						(tile = tiles[plane][tileExX][tileExY]) != null
 					) {
 						hiddenTemporarily = isRenderableHidden(light.actor);
@@ -353,7 +375,7 @@ public class LightManager {
 
 						// Interpolate between tile heights based on specific scene coordinates
 						int tileZ = plane;
-						if (tile.getBridge() != null)
+						if (tile.getBridge() != null && tileZ + 1 < tileHeights.length)
 							tileZ++;
 						float lerpX = fract(light.origin[0] / (float) LOCAL_TILE_SIZE);
 						float lerpY = fract(light.origin[2] / (float) LOCAL_TILE_SIZE);
@@ -414,10 +436,10 @@ public class LightManager {
 				light.prevPlane = light.plane;
 				light.belowFloor = false;
 				light.aboveFloor = false;
-				int tileExX = ((int) light.pos[0] >> LOCAL_COORD_BITS) + sceneContext.sceneOffset;
-				int tileExY = ((int) light.pos[2] >> LOCAL_COORD_BITS) + sceneContext.sceneOffset;
+				int tileExX = ((int) light.pos[0] >> LOCAL_COORD_BITS) + source.sceneOffset;
+				int tileExY = ((int) light.pos[2] >> LOCAL_COORD_BITS) + source.sceneOffset;
 				if (light.plane >= 0 && tileExX >= 0 && tileExY >= 0 && tileExX < EXTENDED_SCENE_SIZE && tileExY < EXTENDED_SCENE_SIZE) {
-					byte hasTile = sceneContext.filledTiles[tileExX][tileExY];
+					byte hasTile = source.filledTiles[tileExX][tileExY];
 					if ((hasTile & (1 << light.plane + 1)) != 0)
 						light.belowFloor = true;
 					if ((hasTile & (1 << light.plane)) != 0)
@@ -435,6 +457,17 @@ public class LightManager {
 				hiddenTemporarily = hiddenByPlane;
 			}
 			light.hiddenByPlane = hiddenByPlane;
+
+			copyTo(light.sceneLocalPos, light.pos);
+			if (light.sourceScene != null) {
+				var projection = view.getMainWorldProjection();
+				if (projection instanceof FloatProjection) {
+					copyTo(source.lightProjection, ((FloatProjection) projection).getProjection());
+					Mat4.transformVecAffine(light.pos, source.lightProjection, light.sceneLocalPos);
+				} else {
+					light.visible = false;
+				}
+			}
 
 			if (parentExists != light.parentExists) {
 				light.parentExists = parentExists;
@@ -511,21 +544,21 @@ public class LightManager {
 
 		// Order visible lights first, then by distance. Leave hidden lights unordered at the end.
 		quickSort(
-			sceneContext.lights,
+			lights,
 			(a, b) -> a.visible && b.visible ?
 				Float.compare(a.distanceSquared, b.distanceSquared) :
 				Boolean.compare(b.visible, a.visible)
 		);
 
 		// Count number of visible lights
-		sceneContext.numVisibleLights = 0;
+		numVisibleLights = 0;
 		int maxLights = plugin.configTiledLighting ? UBOLights.MAX_LIGHTS : plugin.configDynamicLights.getMaxSceneLights();
-		for (Light light : sceneContext.lights) {
+		for (Light light : lights) {
 			// Exit early once encountering the first invisible light, or the light limit is reached
-			if (!light.visible || sceneContext.numVisibleLights >= maxLights)
+			if (!light.visible || numVisibleLights >= maxLights)
 				break;
 
-			sceneContext.numVisibleLights++;
+			numVisibleLights++;
 
 			// If the light was temporarily hidden, begin fading in
 			if (!light.withinViewingDistance && light.hiddenTemporarily)
@@ -575,8 +608,8 @@ public class LightManager {
 			light.applyTemporaryVisibilityFade();
 		}
 
-		for (int i = sceneContext.lights.size() - 1; i >= sceneContext.numVisibleLights; i--) {
-			Light light = sceneContext.lights.get(i);
+		for (int i = lights.size() - 1; i >= numVisibleLights; i--) {
+			Light light = lights.get(i);
 			light.withinViewingDistance = false;
 
 			// Automatically despawn non-replayable fixed lifetime lights when they expire
@@ -584,7 +617,7 @@ public class LightManager {
 				light.markedForRemoval = true;
 
 			if (light.markedForRemoval) {
-				sceneContext.lights.remove(i);
+				lights.remove(i);
 				if (light.projectile != null && --light.projectileRefCounter[0] == 0)
 					sceneContext.knownProjectiles.remove(light.projectile);
 			}
@@ -684,9 +717,10 @@ public class LightManager {
 	}
 
 	public void loadSceneLights(SceneContext sceneContext) {
+		sceneContext.pendingLights.clear();
 		for (Light light : WORLD_LIGHTS) {
 			assert light.worldLight;
-			if (sceneContext.sceneBounds.contains(light.worldPos))
+			if (sceneContext.scene.getWorldViewId() == WorldView.TOPLEVEL && sceneContext.sceneBounds.contains(light.worldPos))
 				addWorldLight(sceneContext, light);
 		}
 
@@ -720,48 +754,59 @@ public class LightManager {
 		}
 	}
 
-	public void swapSceneLights(SceneContext sceneContext, @Nullable SceneContext oldSceneContext) {
-		// Force lights to instantly appear when spawning them as part of a new scene
-		for (int i = 0; i < sceneContext.lights.size(); i++)
-			sceneContext.lights.get(i).fadeInDuration = 0;
-
-		// Set the plane to an unreachable plane, forcing the first `toggleTemporaryVisibility` call to not fade
+	public void swapSceneLights(SceneContext sceneContext) {
+		// Subscenes outlive top-level scene swaps. Do not retain any old top-level parents.
+		lights.removeIf(light -> light.sourceScene == null);
+		sceneContext.knownProjectiles.clear();
+		publishSceneLights(sceneContext, client.getTopLevelWorldView());
 		currentPlane = -1;
+	}
 
-		if (oldSceneContext == null)
-			return;
+	public void loadWorldViewLights(SceneContext source, WorldView view) {
+		unloadWorldViewLights(source);
+		loadSceneLights(source);
+		publishSceneLights(source, view);
+	}
 
-		// Copy over NPC and projectile lights from the old scene
-		ArrayList<Light> lightsToKeep = new ArrayList<>();
-		for (Light light : oldSceneContext.lights)
-			if (light.actor != null || light.projectile != null)
-				lightsToKeep.add(light);
+	public void unloadWorldViewLights(SceneContext source) {
+		lights.removeIf(light -> light.sourceScene == source);
+		numVisibleLights = 0;
+	}
 
-		sceneContext.lights.addAll(lightsToKeep);
-		for (var light : lightsToKeep)
-			if (light.projectile != null && oldSceneContext.knownProjectiles.contains(light.projectile))
-				sceneContext.knownProjectiles.add(light.projectile);
+	public void clearSceneLights() {
+		lights.clear();
+		numVisibleLights = 0;
+	}
+
+	private void publishSceneLights(SceneContext source, WorldView view) {
+		for (Light light : source.pendingLights)
+			light.fadeInDuration = 0;
+		lights.addAll(source.pendingLights);
+		source.pendingLights.clear();
+		for (NPC npc : view.npcs()) {
+			addNpcLights(npc, source);
+			addSpotanimLights(npc, source);
+		}
+		for (Player player : view.players())
+			addSpotanimLights(player, source);
+		numVisibleLights = 0;
 	}
 
 	private void removeLightIf(Predicate<Light> predicate) {
-		var sceneContext = plugin.getSceneContext();
-		if (sceneContext == null)
-			return;
-		removeLightIf(sceneContext, predicate);
-	}
-
-	private void removeLightIf(@Nonnull SceneContext sceneContext, Predicate<Light> predicate) {
-		for (var light : sceneContext.lights)
+		for (var light : lights)
 			if (predicate.test(light))
 				light.markedForRemoval = true;
 	}
 
 	private void addSpotanimLights(Actor actor) {
-		var sceneContext = plugin.getSceneContext();
-		if (sceneContext == null)
+		addSpotanimLights(actor, getLightScene(actor.getWorldView()));
+	}
+
+	private void addSpotanimLights(Actor actor, @Nullable SceneContext source) {
+		if (source == null)
 			return;
 
-		int[] worldPos = sceneContext.localToWorld(actor.getLocalLocation());
+		int[] worldPos = source.localToWorld(actor.getLocalLocation(), actor.getWorldView().getPlane());
 
 		for (var spotAnim : actor.getSpotAnims()) {
 			int spotAnimId = spotAnim.getId();
@@ -777,7 +822,7 @@ public class LightManager {
 						continue;
 				}
 
-				boolean isDuplicate = sceneContext.lights.stream()
+				boolean isDuplicate = lights.stream()
 					.anyMatch(light ->
 						light.spotanimId == spotAnimId &&
 						light.actor == actor &&
@@ -789,18 +834,24 @@ public class LightManager {
 				light.plane = -1;
 				light.spotanimId = spotAnimId;
 				light.actor = actor;
-				sceneContext.lights.add(light);
+				light.sourceScene = actor.getWorldView().isTopLevel() ? null : source;
+				lights.add(light);
 			}
 		}
 	}
 
 	private void addNpcLights(NPC npc) {
-		var sceneContext = plugin.getSceneContext();
-		if (sceneContext == null)
+		addNpcLights(npc, getLightScene(npc.getWorldView()));
+	}
+
+	private void addNpcLights(NPC npc, @Nullable SceneContext source) {
+		if (source == null)
 			return;
+		if (!npc.getWorldView().isTopLevel())
+			lights.removeIf(light -> light.actor == npc && light.markedForRemoval);
 
 		int uuid = ModelHash.packUuid(ModelHash.TYPE_NPC, npc.getId());
-		int[] worldPos = sceneContext.localToWorld(npc.getLocalLocation());
+		int[] worldPos = source.localToWorld(npc.getLocalLocation(), npc.getWorldView().getPlane());
 
 		var modelOverride = modelOverrideManager.getOverride(uuid, worldPos);
 		if (modelOverride.hide)
@@ -819,7 +870,7 @@ public class LightManager {
 			}
 
 			// Prevent duplicate lights from being spawned for the same NPC
-			boolean isDuplicate = sceneContext.lights.stream()
+			boolean isDuplicate = lights.stream()
 				.anyMatch(light ->
 					light.actor == npc &&
 					light.def == def &&
@@ -830,14 +881,51 @@ public class LightManager {
 			Light light = new Light(def);
 			light.plane = -1;
 			light.actor = npc;
-			sceneContext.lights.add(light);
+			light.sourceScene = npc.getWorldView().isTopLevel() ? null : source;
+			lights.add(light);
 		}
 	}
 
 	private void handleObjectSpawn(TileObject object) {
-		var sceneContext = plugin.getSceneContext();
+		var sceneContext = getLightScene(object.getWorldView());
 		if (sceneContext != null)
-			handleObjectSpawn(sceneContext, object);
+			handleObjectSpawn(sceneContext, object, lights);
+	}
+
+	@Nullable
+	private SceneContext getLightScene(WorldView view) {
+		if (view == null)
+			return null;
+		if (view.isTopLevel())
+			return plugin.getSceneContext();
+		return plugin.renderer instanceof ZoneRenderer ? sceneManager.getLoadedSceneContext(view) : null;
+	}
+
+	private static boolean containsObject(SceneContext source, TileObject object) {
+		int x, y;
+		if (object instanceof GameObject) {
+			var point = ((GameObject) object).getSceneMinLocation();
+			x = point.getX();
+			y = point.getY();
+		} else {
+			x = object.getX() >> LOCAL_COORD_BITS;
+			y = object.getY() >> LOCAL_COORD_BITS;
+		}
+		x += source.sceneOffset;
+		y += source.sceneOffset;
+		var tiles = source.scene.getExtendedTiles();
+		int plane = object.getPlane();
+		if (plane < 0 || plane >= tiles.length || x < 0 || x >= tiles[plane].length ||
+			y < 0 || y >= tiles[plane][x].length)
+			return false;
+		for (Tile tile = tiles[plane][x][y]; tile != null; tile = tile.getBridge()) {
+			if (tile.getWallObject() == object || tile.getDecorativeObject() == object || tile.getGroundObject() == object)
+				return true;
+			for (GameObject candidate : tile.getGameObjects())
+				if (candidate == object)
+					return true;
+		}
+		return false;
 	}
 
 	private int getImpostorId(TileObject tileObject) {
@@ -866,9 +954,15 @@ public class LightManager {
 		@Nonnull SceneContext sceneContext,
 		@Nonnull TileObject tileObject
 	) {
+		handleObjectSpawn(sceneContext, tileObject, sceneContext.pendingLights);
+	}
+
+	private void handleObjectSpawn(SceneContext sceneContext, TileObject tileObject, ArrayList<Light> destination) {
 		// prevent objects at plane -1 and below from having lights
 		if (tileObject.getPlane() < 0)
 			return;
+		if (sceneContext.scene.getWorldViewId() != WorldView.TOPLEVEL)
+			destination.removeIf(light -> light.tileObject == tileObject && light.markedForRemoval);
 
 		// GameObjects with DynamicObject renderables may be impostors, so handle those in swapScene
 		int tileObjectId = tileObject.getId();
@@ -883,10 +977,10 @@ public class LightManager {
 			}
 		}
 
-		for (int i = 0; i < sceneContext.lights.size(); ++i) {
-			var light = sceneContext.lights.get(i);
+		for (int i = 0; i < destination.size(); ++i) {
+			var light = destination.get(i);
 			if (light.tileObject == tileObject) {
-				if (light.tileObjectId == tileObjectId)
+				if (light.tileObjectId == tileObjectId && !light.markedForRemoval)
 					return; // Duplicate spawn, probably from spawn event right after scene load
 
 				// Schedule despawning of the old light
@@ -894,7 +988,7 @@ public class LightManager {
 			}
 		}
 
-		spawnLights(sceneContext, tileObject, tileObjectId);
+		spawnLights(sceneContext, destination, tileObject, tileObjectId);
 	}
 
 	private void handleObjectDespawn(TileObject tileObject) {
@@ -903,10 +997,10 @@ public class LightManager {
 			return;
 
 		int impostorId = getImpostorId(tileObject);
-		removeLightIf(sceneContext, l -> l.tileObject == tileObject && l.tileObjectId == impostorId);
+		removeLightIf(l -> l.tileObject == tileObject && l.tileObjectId == impostorId);
 	}
 
-	private void spawnLights(@Nonnull SceneContext sceneContext, TileObject tileObject, int impostorId) {
+	private void spawnLights(@Nonnull SceneContext sceneContext, ArrayList<Light> destination, TileObject tileObject, int impostorId) {
 		int sizeX = 1;
 		int sizeY = 1;
 		int[] orientations = { 0, 0 };
@@ -975,7 +1069,7 @@ public class LightManager {
 			return;
 		}
 
-		List<LightDefinition> lights = OBJECT_LIGHTS.get(impostorId == -1 ? tileObject.getId() : impostorId);
+		List<LightDefinition> definitions = OBJECT_LIGHTS.get(impostorId == -1 ? tileObject.getId() : impostorId);
 
 		LocalPoint lp = tileObject.getLocalLocation();
 		int plane = tileObject.getPlane();
@@ -989,7 +1083,7 @@ public class LightManager {
 			int lightX = lp.getX() + offsets[2 * i];
 			int lightZ = lp.getY() + offsets[2 * i + 1];
 
-			for (LightDefinition def : lights) {
+			for (LightDefinition def : definitions) {
 				if (def.areas.length > 0) {
 					int[] worldPos = sceneContext.localToWorld(lightX, lightZ, plane);
 					boolean isInArea = Arrays.stream(def.areas).anyMatch(aabb -> aabb.contains(worldPos));
@@ -1007,8 +1101,8 @@ public class LightManager {
 				if (def.renderableIndex != -1 && def.renderableIndex != i)
 					continue;
 
-				int tileExX = clamp(lp.getSceneX() + sceneContext.sceneOffset, 0, EXTENDED_SCENE_SIZE - 2);
-				int tileExY = clamp(lp.getSceneY() + sceneContext.sceneOffset, 0, EXTENDED_SCENE_SIZE - 2);
+				int tileExX = clamp(lp.getSceneX() + sceneContext.sceneOffset, 0, sceneContext.sizeX - 2);
+				int tileExY = clamp(lp.getSceneY() + sceneContext.sceneOffset, 0, sceneContext.sizeZ - 2);
 				float lerpX = fract(lightX / (float) LOCAL_TILE_SIZE);
 				float lerpZ = fract(lightZ / (float) LOCAL_TILE_SIZE);
 				int tileZ = clamp(plane, 0, MAX_Z - 1);
@@ -1033,6 +1127,7 @@ public class LightManager {
 
 				Light light = new Light(def);
 				light.tileObject = tileObject;
+				light.sourceScene = sceneContext.scene.getWorldViewId() == WorldView.TOPLEVEL ? null : sceneContext;
 				light.tileObjectId = impostorId;
 				light.plane = plane;
 				light.orientation = orientations[i];
@@ -1041,7 +1136,7 @@ public class LightManager {
 				light.origin[2] = lightZ;
 				light.sizeX = sizeX;
 				light.sizeY = sizeY;
-				sceneContext.lights.add(light);
+				destination.add(light);
 			}
 		}
 	}
@@ -1063,7 +1158,7 @@ public class LightManager {
 			copy.origin[0] = scenePoint[0] * LOCAL_TILE_SIZE + LOCAL_HALF_TILE_SIZE;
 			copy.origin[1] = tileHeights[scenePoint[2]][tileExX][tileExY] - copy.def.height - 1;
 			copy.origin[2] = scenePoint[1] * LOCAL_TILE_SIZE + LOCAL_HALF_TILE_SIZE;
-			ctx.lights.add(copy);
+			ctx.pendingLights.add(copy);
 		}
 	}
 
@@ -1102,7 +1197,7 @@ public class LightManager {
 			light.origin[2] = (int) projectile.getY();
 			light.plane = projectile.getFloor();
 
-			sceneContext.lights.add(light);
+			lights.add(light);
 		}
 	}
 
@@ -1176,7 +1271,7 @@ public class LightManager {
 			light.origin[1] = graphicsObject.getZ();
 			light.origin[2] = lp.getY();
 			light.plane = worldPos[2];
-			sceneContext.lights.add(light);
+			lights.add(light);
 		}
 	}
 

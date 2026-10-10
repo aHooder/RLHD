@@ -49267,5 +49267,35 @@
     "objectIds": [
       "PRIF_CRYSTAL_STAIRCASE_TOP_ARCHES"
     ]
+  },
+  {
+    "description": "Sailing eternal brazier tiny raft 1x3",
+    "objectIds": [ "SAILING_BOAT_1X3_ETERNAL_BRAZIER" ],
+    "offset": [ -44, 93, 69 ],
+    "radius": 1250,
+    "strength": 13.5,
+    "color": "#FFA50C",
+    "type": "FLICKER",
+    "range": 5.8
+  },
+  {
+    "description": "Sailing eternal brazier small skiff 2x5",
+    "objectIds": [ "SAILING_BOAT_SKIFF_ETERNAL_BRAZIER" ],
+    "offset": [ -62, 182, 51 ],
+    "radius": 1250,
+    "strength": 13.5,
+    "color": "#FFA50C",
+    "type": "FLICKER",
+    "range": 5.8
+  },
+  {
+    "description": "Sailing eternal brazier medium sloop 3x10",
+    "objectIds": [ "SAILING_BOAT_SLOOP_ETERNAL_BRAZIER" ],
+    "offset": [ -61, 218, 53 ],
+    "radius": 1250,
+    "strength": 13.5,
+    "color": "#FFA50C",
+    "type": "FLICKER",
+    "range": 5.8
   }
 ]

@@ -15,6 +15,7 @@ import rs117.hd.scene.materials.Material;
 import rs117.hd.scene.tile_overrides.TileOverride;
 import rs117.hd.scene.tile_overrides.TileOverrideVariables;
 import rs117.hd.utils.HDUtils;
+import rs117.hd.utils.Mat4;
 import rs117.hd.utils.collections.Int2IntHashMap;
 import rs117.hd.utils.collections.Int2ObjectHashMap;
 
@@ -52,12 +53,14 @@ public class SceneContext {
 	@Nonnull
 	public final AABB sceneBounds;
 	public final ArrayList<Environment> environments = new ArrayList<>();
-	public final ArrayList<Light> lights = new ArrayList<>();
+	// Staging only: populated during scene loading, then drained into LightManager on the client thread.
+	public final ArrayList<Light> pendingLights = new ArrayList<>();
+	// Captured when lights are updated, after the subscene's projection becomes available.
+	public final float[] lightProjection = Mat4.identity();
 	public final HashSet<Projectile> knownProjectiles = new HashSet<>();
 	public final ArrayList<TileObject> lightSpawnsToHandleOnClientThread = new ArrayList<>();
 	public int sizeX, sizeZ;
 	public int sceneOffset;
-	public int numVisibleLights = 0;
 	public boolean enableAreaHiding;
 	public boolean fillGaps;
 	public boolean isInChambersOfXeric;

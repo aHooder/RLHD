@@ -466,15 +466,11 @@ public class ZoneRenderer implements Renderer {
 				skyManager.update();
 				frameTimer.end(Timer.UPDATE_SKY);
 
-				frameTimer.begin(Timer.UPDATE_LIGHTS);
-				lightManager.update(ctx.sceneContext, plugin.cameraShift, plugin.cameraFrustum);
-				frameTimer.end(Timer.UPDATE_LIGHTS);
-
 				frameTimer.begin(Timer.UPDATE_SCENE);
 				sceneManager.update();
 				frameTimer.end(Timer.UPDATE_SCENE);
 			} catch (Exception ex) {
-				log.error("Error while updating environment or lights:", ex);
+				log.error("Error while updating environment, sky or scene:", ex);
 				plugin.requestPluginStop();
 				return;
 			}
@@ -574,43 +570,6 @@ public class ZoneRenderer implements Renderer {
 			plugin.uboGlobal.projectionMatrix.set(plugin.viewProjMatrix);
 			plugin.uboGlobal.invProjectionMatrix.set(plugin.invViewProjMatrix);
 			plugin.uboGlobal.orthographicProjection.set(plugin.orthographicProjection ? 1 : 0);
-
-			if (plugin.configDynamicLights != DynamicLights.NONE) {
-				// Update lights UBO
-				assert ctx.sceneContext.numVisibleLights <= UBOLights.MAX_LIGHTS;
-
-				frameTimer.begin(Timer.UPDATE_LIGHTS);
-				final float[] lightPosition = new float[4];
-				final float[] lightColor = new float[4];
-				for (int i = 0; i < ctx.sceneContext.numVisibleLights; i++) {
-					final Light light = ctx.sceneContext.lights.get(i);
-					final float lightRadiusSq = light.radius * light.radius;
-					lightPosition[0] = light.pos[0] + plugin.cameraShift[0];
-					lightPosition[1] = light.pos[1];
-					lightPosition[2] = light.pos[2] + plugin.cameraShift[1];
-					lightPosition[3] = lightRadiusSq;
-
-					lightColor[0] = light.color[0] * light.strength;
-					lightColor[1] = light.color[1] * light.strength;
-					lightColor[2] = light.color[2] * light.strength;
-					lightColor[3] = 0.0f;
-
-					plugin.uboLights.setLight(i, lightPosition, lightColor);
-
-					if (plugin.configTiledLighting) {
-						// Pre-calculate the view space position of the light, to save having to do the multiplication in the culling shader
-						lightPosition[3] = 1.0f;
-						Mat4.mulVec(lightPosition, plugin.viewMatrix, lightPosition);
-						lightPosition[3] = lightRadiusSq; // Restore lightRadiusSq
-						plugin.uboLightsCulling.setLight(i, lightPosition, lightColor);
-					}
-				}
-
-				plugin.uboLights.upload();
-				plugin.uboLightsCulling.upload();
-				plugin.uboGlobal.pointLightsCount.set(ctx.sceneContext.numVisibleLights);
-				frameTimer.end(Timer.UPDATE_LIGHTS);
-			}
 		}
 
 		// Upon logging in, the client will draw some frames with zero geometry before it hides the login screen
@@ -1202,6 +1161,50 @@ public class ZoneRenderer implements Renderer {
 				log.warn("prepareInterfaceTexture exception", ex);
 				plugin.restartPlugin();
 				return;
+			}
+
+			var ctx = sceneManager.getSceneContext();
+			if (shouldRenderScene && ctx != null && plugin.configDynamicLights != DynamicLights.NONE) {
+				frameTimer.begin(Timer.UPDATE_LIGHTS);
+				try {
+					lightManager.update(ctx, plugin.cameraShift, plugin.cameraFrustum);
+				} catch (Exception ex) {
+					log.error("Error while updating lights:", ex);
+				}
+
+				// Update lights UBO
+				assert lightManager.getNumVisibleLights() <= UBOLights.MAX_LIGHTS;
+
+				final float[] lightPosition = new float[4];
+				final float[] lightColor = new float[4];
+				for (int i = 0; i < lightManager.getNumVisibleLights(); i++) {
+					final Light light = lightManager.getLights().get(i);
+					final float lightRadiusSq = light.radius * light.radius;
+					lightPosition[0] = light.pos[0] + plugin.cameraShift[0];
+					lightPosition[1] = light.pos[1];
+					lightPosition[2] = light.pos[2] + plugin.cameraShift[1];
+					lightPosition[3] = lightRadiusSq;
+
+					lightColor[0] = light.color[0] * light.strength;
+					lightColor[1] = light.color[1] * light.strength;
+					lightColor[2] = light.color[2] * light.strength;
+					lightColor[3] = 0.0f;
+
+					plugin.uboLights.setLight(i, lightPosition, lightColor);
+
+					if (plugin.configTiledLighting) {
+						// Pre-calculate the view space position of the light, to save having to do the multiplication in the culling shader
+						lightPosition[3] = 1.0f;
+						Mat4.mulVec(lightPosition, plugin.viewMatrix, lightPosition);
+						lightPosition[3] = lightRadiusSq; // Restore lightRadiusSq
+						plugin.uboLightsCulling.setLight(i, lightPosition, lightColor);
+					}
+				}
+
+				plugin.uboLights.upload();
+				plugin.uboLightsCulling.upload();
+				plugin.uboGlobal.pointLightsCount.set(lightManager.getNumVisibleLights());
+				frameTimer.end(Timer.UPDATE_LIGHTS);
 			}
 
 			frameTimer.begin(Timer.DRAW_SUBMIT);
