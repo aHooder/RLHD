@@ -689,15 +689,6 @@ public class LightManager {
 	}
 
 	private boolean isRenderableHidden(@Nonnull Renderable renderable) {
-		try {
-			// getModel may throw an exception from vanilla client code
-			if (renderable.getModel() == null)
-				return true;
-		} catch (Exception ex) {
-			// Vanilla handles exceptions thrown in `DrawCallbacks#draw` gracefully, but here we have to handle them
-			return true;
-		}
-
 		if (!renderCallbackManager.addEntity(renderable, false))
 			return true;
 
