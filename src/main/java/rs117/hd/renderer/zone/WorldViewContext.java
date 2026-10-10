@@ -18,6 +18,7 @@ import rs117.hd.opengl.uniforms.UBOWorldViews.WorldViewStruct;
 import rs117.hd.utils.Camera;
 import rs117.hd.utils.CommandBuffer;
 import rs117.hd.utils.DestructibleHandler;
+import rs117.hd.utils.Mat4;
 import rs117.hd.utils.buffer.GLBuffer;
 import rs117.hd.utils.collections.ConcurrentPool;
 import rs117.hd.utils.jobs.JobGroup;
@@ -26,6 +27,7 @@ import static org.lwjgl.opengl.GL33C.*;
 import static rs117.hd.renderer.zone.DynamicModelVAO.METADATA_SIZE;
 import static rs117.hd.renderer.zone.SceneManager.NUM_ZONES;
 import static rs117.hd.renderer.zone.ZoneRenderer.FRAMES_IN_FLIGHT;
+import static rs117.hd.utils.MathUtils.*;
 import static rs117.hd.utils.collections.Util.quickSort;
 
 @Slf4j
@@ -61,6 +63,16 @@ public class WorldViewContext {
 	final int sizeX, sizeZ;
 	@Nullable
 	WorldViewStruct uboWorldViewStruct;
+	@Nullable
+	public WorldEntity worldEntity;
+	@Nullable
+	public float[] projection;
+	public boolean isSquashed;
+
+	private final float[] capturedProjection = Mat4.zero();
+	private final int[] capturedOrigin = new int[3];
+	private int capturedOrientation;
+
 	Zone[][] zones;
 	GLBuffer vboM;
 
@@ -89,10 +101,12 @@ public class WorldViewContext {
 	) {
 		this.worldViewId = worldView == null ? WorldView.TOPLEVEL : worldView.getId();
 		this.sceneContext = sceneContext;
+		if (sceneContext != null)
+			sceneContext.worldViewContext = this;
 		this.sizeX = worldView == null ? NUM_ZONES : worldView.getSizeX() >> 3;
 		this.sizeZ = worldView == null ? NUM_ZONES : worldView.getSizeY() >> 3;
 		if (worldView != null)
-			uboWorldViewStruct = uboWorldViews.acquire(worldView);
+			uboWorldViewStruct = uboWorldViews.acquire();
 		zones = new Zone[sizeX][sizeZ];
 	}
 
@@ -105,6 +119,63 @@ public class WorldViewContext {
 		for (int x = 0; x < sizeX; ++x)
 			for (int z = 0; z < sizeZ; ++z)
 				zones[x][z] = injector.getInstance(Zone.class);
+	}
+
+	void updateProjection(WorldView topLevel) {
+		if (worldViewId == WorldView.TOPLEVEL)
+			return;
+		worldEntity = topLevel.worldEntities().byIndex(worldViewId);
+		isSquashed = worldEntity != null && worldEntity.isHiddenForOverlap();
+		if (worldEntity == null)
+			return;
+		var worldView = worldEntity.getWorldView();
+		final Projection worldViewProjection = worldView.getMainWorldProjection();
+		if (worldViewProjection instanceof FloatProjection) {
+			if (projection == null)
+				projection = new float[16];
+			copyTo(projection, ((FloatProjection) worldViewProjection).getProjection());
+			copyTo(capturedProjection, projection);
+			var origin = worldEntity.getLocalLocation();
+			capturedOrigin[0] = origin.getX();
+			capturedOrigin[1] = topLevel.getTileHeight(origin.getX(), origin.getY(), topLevel.getPlane());
+			capturedOrigin[2] = origin.getY();
+			capturedOrientation = worldEntity.getOrientation();
+		} else if (projection != null) {
+			// Follow translation and yaw off-screen, retaining the captured pitch, roll and height offset.
+			// Always start from the captured transform to avoid accumulating rounding errors.
+			var origin = worldEntity.getLocalLocation();
+			float angle = (worldEntity.getOrientation() - capturedOrientation) * JAU_TO_RAD;
+			float sin = sin(angle);
+			float cos = cos(angle);
+			copyTo(projection, capturedProjection);
+			for (int i = 0; i < 16; i += 4) {
+				float x = capturedProjection[i];
+				float z = capturedProjection[i + 2];
+				if (i == 12) {
+					x -= capturedOrigin[0];
+					z -= capturedOrigin[2];
+				}
+				projection[i] = cos * x + sin * z;
+				projection[i + 2] = -sin * x + cos * z;
+			}
+			projection[12] += origin.getX();
+			projection[13] += topLevel.getTileHeight(origin.getX(), origin.getY(), topLevel.getPlane()) - capturedOrigin[1];
+			projection[14] += origin.getY();
+		}
+		if (uboWorldViewStruct == null)
+			return;
+		if (projection != null)
+			uboWorldViewStruct.projection.set(projection);
+
+		Scene scene = worldView.getScene();
+		if (scene != null) {
+			uboWorldViewStruct.tint.set(
+				scene.getOverrideHue(), scene.getOverrideSaturation(),
+				scene.getOverrideLuminance(), scene.getOverrideAmount()
+			);
+		} else {
+			uboWorldViewStruct.tint.set(0, 0, 0, 0);
+		}
 	}
 
 	void initBuffers() {
@@ -287,13 +358,18 @@ public class WorldViewContext {
 		sceneLoadGroup.cancel();
 		streamingGroup.cancel();
 
-		if (sceneContext != null)
+		if (sceneContext != null) {
+			sceneContext.worldViewContext = null;
 			sceneContext.destroy();
+		}
 		sceneContext = null;
 
 		if (uboWorldViewStruct != null)
 			uboWorldViewStruct.free();
 		uboWorldViewStruct = null;
+		worldEntity = null;
+		projection = null;
+		isSquashed = false;
 
 		for (int i = 0; i < VAO_COUNT; i++) {
 			for (int k = 0; k < FRAMES_IN_FLIGHT; k++) {

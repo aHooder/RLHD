@@ -479,8 +479,10 @@ public class LightManager {
 			if (light.sceneContext == null) {
 				copyTo(light.pos, light.sceneLocalPos);
 			} else {
-				if (ctx.projection != null && vw.getMainWorldProjection() instanceof FloatProjection) {
-					Mat4.transformVecAffine(light.pos, ctx.projection, light.sceneLocalPos);
+				var worldView = ctx.worldViewContext;
+				if (worldView != null && worldView.projection != null && worldView.worldEntity != null) {
+					Mat4.transformVecAffine(light.pos, worldView.projection, light.sceneLocalPos);
+					hiddenTemporarily |= worldView.isSquashed;
 				} else {
 					hiddenTemporarily = true;
 				}

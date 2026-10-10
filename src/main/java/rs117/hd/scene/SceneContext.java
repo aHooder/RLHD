@@ -7,6 +7,7 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import net.runelite.api.*;
 import net.runelite.api.coords.*;
+import rs117.hd.renderer.zone.WorldViewContext;
 import rs117.hd.scene.areas.AABB;
 import rs117.hd.scene.areas.Area;
 import rs117.hd.scene.environments.Environment;
@@ -45,6 +46,8 @@ public class SceneContext {
 	public final static ThreadLocal<TileOverrideVariables> TILE_OVERRIDE_VARIABLES = ThreadLocal.withInitial(TileOverrideVariables::new);
 	public final Client client;
 	public final Scene scene;
+	@Nullable
+	public WorldViewContext worldViewContext;
 	public final int expandedMapLoadingChunks;
 
 	@Nullable
@@ -53,8 +56,6 @@ public class SceneContext {
 	public final AABB sceneBounds;
 	public final ArrayList<Environment> environments = new ArrayList<>();
 	public final ArrayList<Light> pendingLights = new ArrayList<>();
-	@Nullable
-	public float[] projection;
 	public final HashSet<Projectile> knownProjectiles = new HashSet<>();
 	public final ArrayList<TileObject> lightSpawnsToHandleOnClientThread = new ArrayList<>();
 	public int sizeX, sizeZ;

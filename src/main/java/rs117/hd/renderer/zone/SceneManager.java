@@ -722,7 +722,10 @@ public class SceneManager {
 		}
 
 		ctx.zones = nextZones;
+		if (root.sceneContext != null)
+			root.sceneContext.worldViewContext = null;
 		root.sceneContext = nextSceneContext;
+		nextSceneContext.worldViewContext = root;
 		root.isLoading = false;
 
 		nextZones = null;
@@ -803,6 +806,13 @@ public class SceneManager {
 		for (WorldViewContext ctx : subs)
 			if (ctx != null && !ctx.isLoading)
 				lightManager.loadWorldViewLights(ctx.sceneContext);
+	}
+
+	public void updateWorldViewProjections() {
+		var topLevel = client.getTopLevelWorldView();
+		for (WorldViewContext ctx : subs)
+			if (ctx != null && !ctx.isLoading)
+				ctx.updateProjection(topLevel);
 	}
 
 	static class SortedZone implements Comparable<SortedZone> {

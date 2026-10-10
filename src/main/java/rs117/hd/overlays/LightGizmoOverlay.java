@@ -15,6 +15,7 @@ import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.Arrays;
+import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import javax.swing.SwingUtilities;
@@ -368,8 +369,9 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 					l.pos[1] = l.origin[1] + l.offset[1];
 					l.pos[2] = l.origin[2] + (int) (-cos * z + sin * x);
 					copyTo(l.sceneLocalPos, l.pos);
-					if (l.sceneContext != null && l.sceneContext.projection != null)
-						Mat4.transformVecAffine(l.pos, l.sceneContext.projection, l.sceneLocalPos);
+					var worldProjection = worldProjection(l);
+					if (worldProjection != null)
+						Mat4.transformVecAffine(l.pos, worldProjection, l.sceneLocalPos);
 				}
 			}
 
@@ -527,11 +529,20 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 		return null;
 	}
 
-	private static float[] lightProjection(Light light, float[] projection) {
-		if (light.sceneContext == null || light.sceneContext.projection == null)
+	@Nullable
+	private float[] worldProjection(Light light) {
+		if (light.sceneContext == null)
+			return null;
+		var ctx = light.sceneContext.worldViewContext;
+		return ctx == null ? null : ctx.projection;
+	}
+
+	private float[] lightProjection(Light light, float[] projection) {
+		var worldProjection = worldProjection(light);
+		if (worldProjection == null)
 			return projection;
 		float[] localProjection = copy(projection);
-		Mat4.mul(localProjection, light.sceneContext.projection);
+		Mat4.mul(localProjection, worldProjection);
 		return localProjection;
 	}
 

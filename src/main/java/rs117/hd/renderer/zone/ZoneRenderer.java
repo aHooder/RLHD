@@ -346,16 +346,10 @@ public class ZoneRenderer implements Renderer {
 			ctx.vaoSceneCmd.reset();
 			ctx.vaoDirectionalCmd.reset();
 
-			if (ctx.uboWorldViewStruct != null)
-				ctx.uboWorldViewStruct.update();
-
 			if (isTopLevel) {
 				preSceneDrawTopLevel(scene, cameraX, cameraY, cameraZ, cameraPitch, cameraYaw);
 			} else {
-				var worldView = client.getWorldView(ctx.worldViewId);
-				var projection = worldView.getMainWorldProjection();
-				if (projection instanceof FloatProjection)
-					ctx.sceneContext.projection = ((FloatProjection) projection).getProjection();
+				ctx.updateProjection(client.getTopLevelWorldView());
 			}
 
 			ctx.completeInvalidation();
@@ -685,6 +679,7 @@ public class ZoneRenderer implements Renderer {
 		sceneFboValid = true;
 
 		// Upload world views before rendering
+		sceneManager.updateWorldViewProjections();
 		uboWorldViews.upload();
 
 		if (eboAlphaWriter != null)
@@ -992,8 +987,7 @@ public class ZoneRenderer implements Renderer {
 					z.renderOpaqueLevel(gapFillerCmd, Zone.LEVEL_GAP_FILLER);
 			}
 
-			final boolean isSquashed = ctx.uboWorldViewStruct != null && ctx.uboWorldViewStruct.isSquashed();
-			if (skyRenderer.castsShadows && !isSquashed && (!sceneManager.isRoot(ctx) || z.inShadowFrustum)) {
+			if (skyRenderer.castsShadows && !ctx.isSquashed && (!sceneManager.isRoot(ctx) || z.inShadowFrustum)) {
 				if (!z.onlyWater || z.modelCount > 0) {
 					directionalCmd.SetShader(fastShadowProgram);
 					z.renderOpaque(directionalCmd, ctx, shouldDrawRoofShadows);
@@ -1041,8 +1035,7 @@ public class ZoneRenderer implements Renderer {
 				if (level == 0 && (!sceneManager.isRoot(ctx) || z.inSceneFrustum))
 					z.alphaSort(zx - offset, zz - offset, sceneCamera);
 
-				final boolean isSquashed = ctx.uboWorldViewStruct != null && ctx.uboWorldViewStruct.isSquashed();
-				if (skyRenderer.castsShadows && !isSquashed && (!sceneManager.isRoot(ctx) || z.inShadowFrustum)) {
+				if (skyRenderer.castsShadows && !ctx.isSquashed && (!sceneManager.isRoot(ctx) || z.inShadowFrustum)) {
 					directionalCmd.SetShader(plugin.configShadowMode == ShadowMode.DETAILED ? detailedShadowProgram : fastShadowProgram);
 					z.renderAlpha(directionalCmd, zx - offset, zz - offset, level, ctx, true, shouldDrawRoofShadows);
 				}
