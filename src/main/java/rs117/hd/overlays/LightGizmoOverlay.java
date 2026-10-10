@@ -229,7 +229,7 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 			Light l = lights.get(lightIndex);
 			float[] localProjection = projectionMatrix;
 			float[] inverseProjection = null;
-			if (selections.contains(l)) {
+			if (selections.contains(l) && (l.sceneContext == null || worldProjection(l) != null)) {
 				localProjection = lightProjection(l, projectionMatrix);
 				try {
 					inverseProjection = Mat4.inverse(localProjection);
@@ -480,6 +480,8 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 			switch (action) {
 				case GRAB:
 					Light l = selections.get(0);
+					if (l.sceneContext != null && worldProjection(l) == null)
+						break;
 					float[] localProjection = lightProjection(l, projectionMatrix);
 					var lightOrigin = freezeMode == RELATIVE_TO_ORIGIN ? l.origin : originalLightPosition;
 					System.arraycopy(lightOrigin, 0, point, 0, 3);

@@ -58,20 +58,18 @@ public class WorldViewContext {
 
 	public ZoneSceneContext sceneContext;
 	public boolean isLoading = true;
+	public boolean isSquashed;
+	@Nullable
+	public float[] projection;
 
 	final int worldViewId;
 	final int sizeX, sizeZ;
 	@Nullable
 	WorldViewStruct uboWorldViewStruct;
-	@Nullable
-	public WorldEntity worldEntity;
-	@Nullable
-	public float[] projection;
-	public boolean isSquashed;
 
-	private final float[] capturedProjection = Mat4.zero();
-	private final int[] capturedOrigin = new int[3];
-	private int capturedOrientation;
+	private final float[] lastProjection = Mat4.zero();
+	private final int[] lastOrigin = new int[3];
+	private int lastOrientation;
 
 	Zone[][] zones;
 	GLBuffer vboM;
@@ -122,59 +120,61 @@ public class WorldViewContext {
 	}
 
 	void updateProjection(WorldView topLevel) {
+		// Update worldview projection, or estimate its trajectory when off-screen, if possible
 		if (worldViewId == WorldView.TOPLEVEL)
 			return;
-		worldEntity = topLevel.worldEntities().byIndex(worldViewId);
+		var worldEntity = topLevel.worldEntities().byIndex(worldViewId);
 		isSquashed = worldEntity != null && worldEntity.isHiddenForOverlap();
-		if (worldEntity == null)
+		if (worldEntity == null) {
+			projection = null;
 			return;
+		}
 		var worldView = worldEntity.getWorldView();
-		final Projection worldViewProjection = worldView.getMainWorldProjection();
-		if (worldViewProjection instanceof FloatProjection) {
+		if (worldView.getMainWorldProjection() instanceof FloatProjection) {
 			if (projection == null)
 				projection = new float[16];
-			copyTo(projection, ((FloatProjection) worldViewProjection).getProjection());
-			copyTo(capturedProjection, projection);
+			copyTo(projection, ((FloatProjection) worldView.getMainWorldProjection()).getProjection());
+			copyTo(lastProjection, projection);
 			var origin = worldEntity.getLocalLocation();
-			capturedOrigin[0] = origin.getX();
-			capturedOrigin[1] = topLevel.getTileHeight(origin.getX(), origin.getY(), topLevel.getPlane());
-			capturedOrigin[2] = origin.getY();
-			capturedOrientation = worldEntity.getOrientation();
+			lastOrigin[0] = origin.getX();
+			lastOrigin[1] = topLevel.getTileHeight(origin.getX(), origin.getY(), topLevel.getPlane());
+			lastOrigin[2] = origin.getY();
+			lastOrientation = worldEntity.getOrientation();
 		} else if (projection != null) {
-			// Follow translation and yaw off-screen, retaining the captured pitch, roll and height offset.
-			// Always start from the captured transform to avoid accumulating rounding errors.
+			// Follow translation and yaw off-screen, retaining the last known projection as much as possible
 			var origin = worldEntity.getLocalLocation();
-			float angle = (worldEntity.getOrientation() - capturedOrientation) * JAU_TO_RAD;
+			float angle = (worldEntity.getOrientation() - lastOrientation) * JAU_TO_RAD;
 			float sin = sin(angle);
 			float cos = cos(angle);
-			copyTo(projection, capturedProjection);
+			copyTo(projection, lastProjection);
 			for (int i = 0; i < 16; i += 4) {
-				float x = capturedProjection[i];
-				float z = capturedProjection[i + 2];
+				float x = lastProjection[i];
+				float z = lastProjection[i + 2];
 				if (i == 12) {
-					x -= capturedOrigin[0];
-					z -= capturedOrigin[2];
+					x -= lastOrigin[0];
+					z -= lastOrigin[2];
 				}
 				projection[i] = cos * x + sin * z;
 				projection[i + 2] = -sin * x + cos * z;
 			}
 			projection[12] += origin.getX();
-			projection[13] += topLevel.getTileHeight(origin.getX(), origin.getY(), topLevel.getPlane()) - capturedOrigin[1];
+			projection[13] += topLevel.getTileHeight(origin.getX(), origin.getY(), topLevel.getPlane()) - lastOrigin[1];
 			projection[14] += origin.getY();
 		}
-		if (uboWorldViewStruct == null)
-			return;
-		if (projection != null)
-			uboWorldViewStruct.projection.set(projection);
 
-		Scene scene = worldView.getScene();
-		if (scene != null) {
-			uboWorldViewStruct.tint.set(
-				scene.getOverrideHue(), scene.getOverrideSaturation(),
-				scene.getOverrideLuminance(), scene.getOverrideAmount()
-			);
-		} else {
-			uboWorldViewStruct.tint.set(0, 0, 0, 0);
+		if (uboWorldViewStruct != null) {
+			if (projection != null)
+				uboWorldViewStruct.projection.set(projection);
+
+			Scene scene = worldView.getScene();
+			if (scene != null) {
+				uboWorldViewStruct.tint.set(
+					scene.getOverrideHue(), scene.getOverrideSaturation(),
+					scene.getOverrideLuminance(), scene.getOverrideAmount()
+				);
+			} else {
+				uboWorldViewStruct.tint.set(0, 0, 0, 0);
+			}
 		}
 	}
 
@@ -367,7 +367,6 @@ public class WorldViewContext {
 		if (uboWorldViewStruct != null)
 			uboWorldViewStruct.free();
 		uboWorldViewStruct = null;
-		worldEntity = null;
 		projection = null;
 		isSquashed = false;
 

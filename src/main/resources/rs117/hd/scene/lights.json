@@ -28656,10 +28656,10 @@
     "radius": 170,
     "fixedDespawnTime": true,
     "despawnWithParent": true,
-    "strength": 1000,
+    "strength": 25,
     "color": [
-      0,
-      255,
+      252,
+      148,
       3
     ],
     "type": "FLICKER",
@@ -28670,8 +28670,7 @@
     "despawnDelay": 2200,
     "fadeOutDuration": 150,
     "graphicsObjectIds": [
-      "SPOTANIM_CASTHIGHLVLALCHEMY_FIRE",
-      113
+      "SPOTANIM_CASTHIGHLVLALCHEMY_FIRE"
     ]
   },
   {
