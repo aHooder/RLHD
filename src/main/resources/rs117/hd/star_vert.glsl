@@ -7,6 +7,7 @@
 #include <utils/color_utils.glsl>
 #include <utils/starfield.glsl>
 #include <utils/sky_fog.glsl>
+#include <utils/fog.glsl>
 #include <utils/celestial_projection.glsl>
 
 layout(location = 0) in vec3 aStarDir;     // field-space unit direction
@@ -153,6 +154,7 @@ void main() {
     float actualScreenSize = sizePixels / max(renderScale, 1e-6);
     vBrightness *= min(1.0, (screenSize / actualScreenSize) * (screenSize / actualScreenSize));
     vBrightness *= skyFogTransmittance(upAmount);
+    vBrightness *= skyGroundFogTransmittance(dir);
 
     #if POINT_SPRITES
         gl_PointSize = visibility > 0.001 ? sizePixels : 0.0;

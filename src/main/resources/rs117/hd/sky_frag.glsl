@@ -19,6 +19,11 @@ void main() {
         vec4 farWorld = uboGlobal.invProjectionMatrix * vec4(fScreenPos, 1.0, 1.0);
         vec3 viewDir = normalize(farWorld.xyz / farWorld.w - nearWorld.xyz / nearWorld.w);
         color = sampleSky(viewDir, true, true);
+        // Camera-to-sky ground fog belongs to this draw, not shared reflection sampling.
+        float groundTransmittance = skyGroundFogTransmittance(viewDir);
+        if (groundTransmittance < 1.0)
+            // Distant haze approaches the sky/horizon color, not adapted local ground lighting.
+            color = mix(skyColorBeforeGroundFog(viewDir), color, groundTransmittance);
     }
 
     vec3 srgb = linearToSrgb(color);

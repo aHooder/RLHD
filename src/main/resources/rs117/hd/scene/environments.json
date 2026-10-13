@@ -31,7 +31,9 @@
     "fogDepth": 40,
     "groundFogStart": -150,
     "groundFogEnd": -350,
-    "groundFogOpacity": 0.5
+    "groundFogOpacity": 0.5,
+    "groundFogHeight": 529.4,
+    "groundFogDensity": 2.4847
   },
   {
     "area": "BLACK_ROOMS",
@@ -100,7 +102,9 @@
       "auroraVisibility": 0.019,
       "skyFogHorizonAltitude": 90,
       "skyFogColor": "#251f1d"
-    }
+    },
+    "groundFogHeight": 264.7,
+    "groundFogDensity": 1.2786
   },
   {
     "area": "WILDERNESS_LOW",
@@ -151,7 +155,9 @@
       "auroraVisibility": 0.144,
       "skyFogHorizonAltitude": 90,
       "skyFogColor": "#302c2f"
-    }
+    },
+    "groundFogHeight": 264.7,
+    "groundFogDensity": 1.2786
   },
   {
     "area": "HUNTER_GUILD",
@@ -168,7 +174,9 @@
     "fogDepth": 30,
     "groundFogStart": 0,
     "groundFogEnd": -250,
-    "groundFogOpacity": 0.3
+    "groundFogOpacity": 0.3,
+    "groundFogHeight": 264.7,
+    "groundFogDensity": 1.2786
   },
   {
     "area": "VARROCK_MUSEUM_BASEMENT",
@@ -221,7 +229,9 @@
     "fogDepth": 50,
     "groundFogStart": -150,
     "groundFogEnd": -300,
-    "groundFogOpacity": 0.66
+    "groundFogOpacity": 0.66,
+    "groundFogHeight": 476.5,
+    "groundFogDensity": 3.8672
   },
   {
     "area": "STRONGHOLD_OF_SECURITY_DEATH",
@@ -415,7 +425,9 @@
     "groundFogEnd": -350,
     "groundFogOpacity": 0.7,
     "sky": "BLOOD_MOON",
-    "nightExposure": 2
+    "nightExposure": 2,
+    "groundFogHeight": 529.4,
+    "groundFogDensity": 4.3159
   },
   {
     "area": "VER_SINHAZA_TRANSITION",
@@ -445,7 +457,9 @@
       "starVisibility": 0.229,
       "skyFogHorizonAltitude": 90,
       "skyFogColor": "#20324b"
-    }
+    },
+    "groundFogHeight": 529.4,
+    "groundFogDensity": 2.4847
   },
   {
     "description": "With blood moon and Night, for the portion of the quest immediately after returning from Vampyrium to the overworld. Must remain above the default Ver Sinhaza environment",
@@ -464,7 +478,9 @@
     "groundFogEnd": -350,
     "groundFogOpacity": 0.7,
     "sky": "BLOOD_MOON",
-    "nightExposure": 2
+    "nightExposure": 2,
+    "groundFogHeight": 529.4,
+    "groundFogDensity": 4.3159
   },
   {
     "area": "VER_SINHAZA",
@@ -493,7 +509,9 @@
       "starVisibility": 0.229,
       "skyFogHorizonAltitude": 90,
       "skyFogColor": "#20324b"
-    }
+    },
+    "groundFogHeight": 529.4,
+    "groundFogDensity": 2.4847
   },
   {
     "description": "Needs to be above the non-legacy version",
@@ -544,7 +562,9 @@
     "fogDepth": 40,
     "groundFogEnd": -1000,
     "groundFogStart": -200,
-    "groundFogOpacity": 0.3
+    "groundFogOpacity": 0.3,
+    "groundFogHeight": 1270.6,
+    "groundFogDensity": 1.2786
   },
   {
     "area": "TOA_LOOT_ROOM",
@@ -588,7 +608,9 @@
       80,
       190
     ],
-    "fogDepth": 50
+    "fogDepth": 50,
+    "groundFogHeight": 4923.5,
+    "groundFogDensity": 33.0166
   },
   {
     "area": "BARROWS_TUNNELS",
@@ -619,7 +641,9 @@
     "groundFogStart": -150,
     "groundFogEnd": -350,
     "groundFogOpacity": 0.7,
-    "sky": "BLOOD_MOON"
+    "sky": "BLOOD_MOON",
+    "groundFogHeight": 529.4,
+    "groundFogDensity": 4.3159
   },
   {
     "area": "BARROWS",
@@ -647,7 +671,9 @@
       "nightHorizonStrength": 1,
       "skyFogHorizonAltitude": 90,
       "skyFogColor": "#2a303b"
-    }
+    },
+    "groundFogHeight": 847.1,
+    "groundFogDensity": 2.4847
   },
   {
     "description": "With blood moon and Night, for the portion of the quest immediately after returning from Vampyrium to the overworld. Must remain above the default Darkmeyer environment",
@@ -665,7 +691,9 @@
     "groundFogStart": -150,
     "groundFogEnd": -350,
     "groundFogOpacity": 0.7,
-    "sky": "BLOOD_MOON"
+    "sky": "BLOOD_MOON",
+    "groundFogHeight": 529.4,
+    "groundFogDensity": 4.3159
   },
   {
     "area": "DARKMEYER",
@@ -693,7 +721,9 @@
       "starVisibility": 0.229,
       "skyFogHorizonAltitude": 90,
       "skyFogColor": "#20324b"
-    }
+    },
+    "groundFogHeight": 529.4,
+    "groundFogDensity": 2.4847
   },
   {
     "area": "MEIYERDITCH",
@@ -719,7 +749,9 @@
       "auroraVisibility": 0.049,
       "skyFogHorizonAltitude": 90,
       "skyFogColor": "#2a364d"
-    }
+    },
+    "groundFogHeight": 529.4,
+    "groundFogDensity": 2.4847
   },
   {
     "area": "MEIYERDITCH_MYREQUE_HIDEOUT",
@@ -770,7 +802,9 @@
       "nightHorizonStrength": 1,
       "starVisibility": 0.838,
       "auroraVisibility": 0
-    }
+    },
+    "groundFogHeight": 529.4,
+    "groundFogDensity": 1.9837
   },
   {
     "description": "Hide the sun reveal if the player leaves the final cutscene of The Blood Moon Rises",
@@ -802,7 +836,9 @@
       "sunStrength": 0,
       "skyFogDensity": 0,
       "skyVisibility": 1
-    }
+    },
+    "groundFogHeight": 423.5,
+    "groundFogDensity": 0.7999
   },
   {
     "description": "Environment for Icyene Graveyard after Blood Moon Rises and during final cutscene",
@@ -835,7 +871,9 @@
       "skyVisibility": 1,
       "skyFogHorizonAltitude": 90,
       "skyFogColor": "#dda47c"
-    }
+    },
+    "groundFogHeight": 423.5,
+    "groundFogDensity": 0.7999
   },
   {
     "description": "With blood moon and Night, for the portion of the quest immediately after returning from Vampyrium to the overworld. Must remain above the default Morytania environment",
@@ -854,7 +892,9 @@
     "groundFogStart": -150,
     "groundFogEnd": -350,
     "groundFogOpacity": 0.7,
-    "sky": "BLOOD_MOON"
+    "sky": "BLOOD_MOON",
+    "groundFogHeight": 529.4,
+    "groundFogDensity": 4.3159
   },
   {
     "description": "Default Morytania Environment",
@@ -882,7 +922,9 @@
       "auroraVisibility": 0.182,
       "skyFogHorizonAltitude": 90,
       "skyFogColor": "#21324b"
-    }
+    },
+    "groundFogHeight": 529.4,
+    "groundFogDensity": 2.4847
   },
   {
     "area": "LUMBRIDGE_CASTLE_BASEMENT",
@@ -975,7 +1017,9 @@
     "fogDepth": 20,
     "groundFogOpacity": 0.57,
     "groundFogStart": -300,
-    "groundFogEnd": -600
+    "groundFogEnd": -600,
+    "groundFogHeight": 952.9,
+    "groundFogDensity": 3.0254
   },
   {
     "area": "MISTHALIN_MYSTERY_MANOR_REGION",
@@ -1251,7 +1295,9 @@
       "auroraVisibility": 0.396,
       "skyFogHorizonAltitude": 90,
       "skyFogColor": "#b7b7bd"
-    }
+    },
+    "groundFogHeight": 1588.2,
+    "groundFogDensity": 1.8312
   },
   {
     "area": "MOUNTAIN_CAMP",
@@ -1274,7 +1320,9 @@
       "auroraVisibility": 0.396,
       "skyFogHorizonAltitude": 90,
       "skyFogColor": "#b7b7bd"
-    }
+    },
+    "groundFogHeight": 2964.7,
+    "groundFogDensity": 2.4847
   },
   {
     "area": "FREMENNIK_PROVINCE",
@@ -1299,7 +1347,9 @@
       "auroraVisibility": 0.396,
       "skyFogHorizonAltitude": 90,
       "skyFogColor": "#a29fa0"
-    }
+    },
+    "groundFogHeight": 635.3,
+    "groundFogDensity": 1.2786
   },
   {
     "area": "RELLEKKA_COLD_WATER",
@@ -1364,7 +1414,9 @@
       "auroraVisibility": 0.736,
       "skyFogHorizonAltitude": 90,
       "skyFogColor": "#a09ea2"
-    }
+    },
+    "groundFogHeight": 635.3,
+    "groundFogDensity": 1.2786
   },
   {
     "area": "FREMENNIK_ISLES_FAR_NORTH",
@@ -1379,7 +1431,9 @@
     "windStrength": 85,
     "windCeiling": 400,
     "windAngle": 45,
-    "windSpeed": 22.5
+    "windSpeed": 22.5,
+    "groundFogHeight": 1058.8,
+    "groundFogDensity": 1.2786
   },
   {
     "area": "FREMENNIK_ISLES_NORTH",
@@ -1695,7 +1749,9 @@
     "fogDepth": 30,
     "groundFogStart": 0,
     "groundFogEnd": -250,
-    "groundFogOpacity": 0.3
+    "groundFogOpacity": 0.3,
+    "groundFogHeight": 264.7,
+    "groundFogDensity": 1.2786
   },
   {
     "area": "KARUULM_SLAYER_DUNGEON",
@@ -1806,7 +1862,9 @@
       "auroraVisibility": 0.203,
       "skyFogHorizonAltitude": 90,
       "skyFogColor": "#afbce1"
-    }
+    },
+    "groundFogHeight": 4235.3,
+    "groundFogDensity": 3.7633
   },
   {
     "area": "ARCEUUS",
@@ -1908,7 +1966,9 @@
     "fogDepth": 50,
     "groundFogStart": -150,
     "groundFogEnd": -350,
-    "groundFogOpacity": 0.5
+    "groundFogOpacity": 0.5,
+    "groundFogHeight": 529.4,
+    "groundFogDensity": 2.4847
   },
   {
     "area": "COSMIC_ENTITYS_PLANE",
@@ -2027,7 +2087,9 @@
       "auroraVisibility": 0.144,
       "skyFogHorizonAltitude": 90,
       "skyFogColor": "#47484c"
-    }
+    },
+    "groundFogHeight": 317.6,
+    "groundFogDensity": 1.2786
   },
   {
     "area": "THE_STORM_TEMPOR_EDGE",
@@ -2072,7 +2134,9 @@
       "auroraVisibility": 0.144,
       "skyFogHorizonAltitude": 90,
       "skyFogColor": "#4d515b"
-    }
+    },
+    "groundFogHeight": 317.6,
+    "groundFogDensity": 1.0313
   },
   {
     "area": "TEMPLE_OF_THE_EYE",
@@ -2089,7 +2153,9 @@
     "windStrength": 30,
     "windAngle": 140,
     "groundFogOpacity": 0.7,
-    "waterCausticsStrength": 40
+    "waterCausticsStrength": 40,
+    "groundFogHeight": 741.2,
+    "groundFogDensity": 4.3159
   },
   {
     "area": "DEATHS_OFFICE",
@@ -2144,7 +2210,9 @@
     "fogDepth": 60,
     "groundFogStart": -100,
     "groundFogOpacity": 0.65,
-    "waterCausticsStrength": 3.5
+    "waterCausticsStrength": 3.5,
+    "groundFogHeight": 635.3,
+    "groundFogDensity": 3.7633
   },
   {
     "area": "HARMONY_ISLAND_UNDERWATER_TUNNEL",
@@ -2161,7 +2229,9 @@
     "fogDepth": 80,
     "groundFogStart": -800,
     "groundFogEnd": -1100,
-    "groundFogOpacity": 0.5
+    "groundFogOpacity": 0.5,
+    "groundFogHeight": 2011.8,
+    "groundFogDensity": 2.4847
   },
   {
     "area": "FOSSIL_ISLAND_UNDERWATER_AREA",
@@ -2179,7 +2249,9 @@
     "groundFogStart": -450,
     "groundFogEnd": -700,
     "groundFogOpacity": 0.65,
-    "waterCausticsStrength": 4
+    "waterCausticsStrength": 4,
+    "groundFogHeight": 1217.6,
+    "groundFogDensity": 3.7633
   },
   {
     "area": "CORAL_NURSERY",
@@ -2193,7 +2265,9 @@
     "groundFogStart": -450,
     "groundFogEnd": -700,
     "groundFogOpacity": 0.65,
-    "waterCausticsStrength": 4
+    "waterCausticsStrength": 4,
+    "groundFogHeight": 1217.6,
+    "groundFogDensity": 3.7633
   },
   {
     "area": "RED_REEF_UNDERWATER",
@@ -2207,7 +2281,9 @@
     "groundFogStart": -50,
     "groundFogEnd": -700,
     "groundFogOpacity": 0.5,
-    "waterCausticsStrength": 42
+    "waterCausticsStrength": 42,
+    "groundFogHeight": 794.1,
+    "groundFogDensity": 2.4847
   },
   {
     "area": "LUNAR_DREAM_WORLD",
@@ -2268,7 +2344,9 @@
     "fogDepth": 40,
     "groundFogStart": -150,
     "groundFogEnd": -350,
-    "groundFogOpacity": 0.5
+    "groundFogOpacity": 0.5,
+    "groundFogHeight": 529.4,
+    "groundFogDensity": 2.4847
   },
   {
     "area": "GIANTS_FOUNDRY",
@@ -2671,7 +2749,9 @@
       "auroraVisibility": 0.396,
       "skyFogHorizonAltitude": 90,
       "skyFogColor": "#b4b9d4"
-    }
+    },
+    "groundFogHeight": 2117.6,
+    "groundFogDensity": 1.2786
   },
   {
     "area": "VARLAMORE_SNOWY_MOUNTAINS_UPPER",
@@ -2822,7 +2902,9 @@
     "fogColor": "#303030",
     "groundFogOpacity": 0.75,
     "groundFogStart": -200,
-    "groundFogEnd": -400
+    "groundFogEnd": -400,
+    "groundFogHeight": 635.3,
+    "groundFogDensity": 4.9695
   },
   {
     "area": "Black Knights Fort - Basement",
@@ -3066,7 +3148,9 @@
       "starVisibility": 0.439,
       "starHorizonHeight": 0.93,
       "auroraVisibility": 0.439
-    }
+    },
+    "groundFogHeight": 264.7,
+    "groundFogDensity": 1.2786
   },
   {
     "area": "PLAYER_OWNED_HOUSE_FREM",
@@ -3092,7 +3176,9 @@
       "auroraVisibility": 0.396,
       "skyFogHorizonAltitude": 90,
       "skyFogColor": "#a29fa0"
-    }
+    },
+    "groundFogHeight": 635.3,
+    "groundFogDensity": 1.2786
   },
   {
     "area": "PLAYER_OWNED_HOUSE_MORY",
@@ -3120,7 +3206,9 @@
       "auroraVisibility": 0.182,
       "skyFogHorizonAltitude": 90,
       "skyFogColor": "#24344c"
-    }
+    },
+    "groundFogHeight": 529.4,
+    "groundFogDensity": 2.4847
   },
   {
     "area": "PLAYER_OWNED_HOUSE_DEATH",
@@ -3186,7 +3274,9 @@
       "auroraVisibility": 0.376,
       "skyFogHorizonAltitude": 90,
       "skyFogColor": "#9f9eb0"
-    }
+    },
+    "groundFogHeight": 847.1,
+    "groundFogDensity": 0.9137
   },
   {
     "area": "WYRMSCRAIG",
@@ -3199,7 +3289,9 @@
     "groundFogEnd": -600,
     "groundFogOpacity": 0.225,
     "windSpeed": 17.5,
-    "windStrength": 60
+    "windStrength": 60,
+    "groundFogHeight": 847.1,
+    "groundFogDensity": 0.9137
   },
   {
     "key": "OVERWORLD",

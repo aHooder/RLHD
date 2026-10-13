@@ -350,6 +350,9 @@ public class EnvironmentManager {
 		state.to.groundFogStart = areaEnvironment.groundFogStart;
 		state.to.groundFogEnd = areaEnvironment.groundFogEnd;
 		state.to.groundFogOpacity = areaEnvironment.groundFogOpacity;
+		state.to.groundFogHeight = areaEnvironment.groundFogHeight;
+		state.to.groundFogHeightOffset = areaEnvironment.groundFogHeightOffset;
+		state.to.groundFogDensity = areaEnvironment.groundFogDensity;
 		lightningEnabled = areaEnvironment.lightningEffects;
 
 		copyTo(state.to.getShadowAngles(), areaEnvironment.getShadowAngles());

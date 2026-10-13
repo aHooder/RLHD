@@ -613,6 +613,10 @@ public class ZoneRenderer implements Renderer {
 		plugin.uboGlobal.groundFogStart.set(env.groundFogStart);
 		plugin.uboGlobal.groundFogEnd.set(env.groundFogEnd);
 		plugin.uboGlobal.groundFogOpacity.set(config.groundFog() ? env.groundFogOpacity : 0);
+		plugin.uboGlobal.integratedGroundFog.set(config.integratedGroundFog() ? 1 : 0);
+		plugin.uboGlobal.groundFogHeight.set(env.groundFogHeight);
+		plugin.uboGlobal.groundFogHeightOffset.set(env.groundFogHeightOffset);
+		plugin.uboGlobal.groundFogDensity.set(config.groundFog() ? env.groundFogDensity : 0);
 
 		// Lights & lightning
 		plugin.uboGlobal.lightningBrightness.set(environmentManager.getLightningBrightness());

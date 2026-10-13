@@ -738,7 +738,7 @@ public interface HdPluginConfig extends Config
 		position = 7,
 		section = daylightCycleSettings
 	)
-	default int customCycleDurationMinutes() {
+	default double customCycleDurationMinutes() {
 		return 60;
 	}
 
@@ -1479,6 +1479,16 @@ public interface HdPluginConfig extends Config
 	)
 	default DefaultBoolean pointSprites() {
 		return DefaultBoolean.DEFAULT;
+	}
+
+	@ConfigItem(
+		keyName = "experimentalIntegratedGroundFog",
+		name = "dev: integrated ground fog",
+		description = "Integrate ground fog along the viewing ray instead of using the fragment's height and distance.",
+		section = experimentalSettings
+	)
+	default boolean integratedGroundFog() {
+		return true;
 	}
 
 	String KEY_SIMPLE_BOAT_SILHOUETTES = "experimentalSimpleBoatSilhouettes";

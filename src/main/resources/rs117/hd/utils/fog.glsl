@@ -23,7 +23,10 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+#pragma once
+
 #include <uniforms/global.glsl>
+#include <uniforms/sky.glsl>
 
 #include <utils/constants.glsl>
 
@@ -34,6 +37,49 @@
 
 float fogFactorLinear(const float dist, const float start, const float end) {
     return 1.0 - clamp((dist - start) / (end - start), 0.0, 1.0);
+}
+
+// Integral of 1 - smoothstep(0, 1, height): uniform below the layer,
+// smoothly thinning to zero at its top. Height is normalized to the authored range.
+float groundFogDensityIntegral(float height) {
+    float h = clamp(height, 0.0, 1.0);
+    return min(height, 0.0) + h * (1.0 - h * h * (1.0 - 0.5 * h));
+}
+
+float calculateGroundFogOpticalDepth(vec3 position) {
+    if (uboGlobal.groundFogDensity <= 0.0)
+        return 0.0;
+
+    float heightRange = -max(uboGlobal.groundFogHeight, 1.0);
+    float fromHeight = (uboGlobal.cameraPos.y + uboGlobal.groundFogHeightOffset) / heightRange;
+    float toHeight = (position.y + uboGlobal.groundFogHeightOffset) / heightRange;
+    float heightDifference = toHeight - fromHeight;
+    float density;
+    if (abs(heightDifference) < 0.001) {
+        // Avoid cancellation for nearly horizontal rays; midpoint density is sufficient here.
+        density = 1.0 - smoothstep(0.0, 1.0, (fromHeight + toHeight) * 0.5);
+    } else {
+        density = (groundFogDensityIntegral(toHeight) - groundFogDensityIntegral(fromHeight)) / heightDifference;
+    }
+
+    // Density specifies optical depth over 1500 world units at full layer density.
+    float extinction = uboGlobal.groundFogDensity / 1500.0;
+    return extinction * distance(position, uboGlobal.cameraPos) * clamp(density, 0.0, 1.0);
+}
+
+float groundFogNightBlend() {
+    return uboSky.enabled ? 1.0 - smoothstep(sin(radians(-6.0)), 0.0, uboSky.sunDir.y) : 0.0;
+}
+
+float skyGroundFogTransmittance(vec3 viewDir) {
+    if (!uboGlobal.integratedGroundFog || uboGlobal.groundFogDensity <= 0.0)
+        return 1.0;
+    // A finite local layer avoids infinite extinction along horizontal sky rays.
+    vec3 end = uboGlobal.cameraPos + viewDir * max(uboGlobal.drawDistance, 1.0) * TILE_SIZE;
+    float depth = calculateGroundFogOpticalDepth(end);
+    if (uboSky.enabled)
+        depth *= mix(0.88, 0.352, groundFogNightBlend());
+    return exp(-depth);
 }
 
 float calculateFogAmount(vec3 position) {

@@ -216,6 +216,20 @@
         "type": "number",
         "description": "Ground fog opacity ranging from 0 to 1, meaning no ground fog and full ground fog respectively. Defaults to 0."
       },
+      "groundFogHeight": {
+        "type": "number",
+        "minimum": 1,
+        "description": "Integrated ground fog only: layer thickness above groundFogHeightOffset in local units (128 per tile). Density smoothly falls from full at the offset to zero at offset + height. Defaults to 500."
+      },
+      "groundFogHeightOffset": {
+        "type": "number",
+        "description": "Integrated ground fog only: signed height above world Y=0 where thinning begins, in local units (128 per tile). Positive raises the layer, negative lowers it. Density remains constant below this height. Defaults to 0."
+      },
+      "groundFogDensity": {
+        "type": "number",
+        "minimum": 0,
+        "description": "Integrated ground fog only: optical depth through 1500 local units at full density. Zero disables fog; 1 transmits about 37% of background light before nighttime scaling. Defaults to 0."
+      },
       "windAngle": {
         "type": "number",
         "description": "Angle in degrees for the wind direction. Zero is east and positive rotates towards north. Defaults to 0."

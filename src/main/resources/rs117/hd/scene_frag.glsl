@@ -531,18 +531,22 @@ void main() {
 
     // apply fog
     if (!isUnderwater) {
-        // ground fog
-        float distance = distance(IN.position, uboGlobal.cameraPos);
-        float closeFadeDistance = 1500;
-        float groundFog = 1.0 - clamp((IN.position.y - uboGlobal.groundFogStart) / (uboGlobal.groundFogEnd - uboGlobal.groundFogStart), 0.0, 1.0);
-        groundFog = mix(0.0, uboGlobal.groundFogOpacity, groundFog);
-        groundFog *= clamp(distance / closeFadeDistance, 0.0, 1.0);
-        float nightFogBlend = 0.0;
+        float nightFogBlend = groundFogNightBlend();
 
-        // Scale optical depth, with lighter haze at night. Apply before water coverage too.
-        if (uboSky.enabled) {
-            nightFogBlend = 1.0 - smoothstep(sin(radians(-6.0)), 0.0, uboSky.sunDir.y);
-            groundFog = 1.0 - pow(1.0 - clamp(groundFog, 0.0, 1.0), mix(0.88, 0.352, nightFogBlend));
+        float groundFog;
+        if (uboGlobal.integratedGroundFog) {
+            float groundFogDepth = calculateGroundFogOpticalDepth(IN.position);
+            if (uboSky.enabled)
+                groundFogDepth *= mix(0.88, 0.352, nightFogBlend);
+            groundFog = 1.0 - exp(-groundFogDepth);
+        } else {
+            float distance = distance(IN.position, uboGlobal.cameraPos);
+            float closeFadeDistance = 1500;
+            groundFog = 1.0 - clamp((IN.position.y - uboGlobal.groundFogStart) / (uboGlobal.groundFogEnd - uboGlobal.groundFogStart), 0.0, 1.0);
+            groundFog = mix(0.0, uboGlobal.groundFogOpacity, groundFog);
+            groundFog *= clamp(distance / closeFadeDistance, 0.0, 1.0);
+            if (uboSky.enabled)
+                groundFog = 1.0 - pow(1.0 - clamp(groundFog, 0.0, 1.0), mix(0.88, 0.352, nightFogBlend));
         }
 
         // multiply the visibility of each fog
@@ -556,15 +560,9 @@ void main() {
         if (uboSky.enabled) {
             if (combinedFog > 1e-4) {
                 vec3 fogViewDir = normalize(IN.position - uboGlobal.cameraPos);
-                vec3 distanceFogColor = foggedSkyColor(fogViewDir);
+                vec3 distanceFogColor = skyColorBeforeGroundFog(fogViewDir);
                 if (groundFog > 1e-4 && fogAmount < 1.0) {
-                    // Approximate reduced nighttime color sensitivity without changing luminance.
-                    vec3 nightFogColor = mix(uboSky.groundFogLight,
-                        vec3(linearSrgbLuminance(uboSky.groundFogLight)), 0.5);
-                    // Preserve the regular fog color by day; introduce adapted local
-                    // illumination only through civil dusk, from sun altitude 0 to -6 degrees.
-                    vec3 groundFogColor = mix(distanceFogColor, nightFogColor, nightFogBlend);
-                    outputColor.rgb = linearToSrgb(mix(srgbToLinear(outputColor.rgb), groundFogColor, groundFog));
+                    outputColor.rgb = linearToSrgb(mix(srgbToLinear(outputColor.rgb), groundFogColor(distanceFogColor), groundFog));
                 }
                 // Preserve the scene's existing distance-fog composition. It hides
                 // the local haze at the far boundary, matching the sky behind it.

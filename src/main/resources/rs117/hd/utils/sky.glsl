@@ -6,6 +6,7 @@
 #include <utils/celestial_projection.glsl>
 #include <utils/starfield.glsl>
 #include <utils/sky_fog.glsl>
+#include <utils/fog.glsl>
 
 struct SkyGradient {
     vec3 sunDir;         // sun direction with the perceived-horizon offset applied
@@ -106,10 +107,17 @@ vec3 visibleSkyColor(SkyGradient sky, vec3 viewDir, float elapsedSeconds, float 
 }
 
 // Linear sky radiance for scene fog and broad water reflections, without disks or stars.
-vec3 foggedSkyColor(vec3 viewDir) {
+vec3 skyColorBeforeGroundFog(vec3 viewDir) {
     SkyGradient sky = computeSkyGradient(viewDir);
     vec3 color = visibleSkyColor(sky, viewDir, uboGlobal.elapsedTime, 1.0);
     vec3 moonDir = normalize(vec3(uboSky.moonDir.x, -uboSky.moonDir.y + CELESTIAL_HORIZON_OFFSET, uboSky.moonDir.z));
     float transmittance = skyFogTransmittance(sky.upAmount);
     return applySkyFog(color, transmittance) + skyFogGlow(viewDir, sky.sunDir, moonDir, transmittance);
+}
+
+vec3 groundFogColor(vec3 distanceFogColor) {
+    // Reduced nighttime color sensitivity, without changing luminance.
+    vec3 nightColor = mix(uboSky.groundFogLight,
+        vec3(linearSrgbLuminance(uboSky.groundFogLight)), 0.5);
+    return mix(distanceFogColor, nightColor, groundFogNightBlend());
 }

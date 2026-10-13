@@ -17,6 +17,7 @@ import rs117.hd.utils.HDUtils;
 
 import static rs117.hd.utils.ColorUtils.SrgbToLinearAdapter;
 import static rs117.hd.utils.ColorUtils.rgb;
+import static rs117.hd.utils.DeveloperTools.COLOR_PICKER;
 import static rs117.hd.utils.MathUtils.*;
 
 @Slf4j
@@ -86,6 +87,9 @@ public class Environment {
 	public float groundFogStart = -200;
 	public float groundFogEnd = -500;
 	public float groundFogOpacity = 0;
+	public float groundFogHeight = 500;
+	public float groundFogHeightOffset;
+	public float groundFogDensity = 0;
 	@JsonAdapter(DegreesToRadians.class)
 	public float windAngle = 0.0f;
 	public float windSpeed = 15.0f;
@@ -161,6 +165,8 @@ public class Environment {
 			waterCausticsStrength = directionalStrength;
 
 		fogDepth = max(0, fogDepth);
+		groundFogHeight = max(1, groundFogHeight);
+		groundFogDensity = max(0, groundFogDensity);
 
 		if (sky != null)
 			sky.normalize();
@@ -170,6 +176,44 @@ public class Environment {
 	}
 
 	public SkyConfiguration getSky() {
+		var sky = getSky2();
+//		sky.moonDiskStrength = COLOR_PICKER[3] * 2;
+//		MathUtils.copyTo(sky.moonDiskColor, COLOR_PICKER, 0, 3);
+//		sky.moonDirectionalColor = null;
+//		sky.moonAmbientColor = null;
+//		sky.moonDirectionalStrength = -1;
+//		sky.moonAmbientStrength = -1;
+////		sky.skyFogDensity = COLOR_PICKER[3] * 100;
+		sky.sunAngles = vec(
+			(COLOR_PICKER[0] * 2 - 1) * HALF_PI,
+			(COLOR_PICKER[1] * 2 - 1) * PI
+		);
+//		MathUtils.copyTo(sky.skyFogColor, COLOR_PICKER_LINEAR, 0, 3);
+//		sky.skyFogDensity = COLOR_PICKER[3] * 10;
+//		sky.sunAngles = vec(
+//			(COLOR_PICKER[0] * 2 - 1) * PI,
+//			(COLOR_PICKER[1] * 2 - 1) * PI
+//		);
+//		if (abs(sky.sunAngles[0]) > HALF_PI) {
+//			// Reflect altitude past either pole and turn azimuth halfway around.
+//			sky.sunAngles[0] = sign(sky.sunAngles[0]) * PI - sky.sunAngles[0];
+//			sky.sunAngles[1] = mod(sky.sunAngles[1] + 2 * PI, 2 * PI) - PI;
+//		}
+//		sky.moonAngles = vec(
+//			(ColorUtils.linearToSrgb(COLOR_PICKER[0]) * 2 - 1) * HALF_PI,
+//			(ColorUtils.linearToSrgb(COLOR_PICKER[1]) * 2 - 1) * PI
+//		);
+//		MathUtils.copyTo(sky.nightAmbientColor, COLOR_PICKER, 0, 3);
+//		sky.nightHorizonStrength = COLOR_PICKER[3] * 0.01f;
+//		MathUtils.copyTo(sky.nightHorizonColor, COLOR_PICKER_LINEAR, 0, 3);
+//		sky.nightHorizonStrength = COLOR_PICKER[3] * 0.5f;
+//		MathUtils.copyTo(sky.nightAmbientColor, COLOR_PICKER_LINEAR, 0, 3);
+//		sky.nightAmbientStrength = 0.005f * COLOR_PICKER[3];
+//		sky.normalize();
+		return sky;
+	}
+
+	public SkyConfiguration getSky2() {
 		return sky != null ? sky : SkyConfiguration.DEFAULT_PRESET;
 	}
 
@@ -206,6 +250,9 @@ public class Environment {
 		groundFogStart = mix(from.groundFogStart, to.groundFogStart, t);
 		groundFogEnd = mix(from.groundFogEnd, to.groundFogEnd, t);
 		groundFogOpacity = mix(from.groundFogOpacity, to.groundFogOpacity, t);
+		groundFogHeight = mix(from.groundFogHeight, to.groundFogHeight, t);
+		groundFogHeightOffset = mix(from.groundFogHeightOffset, to.groundFogHeightOffset, t);
+		groundFogDensity = mix(from.groundFogDensity, to.groundFogDensity, t);
 		waterCausticsStrength = mix(from.waterCausticsStrength, to.waterCausticsStrength, t);
 		windAngle = mix(from.windAngle, to.windAngle, t);
 		windSpeed = mix(from.windSpeed, to.windSpeed, t);
