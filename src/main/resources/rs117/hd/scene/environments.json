@@ -1296,8 +1296,8 @@
       "skyFogHorizonAltitude": 90,
       "skyFogColor": "#b7b7bd"
     },
-    "groundFogHeight": 1588.2,
-    "groundFogDensity": 1.8312
+    "groundFogHeight": 2000,
+    "groundFogDensity": 0.5
   },
   {
     "area": "MOUNTAIN_CAMP",
@@ -1321,8 +1321,8 @@
       "skyFogHorizonAltitude": 90,
       "skyFogColor": "#b7b7bd"
     },
-    "groundFogHeight": 2964.7,
-    "groundFogDensity": 2.4847
+    "groundFogHeight": 2000,
+    "groundFogDensity": 0.5
   },
   {
     "area": "FREMENNIK_PROVINCE",
@@ -1348,8 +1348,8 @@
       "skyFogHorizonAltitude": 90,
       "skyFogColor": "#a29fa0"
     },
-    "groundFogHeight": 635.3,
-    "groundFogDensity": 1.2786
+    "groundFogHeight": 2000,
+    "groundFogDensity": 0.5
   },
   {
     "area": "RELLEKKA_COLD_WATER",
