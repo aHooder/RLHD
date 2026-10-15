@@ -44,9 +44,10 @@ import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -60,9 +61,12 @@ import net.runelite.api.hooks.*;
 import net.runelite.client.RuneLite;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
+import net.runelite.client.config.ConfigProfile;
 import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
+import net.runelite.client.events.ExternalPluginsChanged;
+import net.runelite.client.events.ProfileChanged;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.plugins.PluginManager;
@@ -85,6 +89,7 @@ import rs117.hd.config.SeasonalTheme;
 import rs117.hd.config.ShadingMode;
 import rs117.hd.config.ShadowFiltering;
 import rs117.hd.config.ShadowMode;
+import rs117.hd.config.ShadowResolution;
 import rs117.hd.config.VanillaShadowMode;
 import rs117.hd.opengl.shader.ShaderException;
 import rs117.hd.opengl.shader.ShaderIncludes;
@@ -257,6 +262,9 @@ public class HdPlugin extends Plugin {
 	private EventBus eventBus;
 
 	@Inject
+	private ConfigManager configManager;
+
+	@Inject
 	private PluginManager pluginManager;
 
 	@Inject
@@ -412,6 +420,11 @@ public class HdPlugin extends Plugin {
 	public UBOLights uboLights;
 	public UBOLights uboLightsCulling;
 
+	// Configs that may require confirmation
+	public boolean configLowMemoryMode;
+	private boolean configMacosIntelWorkaround;
+	private ShadowResolution configShadowResolution;
+
 	// Configs used frequently enough to be worth caching
 	public boolean configGroundTextures;
 	public boolean configGroundBlending;
@@ -460,7 +473,13 @@ public class HdPlugin extends Plugin {
 	public ColorFilter configColorFilter = ColorFilter.NONE;
 	public ColorFilter configColorFilterPrevious;
 
-	public boolean useLowMemoryMode;
+	private ConfigProfile configProfile;
+	private String ignoreInternalConfigChange;
+	private final Map<String, Runnable> pendingConfigChanges = new HashMap<>();
+	private final Map<String, Runnable> pendingConfigSaveCallbacks = new HashMap<>();
+	private Runnable configWarningApply;
+	private Runnable configWarningClose;
+
 	public boolean enableDetailedTimers;
 	public boolean enableFreezeFrame;
 	public boolean orthographicProjection;
@@ -477,8 +496,6 @@ public class HdPlugin extends Plugin {
 	public boolean justChangedArea;
 	public Scene skipScene;
 	public int gpuFlags;
-
-	public final ConcurrentHashMap.KeySetView<String, ?> pendingConfigChanges = ConcurrentHashMap.newKeySet();
 
 	// Camera position and orientation may be reused from the old scene while hopping, prior to drawScene being called
 	public final float[] cameraPosition = new float[3];
@@ -538,6 +555,10 @@ public class HdPlugin extends Plugin {
 
 	@Override
 	protected void startUp() {
+		startUp(false);
+	}
+
+	private void startUp(boolean isRestart) {
 		// Lazily inject members into our singletons
 		for (var clazz : LAZY_SINGLETONS)
 			injector.injectMembers(injector.getInstance(clazz));
@@ -581,14 +602,23 @@ public class HdPlugin extends Plugin {
 				lastFrameTimeMillis = 0;
 				lastFrameClientTime = 0;
 
+				if (!isRestart) {
+					synchronized (this) {
+						pendingConfigChanges.clear();
+						pendingConfigSaveCallbacks.clear();
+						configProfile = configManager.getProfile();
+						updateUnsafeCachedConfigs();
+					}
+				}
+
 				// lwjgl defaults to lwjgl- + user.name, but this breaks if the username would cause an invalid path
 				// to be created.
 				Configuration.SHARED_LIBRARY_EXTRACT_DIRECTORY.set("lwjgl-rl");
 
 				SKIP_GL_ERROR_CHECKS = false;
 				GL_CAPS = GL.createCapabilities();
-				useLowMemoryMode = config.lowMemoryMode();
-				BUFFER_GROWTH_MULTIPLIER = useLowMemoryMode ? 1.333f : 2;
+
+				BUFFER_GROWTH_MULTIPLIER = configLowMemoryMode ? 1.333f : 2;
 
 				var rendererClass = config.legacyRenderer() ? LegacyRenderer.class : ZoneRenderer.class;
 				String rlawtVersion = System.getProperty("runelite.rlawtpath", "Release");
@@ -629,7 +659,7 @@ public class HdPlugin extends Plugin {
 				log.info("Indirect draw:       {}", SUPPORTS_INDIRECT_DRAW);
 				log.info("Multi indirect draw: {}", SUPPORTS_MULTI_INDIRECT_DRAW);
 				log.info("Storage buffers:     {}", SUPPORTS_STORAGE_BUFFERS);
-				log.info("Low memory mode:     {}", useLowMemoryMode);
+				log.info("Low memory mode:     {}", configLowMemoryMode);
 
 				renderer = injector.getInstance(rendererClass);
 
@@ -782,7 +812,17 @@ public class HdPlugin extends Plugin {
 
 	@Override
 	protected void shutDown() {
+		shutDown(false);
+	}
+
+	private void shutDown(boolean isRestart) {
 		clientThread.invoke(() -> {
+			if (!isRestart) {
+				cancelConfigWarning();
+				// Update the config panel in case an unsafe configs failed to apply
+				refreshConfigPanel();
+			}
+
 			if (!isActive)
 				return;
 			isActive = false;
@@ -892,6 +932,11 @@ public class HdPlugin extends Plugin {
 
 	public void stopPlugin() {
 		clientThread.invoke(() -> {
+			synchronized (this) {
+				pendingConfigChanges.clear();
+				pendingConfigSaveCallbacks.clear();
+			}
+
 			try {
 				// Shut the plugin down immediately, making RuneLite's call to shutDown() a no-op
 				shutDown();
@@ -912,10 +957,10 @@ public class HdPlugin extends Plugin {
 
 	public void restartPlugin() {
 		clientThread.invoke(() -> {
-			shutDown();
+			shutDown(true);
 			// Validate the canvas so it becomes valid without having to manually resize the client
 			canvas.validate();
-			startUp();
+			startUp(true);
 		});
 	}
 
@@ -945,7 +990,7 @@ public class HdPlugin extends Plugin {
 	public String generateGetter(String type, String array, int arrayLength) {
 		StringBuilder include = new StringBuilder();
 
-		if (config.macosIntelWorkaround() && !APPLE_ARM) {
+		if (configMacosIntelWorkaround && !APPLE_ARM) {
 			// Workaround wrapper for drivers that do not support dynamic indexing,
 			// particularly Intel drivers on macOS
 			include
@@ -1083,7 +1128,7 @@ public class HdPlugin extends Plugin {
 					log.warn("Disabling TILED_LIGHTING_LAYERED due to:", ex);
 					// If both tiled lighting implementations fail, fall back to the old lighting, and warn about it
 					if (!Props.DEVELOPMENT) {
-						config.tiledLighting(DefaultBoolean.OFF);
+						config.setTiledLighting(DefaultBoolean.OFF);
 						PopupUtils.displayPopupMessage(
 							client, "117 HD Error",
 							"Tiled lighting has been automatically disabled, since it failed to compile on your GPU.<br>" +
@@ -1500,7 +1545,7 @@ public class HdPlugin extends Plugin {
 		glActiveTexture(TEXTURE_UNIT_SHADOW_MAP);
 		glBindTexture(GL_TEXTURE_2D, texShadowMap);
 
-		shadowMapResolution = config.shadowResolution().getValue();
+		shadowMapResolution = configShadowResolution.getValue();
 		int maxResolution = glGetInteger(GL_MAX_TEXTURE_SIZE);
 		if (maxResolution < shadowMapResolution) {
 			log.info("Capping shadow resolution from {} to {}", shadowMapResolution, maxResolution);
@@ -1792,8 +1837,14 @@ public class HdPlugin extends Plugin {
 		return renderer.isLoadingScene();
 	}
 
+	private void updateUnsafeCachedConfigs() {
+		configLowMemoryMode = config.lowMemoryMode();
+		configMacosIntelWorkaround = config.macosIntelWorkaround();
+		configShadowResolution = config.shadowResolution();
+	}
+
 	private void updateCachedConfigs() {
-		configExpandedMapLoadingChunks = useLowMemoryMode ? 0 : config.expandedMapLoadingChunks();
+		configExpandedMapLoadingChunks = configLowMemoryMode ? 0 : config.expandedMapLoadingChunks();
 		configNightBrightness = config.nightBrightness() / 100f;
 		configShadowMode = config.shadowMode();
 		configShadowsEnabled = configShadowMode != ShadowMode.OFF;
@@ -1899,16 +1950,194 @@ public class HdPlugin extends Plugin {
 			return;
 
 		synchronized (this) {
-			pendingConfigChanges.add(event.getKey());
+			if (event.getKey().equals(ignoreInternalConfigChange))
+				return;
+
+			updateConfigProfile();
+			if (handleUnsafeConfigChange(event))
+				return;
+
+			pendingConfigChanges.putIfAbsent(event.getKey(), null);
 			// Process pending config changes after the EDT is done with any pending work, which could include further config changes
 			SwingUtilities.invokeLater(this::processPendingConfigChanges);
 		}
 	}
 
+	@Subscribe
+	public synchronized void onProfileChanged(ProfileChanged event) {
+		// In the event of a profile switch in the middle of attempting to apply an unsafe config,
+		// it's possible for the previous and new profiles to both have identical saved configs.
+		// If we don't handle this case, the new profile's setting won't actually be applied here,
+		// because RuneLite omits ConfigChanged events where the value doesn't change.
+		updateConfigProfile();
+		SwingUtilities.invokeLater(this::processPendingConfigChanges);
+	}
+
+	private void updateConfigProfile() {
+		ConfigProfile profile = configManager.getProfile();
+		if (configProfile == profile)
+			return;
+
+		if (cancelConfigWarning())
+			refreshConfigPanel();
+
+		// Discard old callbacks, but retain the keys, to ensure config
+		// changes go through even if they are identical in the new profile
+		pendingConfigChanges.replaceAll((key, apply) -> null);
+		for (var key : pendingConfigSaveCallbacks.keySet())
+			pendingConfigChanges.put(key, null);
+		pendingConfigSaveCallbacks.clear();
+		configProfile = profile;
+		updateUnsafeCachedConfigs();
+	}
+
+	@SuppressWarnings("SynchronizeOnNonFinalField")
+	public synchronized void saveUnsafeConfigChanges() {
+		if (!isActive || isPluginStopPending || pendingConfigSaveCallbacks.isEmpty())
+			return;
+
+		// Ensure the new configs seem to safely produce a frame
+		glFinish();
+		if (glGetError() != GL_NO_ERROR) {
+			requestPluginStop("Encountered an OpenGL error applying an unsafe config");
+			return;
+		}
+
+		// Synchronize with profile switching
+		synchronized (configManager) {
+			if (configProfile != configManager.getProfile())
+				return;
+
+			for (var entry : pendingConfigSaveCallbacks.entrySet()) {
+				ignoreInternalConfigChange = entry.getKey();
+				entry.getValue().run();
+			}
+			ignoreInternalConfigChange = null;
+			pendingConfigSaveCallbacks.clear();
+		}
+
+		refreshConfigPanel();
+	}
+
+	private void refreshConfigPanel() {
+		// Hack with minimal side effects to force the config panel to update.
+		eventBus.post(new ExternalPluginsChanged());
+	}
+
+	private boolean handleUnsafeConfigChange(ConfigChanged event) {
+		// For a config protected by a warning, we want to revert the config change immediately, so RuneLite does not save it.
+		// We then apply the change only to cached configs, and ensure that 117 HD is able to produce a frame, before actually saving.
+		// Note that RuneLite technically omits events when a config is unchanged by profile switching, but we still handle it here,
+		// because we update cached configs early as part of profile switching.
+		String key = event.getKey(), warning = null;
+		Runnable apply, revert, save;
+		switch (key) {
+			case KEY_LOW_MEMORY_MODE: {
+				boolean current = config.lowMemoryMode();
+				boolean previous = configLowMemoryMode;
+				if (current && !previous)
+					warning = "This <b>will not</b> result in better performance. It is recommended only if you are unable to install<br>" +
+							  "the 64-bit version of RuneLite, or if your computer has a very low amount of memory available.";
+				apply = () -> configLowMemoryMode = current;
+				revert = () -> config.setLowMemoryMode(previous);
+				save = () -> config.setLowMemoryMode(current);
+				break;
+			}
+			case KEY_MACOS_INTEL_WORKAROUND: {
+				boolean current = config.macosIntelWorkaround();
+				boolean previous = configMacosIntelWorkaround;
+				if (current && !previous)
+					warning = "This setting can cause RuneLite to crash. Only enable it if you are seeing broken colors.";
+				apply = () -> configMacosIntelWorkaround = current;
+				revert = () -> config.setMacosIntelWorkaround(previous);
+				save = () -> config.setMacosIntelWorkaround(current);
+				break;
+			}
+			case KEY_SHADOW_RESOLUTION: {
+				ShadowResolution current = config.shadowResolution();
+				ShadowResolution previous = configShadowResolution;
+				if (current == ShadowResolution.RES_32768 && current != previous)
+					warning = "Insane shadow quality requires a very large amount of GPU memory (>6 GB) and may freeze the game.";
+				apply = () -> configShadowResolution = current;
+				revert = () -> config.setShadowResolution(previous);
+				save = () -> config.setShadowResolution(current);
+				break;
+			}
+			default:
+				return false;
+		}
+
+		if (cancelConfigWarning())
+			refreshConfigPanel();
+
+		pendingConfigSaveCallbacks.remove(key);
+		if (warning == null) {
+			pendingConfigChanges.put(key, apply);
+			return false;
+		}
+
+		pendingConfigChanges.remove(key);
+
+		// Revert the config change while ignoring the event, to retain the cached config
+		ignoreInternalConfigChange = key;
+		revert.run();
+		ignoreInternalConfigChange = null;
+		refreshConfigPanel();
+
+		configWarningApply = apply;
+		configWarningClose = PopupUtils.displayPopupMessage(
+			client, "117 HD Warning",
+			warning + "<br><br>Do you want to proceed?",
+			new String[] { "Ok", "Cancel" },
+			button -> {
+				synchronized (this) {
+					// Ensure this is the latest warning popup
+					if (configWarningApply != apply)
+						return true;
+					configWarningApply = null;
+					configWarningClose = null;
+					if (button == 0) {
+						// Schedule the config change to go through, and for it to be saved if successful
+						pendingConfigChanges.put(
+							key, () -> {
+								apply.run();
+								pendingConfigSaveCallbacks.put(key, save);
+							}
+						);
+						SwingUtilities.invokeLater(this::processPendingConfigChanges);
+					} else {
+						refreshConfigPanel();
+					}
+				}
+				return true;
+			}
+		);
+		return true;
+	}
+
+	private synchronized boolean cancelConfigWarning() {
+		configWarningApply = null;
+		if (configWarningClose == null)
+			return false;
+		configWarningClose.run();
+		configWarningClose = null;
+		return true;
+	}
+
 	public void processPendingConfigChanges() {
 		clientThread.invoke(() -> {
-			if (pendingConfigChanges.isEmpty())
-				return;
+			synchronized (this) {
+				if (!isActive || isPluginStopPending || !pluginManager.isPluginEnabled(this)) {
+					if (cancelConfigWarning())
+						refreshConfigPanel();
+					pendingConfigChanges.clear();
+					pendingConfigSaveCallbacks.clear();
+					return;
+				}
+
+				if (pendingConfigChanges.isEmpty() || configProfile != configManager.getProfile())
+					return;
+			}
 
 			try {
 				// TODO: Move this synchronization into ZoneRenderer
@@ -1920,11 +2149,15 @@ public class HdPlugin extends Plugin {
 				synchronized (this) {
 					boolean previousReduceGlareIntensity = configReduceGlareIntensity;
 
+					// Apply approved protected settings alongside ordinary config updates.
+					for (var apply : pendingConfigChanges.values())
+						if (apply != null)
+							apply.run();
 					updateCachedConfigs();
 
-					log.debug("Processing {} pending config changes: {}", pendingConfigChanges.size(), pendingConfigChanges);
+					log.debug("Processing {} pending config changes: {}", pendingConfigChanges.size(), pendingConfigChanges.keySet());
 
-					renderer.processConfigChanges(pendingConfigChanges);
+					renderer.processConfigChanges(pendingConfigChanges.keySet());
 
 					boolean recompilePrograms = false;
 					boolean recreateSceneFbo = false;
@@ -1935,7 +2168,7 @@ public class HdPlugin extends Plugin {
 					boolean reloadTileOverrides = false;
 					boolean reloadScene = false;
 
-					for (var key : pendingConfigChanges) {
+					for (var key : pendingConfigChanges.keySet()) {
 						switch (key) {
 							case KEY_LOW_MEMORY_MODE:
 							case KEY_REMOVE_VERTEX_SNAPPING:
@@ -1943,8 +2176,9 @@ public class HdPlugin extends Plugin {
 							case KEY_INDIRECT_DRAW:
 							case KEY_STORAGE_BUFFERS:
 							case KEY_SHADING_MODE:
+								// Since we'll be restarting the plugin anyway, skip pending changes
+								pendingConfigChanges.clear();
 								restartPlugin();
-								// since we'll be restarting the plugin anyway, skip pending changes
 								return;
 							case KEY_SEASONAL_THEME:
 							case KEY_SEASONAL_HEMISPHERE:
@@ -2087,12 +2321,14 @@ public class HdPlugin extends Plugin {
 					}
 
 					if (reloadEnvironments) {
-						if (pendingConfigChanges.contains(KEY_LEGACY_DISABLE_ENVIRONMENTAL_LIGHTING)) {
+						if (pendingConfigChanges.containsKey(KEY_LEGACY_DISABLE_ENVIRONMENTAL_LIGHTING)) {
 							environmentManager.reload();
 						} else {
 							environmentManager.reloadAndSmoothlyTransition();
 						}
 					}
+
+					pendingConfigChanges.clear();
 				}
 			} catch (Throwable ex) {
 				log.error("Error while changing settings:", ex);
@@ -2100,7 +2336,6 @@ public class HdPlugin extends Plugin {
 			} finally {
 				sceneManager.getLoadingLock().unlock();
 				log.trace("loadingLock unlocked - holdCount: {}", sceneManager.getLoadingLock().getHoldCount());
-				pendingConfigChanges.clear();
 				frameTimer.reset();
 			}
 		});
@@ -2361,7 +2596,7 @@ public class HdPlugin extends Plugin {
 	public void displayOutOfMemoryMessage() {
 		String errorMessage;
 		if (HDUtils.is32Bit()) {
-			String lowMemoryModeHint = useLowMemoryMode ? "" : (
+			String lowMemoryModeHint = configLowMemoryMode ? "" : (
 				"If you are unable to install 64-bit RuneLite, you can instead turn on <b>Low Memory Mode</b> in the<br>" +
 				"Miscellaneous section of 117 HD settings.<br>"
 			);
@@ -2379,7 +2614,7 @@ public class HdPlugin extends Plugin {
 		} else {
 			errorMessage =
 				"The plugin ran out of memory. "
-				+ "Try " + (useLowMemoryMode ? "" : "reducing your model cache size from " + config.modelCacheSizeMiB() + " or ")
+				+ "Try " + (configLowMemoryMode ? "" : "reducing your model cache size from " + config.modelCacheSizeMiB() + " or ")
 				+ "closing other programs.<br>"
 				+ "<br>"
 				+ "If the issue persists, please join our "

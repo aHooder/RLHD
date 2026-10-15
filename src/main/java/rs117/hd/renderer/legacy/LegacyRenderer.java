@@ -1004,7 +1004,8 @@ public class LegacyRenderer implements Renderer {
 			plugin.hasLoggedIn = true;
 
 		// Draw 3d scene
-		if (plugin.hasLoggedIn && sceneContext != null && plugin.sceneViewport != null) {
+		boolean renderScene = plugin.hasLoggedIn && sceneContext != null && plugin.sceneViewport != null;
+		if (renderScene) {
 			// Before reading the SSBOs written to from postDrawScene() we must insert a barrier
 			if (computeMode == ComputeMode.OPENCL) {
 				clManager.finish();
@@ -1246,6 +1247,8 @@ public class LegacyRenderer implements Renderer {
 			plugin.awtContext.swapBuffers();
 			frameTimer.end(Timer.SWAP_BUFFERS);
 			drawManager.processDrawComplete(plugin::screenshot);
+			if (renderScene)
+				plugin.saveUnsafeConfigChanges();
 		} catch (RuntimeException ex) {
 			// this is always fatal
 			if (!plugin.canvas.isValid()) {
@@ -1299,7 +1302,7 @@ public class LegacyRenderer implements Renderer {
 			return;
 		}
 
-		if (plugin.useLowMemoryMode)
+		if (plugin.configLowMemoryMode)
 			return; // Force scene loading to happen on the client thread
 
 		loadSceneInternal(scene);
@@ -1325,7 +1328,7 @@ public class LegacyRenderer implements Renderer {
 		} catch (OutOfMemoryError oom) {
 			log.error(
 				"Ran out of memory while loading scene (32-bit: {}, low memory mode: {}, cache size: {})",
-				HDUtils.is32Bit(), plugin.useLowMemoryMode, config.modelCacheSizeMiB(), oom
+				HDUtils.is32Bit(), plugin.configLowMemoryMode, config.modelCacheSizeMiB(), oom
 			);
 			plugin.displayOutOfMemoryMessage();
 			plugin.stopPlugin();

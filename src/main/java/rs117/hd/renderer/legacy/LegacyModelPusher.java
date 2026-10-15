@@ -77,7 +77,7 @@ public class LegacyModelPusher {
 	public void startUp() {
 		assert WindDisplacement.values().length - 1 <= 0x7;
 
-		if (plugin.configModelCaching && !plugin.useLowMemoryMode) {
+		if (plugin.configModelCaching && !plugin.configLowMemoryMode) {
 			final int size = config.modelCacheSizeMiB();
 			try {
 				modelCache = new ModelCache(size, () -> {

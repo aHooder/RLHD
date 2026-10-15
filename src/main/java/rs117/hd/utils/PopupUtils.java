@@ -5,9 +5,12 @@ import java.awt.Desktop;
 import java.awt.FlowLayout;
 import java.awt.Image;
 import java.awt.Point;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.net.URISyntaxException;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 import javax.swing.BorderFactory;
 import javax.swing.ImageIcon;
@@ -28,15 +31,27 @@ import static rs117.hd.utils.ResourcePath.path;
 
 @Slf4j
 public class PopupUtils {
-	public static void displayPopupMessage(
+	public static Runnable displayPopupMessage(
 		Client client,
 		String title,
 		String message,
 		String[] buttonLabels,
 		Function<Integer, Boolean> buttonIndexConsumer
 	) {
+		CompletableFuture<JFrame> popup = new CompletableFuture<>();
 		SwingUtilities.invokeLater(() -> {
+			if (popup.isCancelled())
+				return;
 			JFrame frame = new JFrame(title);
+			frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+			frame.addWindowListener(new WindowAdapter() {
+				@Override
+				public void windowClosing(WindowEvent event) {
+					// Treat closing the window as dismissal
+					if (buttonIndexConsumer.apply(-1))
+						frame.dispose();
+				}
+			});
 
 			JPanel mainPanel = new JPanel(new BorderLayout());
 			mainPanel.setBorder(BorderFactory.createEmptyBorder(16, 0, 8, 8));
@@ -83,7 +98,7 @@ public class PopupUtils {
                 int index = i;
 				button.addActionListener(actionEvent -> {
 					if (buttonIndexConsumer.apply(index))
-						frame.setVisible(false);
+						frame.dispose();
 				});
 				buttonPanel.add(button);
             }
@@ -105,7 +120,15 @@ public class PopupUtils {
             if (runeLiteWindow.isAlwaysOnTop())
                 frame.setAlwaysOnTop(true);
 
-            frame.setVisible(true);
+			if (popup.complete(frame)) {
+				frame.setVisible(true);
+			} else {
+				frame.dispose();
+			}
         });
+		return () -> {
+			if (!popup.cancel(false))
+				popup.thenAccept(frame -> SwingUtilities.invokeLater(frame::dispose));
+		};
     }
 }

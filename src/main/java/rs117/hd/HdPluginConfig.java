@@ -432,6 +432,8 @@ public interface HdPluginConfig extends Config
 	default ShadowResolution shadowResolution() {
 		return ShadowResolution.RES_8192;
 	}
+	@ConfigItem(keyName = KEY_SHADOW_RESOLUTION, hidden = true, name = "", description = "")
+	void setShadowResolution(ShadowResolution resolution);
 
 	String KEY_SHADOW_FILTERING = "shadowFiltering";
 	@ConfigItem(
@@ -1091,14 +1093,13 @@ public interface HdPluginConfig extends Config
 		keyName = KEY_LOW_MEMORY_MODE,
 		name = "Low memory mode",
 		description = "Turns off features which require extra memory, such as model caching, faster scene loading & extended scene loading.",
-		warning =
-			"<html>This <b>will not</b> result in better performance. It is recommended only if you are unable to install<br>" +
-			"the 64-bit version of RuneLite, or if your computer has a very low amount of memory available.</html>",
 		section = miscellaneousSettings
 	)
 	default boolean lowMemoryMode() {
 		return false;
 	}
+	@ConfigItem(keyName = KEY_LOW_MEMORY_MODE, hidden = true, name = "", description = "")
+	void setLowMemoryMode(boolean enabled);
 
 	String KEY_COLOR_FILTER = "colorFilter";
 	@ConfigItem(
@@ -1461,7 +1462,7 @@ public interface HdPluginConfig extends Config
 		return DefaultBoolean.DEFAULT;
 	}
 	@ConfigItem(keyName = KEY_TILED_LIGHTING, hidden = true, name = "", description = "")
-	void tiledLighting(DefaultBoolean state);
+	void setTiledLighting(DefaultBoolean state);
 
 	String KEY_IMAGE_LOAD_STORE = "experimentalTiledLightingImageStore";
 	@ConfigItem(
@@ -1540,14 +1541,13 @@ public interface HdPluginConfig extends Config
 		keyName = KEY_MACOS_INTEL_WORKAROUND,
 		name = "Intel-based Mac workaround",
 		description = "Workaround for visual artifacts found on some Intel GPU drivers on macOS.",
-		warning =
-			"This setting can cause RuneLite to crash, and it can be difficult to undo.\n" +
-			"Only enable it if you are seeing broken colors. Are you sure you want to enable this setting?",
 		section = technicalSettings
 	)
 	default boolean macosIntelWorkaround() {
 		return false;
 	}
+	@ConfigItem(keyName = KEY_MACOS_INTEL_WORKAROUND, hidden = true, name = "", description = "")
+	void setMacosIntelWorkaround(boolean enabled);
 
 	String KEY_CENTROID_QUALIFIER = "centroidQualifier";
 	@ConfigItem(

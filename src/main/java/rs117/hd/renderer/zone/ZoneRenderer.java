@@ -1379,6 +1379,8 @@ public class ZoneRenderer implements Renderer {
 				plugin.awtContext.swapBuffers();
 				frameTimer.end(Timer.SWAP_BUFFERS);
 				drawManager.processDrawComplete(plugin::screenshot);
+				if (shouldRenderScene)
+					plugin.saveUnsafeConfigChanges();
 			} catch (RuntimeException ex) {
 				// this is always fatal
 				if (!plugin.canvas.isValid()) {
@@ -1442,7 +1444,7 @@ public class ZoneRenderer implements Renderer {
 		} catch (OutOfMemoryError oom) {
 			log.error(
 				"Ran out of memory while generating scene data (32-bit: {}, low memory mode: {})",
-				HDUtils.is32Bit(), plugin.useLowMemoryMode, oom
+				HDUtils.is32Bit(), plugin.configLowMemoryMode, oom
 			);
 			plugin.displayOutOfMemoryMessage();
 			plugin.stopPlugin();
