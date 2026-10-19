@@ -539,6 +539,8 @@ public class HdPlugin extends Plugin {
 
 	@Override
 	protected void startUp() {
+		long startupStart = System.nanoTime();
+		log.debug("Starting 117 HD");
 		// Lazily inject members into our singletons
 		for (var clazz : LAZY_SINGLETONS)
 			injector.injectMembers(injector.getInstance(clazz));
@@ -550,6 +552,8 @@ public class HdPlugin extends Plugin {
 				if (!textureManager.vanillaTexturesAvailable())
 					return false;
 
+				long stageStart = System.nanoTime();
+				log.debug("Startup: native libraries and GL context/config setup");
 				AWTContext.loadNatives();
 				canvas = client.getCanvas();
 				synchronized (canvas.getTreeLock()) {
@@ -718,12 +722,25 @@ public class HdPlugin extends Plugin {
 				setupSyncMode();
 				initializeVaos();
 				initializeUbos();
+				log.debug("Startup GL/config setup: {} ms", (System.nanoTime() - stageStart) / 1e6);
 
 				// Materials need to be initialized before compiling shader programs
+				stageStart = System.nanoTime();
+				log.debug("Startup: textureManager.startUp()");
 				textureManager.startUp();
+				log.debug("Startup textureManager.startUp(): {} ms", (System.nanoTime() - stageStart) / 1e6);
+				stageStart = System.nanoTime();
+				log.debug("Startup: materialManager.startUp()");
 				materialManager.startUp();
+				log.debug("Startup materialManager.startUp(): {} ms", (System.nanoTime() - stageStart) / 1e6);
+				stageStart = System.nanoTime();
+				log.debug("Startup: waterTypeManager.startUp()");
 				waterTypeManager.startUp();
+				log.debug("Startup waterTypeManager.startUp(): {} ms", (System.nanoTime() - stageStart) / 1e6);
+				stageStart = System.nanoTime();
+				log.debug("Startup: gamevalManager.startUp()");
 				gamevalManager.startUp();
+				log.debug("Startup gamevalManager.startUp(): {} ms", (System.nanoTime() - stageStart) / 1e6);
 
 				gpuFlags = DrawCallbacks.GPU | renderer.gpuFlags();
 				if (config.removeVertexSnapping())
@@ -734,13 +751,28 @@ public class HdPlugin extends Plugin {
 
 				// Initialize the renderer after setting initial GPU flags,
 				// to let the renderer override GPU flags even during startup
+				stageStart = System.nanoTime();
+				log.debug("Startup: renderer.initialize()");
 				renderer.initialize();
+				log.debug("Startup renderer.initialize(): {} ms", (System.nanoTime() - stageStart) / 1e6);
 				eventBus.register(renderer);
 
+				stageStart = System.nanoTime();
+				log.debug("Startup: initializeShaders()");
 				initializeShaders();
+				log.debug("Startup initializeShaders(): {} ms", (System.nanoTime() - stageStart) / 1e6);
+				stageStart = System.nanoTime();
+				log.debug("Startup: initializeShaderHotswapping()");
 				initializeShaderHotswapping();
+				log.debug("Startup initializeShaderHotswapping(): {} ms", (System.nanoTime() - stageStart) / 1e6);
+				stageStart = System.nanoTime();
+				log.debug("Startup: initializeUiTexture()");
 				initializeUiTexture();
+				log.debug("Startup initializeUiTexture(): {} ms", (System.nanoTime() - stageStart) / 1e6);
+				stageStart = System.nanoTime();
+				log.debug("Startup: initializeShadowMapFbo()");
 				initializeShadowMapFbo();
+				log.debug("Startup initializeShadowMapFbo(): {} ms", (System.nanoTime() - stageStart) / 1e6);
 
 				checkGLErrors();
 
@@ -749,16 +781,46 @@ public class HdPlugin extends Plugin {
 				// force rebuild of main buffer provider to enable alpha channel
 				client.resizeCanvas();
 
+				stageStart = System.nanoTime();
+				log.debug("Startup: areaManager.startUp()");
 				areaManager.startUp();
+				log.debug("Startup areaManager.startUp(): {} ms", (System.nanoTime() - stageStart) / 1e6);
+				stageStart = System.nanoTime();
+				log.debug("Startup: groundMaterialManager.startUp()");
 				groundMaterialManager.startUp();
+				log.debug("Startup groundMaterialManager.startUp(): {} ms", (System.nanoTime() - stageStart) / 1e6);
+				stageStart = System.nanoTime();
+				log.debug("Startup: tileOverrideManager.startUp()");
 				tileOverrideManager.startUp();
+				log.debug("Startup tileOverrideManager.startUp(): {} ms", (System.nanoTime() - stageStart) / 1e6);
+				stageStart = System.nanoTime();
+				log.debug("Startup: modelOverrideManager.startUp()");
 				modelOverrideManager.startUp();
+				log.debug("Startup modelOverrideManager.startUp(): {} ms", (System.nanoTime() - stageStart) / 1e6);
+				stageStart = System.nanoTime();
+				log.debug("Startup: lightManager.startUp()");
 				lightManager.startUp();
+				log.debug("Startup lightManager.startUp(): {} ms", (System.nanoTime() - stageStart) / 1e6);
+				stageStart = System.nanoTime();
+				log.debug("Startup: skyManager.startUp()");
 				skyManager.startUp();
+				log.debug("Startup skyManager.startUp(): {} ms", (System.nanoTime() - stageStart) / 1e6);
+				stageStart = System.nanoTime();
+				log.debug("Startup: environmentManager.startUp()");
 				environmentManager.startUp();
+				log.debug("Startup environmentManager.startUp(): {} ms", (System.nanoTime() - stageStart) / 1e6);
+				stageStart = System.nanoTime();
+				log.debug("Startup: fishingSpotReplacer.startUp()");
 				fishingSpotReplacer.startUp();
+				log.debug("Startup fishingSpotReplacer.startUp(): {} ms", (System.nanoTime() - stageStart) / 1e6);
+				stageStart = System.nanoTime();
+				log.debug("Startup: gammaCalibrationOverlay.initialize()");
 				gammaCalibrationOverlay.initialize();
+				log.debug("Startup gammaCalibrationOverlay.initialize(): {} ms", (System.nanoTime() - stageStart) / 1e6);
+				stageStart = System.nanoTime();
+				log.debug("Startup: npcDisplacementCache.initialize()");
 				npcDisplacementCache.initialize();
+				log.debug("Startup npcDisplacementCache.initialize(): {} ms", (System.nanoTime() - stageStart) / 1e6);
 
 				hasLoggedIn = client.getGameState().getState() > GameState.LOGGING_IN.getState();
 				redrawPreviousFrame = false;
@@ -773,6 +835,8 @@ public class HdPlugin extends Plugin {
 				clientThread.invokeLater(this::displayUpdateMessage);
 
 				log.info("117 HD started successfully!");
+				log.debug("Startup total including scheduling/readiness waits: {} ms (excluding deferred scene loading and sky baking)",
+					(System.nanoTime() - startupStart) / 1e6);
 			} catch (Throwable err) {
 				log.error("Error while starting 117 HD", err);
 				stopPlugin();

@@ -185,6 +185,8 @@ public final class StarField {
 	public boolean rebuildIfNeeded() {
 		boolean rebuilt = false;
 		if (!starGeometryCurrent) {
+			long start = System.nanoTime();
+			log.debug("Generating and uploading star geometry");
 			random.setSeed(SEED);
 			FloatBuffer vertexData = BufferUtils.createFloatBuffer(MAX_STAR_COUNT * FLOATS_PER_STAR);
 
@@ -198,11 +200,22 @@ public final class StarField {
 			vboStars.upload(vertexData.flip());
 			starGeometryCurrent = true;
 			rebuilt = true;
+			log.debug("Star geometry generation/upload: {} ms", (System.nanoTime() - start) / 1e6);
 		}
 
 		if (!config.enableNebulae() || nebulaMapCurrent || fboNebulaBake == 0 || texNebulaCubemap == 0 || !nebulaBakeProgram.isValid())
 			return rebuilt;
 
+		boolean timeGpu = log.isDebugEnabled();
+		long bakeStart = System.nanoTime();
+		if (timeGpu) {
+			// Diagnostic-only synchronization separates earlier GPU work from the bake itself.
+			log.debug("Waiting for GPU before nebula bake");
+			glFinish();
+			log.debug("Pre-bake GPU wait: {} ms", (System.nanoTime() - bakeStart) / 1e6);
+			bakeStart = System.nanoTime();
+		}
+		log.debug("Baking nebula cubemap ({} x {}, 6 faces)", NEBULA_CUBE_MAP_RESOLUTION, NEBULA_CUBE_MAP_RESOLUTION);
 		nebulaBakeRenderState.framebuffer.set(GL_FRAMEBUFFER, fboNebulaBake);
 		nebulaBakeRenderState.viewport.set(0, 0, NEBULA_CUBE_MAP_RESOLUTION, NEBULA_CUBE_MAP_RESOLUTION);
 		nebulaBakeRenderState.vao.setVao(plugin.vaoTri);
@@ -228,6 +241,10 @@ public final class StarField {
 
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 		nebulaBakeRenderState.reset();
+		if (timeGpu) {
+			glFinish();
+			log.debug("Nebula bake including GPU completion: {} ms", (System.nanoTime() - bakeStart) / 1e6);
+		}
 		nebulaMapCurrent = true;
 		return true;
 	}

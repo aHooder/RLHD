@@ -71,13 +71,20 @@ public class ShaderTemplate
 				if (shader == 0)
 					throw new ShaderException("Unable to create shader of type " + entry.getKey());
 
+				log.debug("Preparing shader {}", entry.getValue());
+				long start = System.nanoTime();
 				String source = includes
 					.addInclude("SHADER_TYPE", SHADER_TYPE_DEFINE + entry.getKey())
 					.loadFile(entry.getValue());
+				log.debug("Shader {}: source preparation {} ms", entry.getValue(), (System.nanoTime() - start) / 1e6);
+				log.debug("Compiling shader {}", entry.getValue());
+				start = System.nanoTime();
 				glShaderSource(shader, source);
 				glCompileShader(shader);
 
-				if (glGetShaderi(shader, GL_COMPILE_STATUS) != GL_TRUE) {
+				int status = glGetShaderi(shader, GL_COMPILE_STATUS);
+				log.debug("Shader {}: compile {} ms", entry.getValue(), (System.nanoTime() - start) / 1e6);
+				if (status != GL_TRUE) {
 					String error = glGetShaderInfoLog(shader);
 					glDeleteShader(shader);
 					throw ShaderException.compileError(includes, source, error, entry.getValue());
@@ -87,11 +94,14 @@ public class ShaderTemplate
 				shaders[i++] = shader;
 			}
 
-			glLinkProgram(program);
-
 			String[] paths = shaderTypePaths.values().toArray(String[]::new);
 			String combinedName = String.join(" + ", paths);
-			if (glGetProgrami(program, GL_LINK_STATUS) == GL_FALSE) {
+			log.debug("Linking shaders {}", combinedName);
+			long start = System.nanoTime();
+			glLinkProgram(program);
+			int status = glGetProgrami(program, GL_LINK_STATUS);
+			log.debug("Shaders {}: link {} ms", combinedName, (System.nanoTime() - start) / 1e6);
+			if (status == GL_FALSE) {
 				throw ShaderException.compileError(
 					includes,
 					"// Linking " + combinedName,
