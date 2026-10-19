@@ -1035,6 +1035,7 @@ public class HdPlugin extends Plugin {
 
 	public ShaderIncludes getShaderIncludes() {
 		var includes = new ShaderIncludes()
+			.flattenUniformBlocks(config.flattenUniformBlocks().get(false))
 			.addIncludePath(SHADER_PATH)
 			.addInclude("VERSION_HEADER", OSType.getOSType() == OSType.Linux ? LINUX_VERSION_HEADER : WINDOWS_VERSION_HEADER)
 			.define("UI_SCALING_MODE", config.uiScalingMode())
@@ -2062,6 +2063,7 @@ public class HdPlugin extends Plugin {
 							case KEY_LEGACY_BOAT_SILHOUETTES:
 							case KEY_WATER_SPECULAR_REFLECTIONS:
 							case KEY_CENTROID_QUALIFIER:
+							case KEY_FLATTEN_UNIFORM_BLOCKS:
 								recompilePrograms = true;
 								break;
 							case KEY_GLARE_INTENSITY:

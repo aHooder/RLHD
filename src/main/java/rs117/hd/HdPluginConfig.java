@@ -1549,6 +1549,17 @@ public interface HdPluginConfig extends Config
 		return false;
 	}
 
+	String KEY_FLATTEN_UNIFORM_BLOCKS = "flattenUniformBlocks";
+	@ConfigItem(
+		keyName = KEY_FLATTEN_UNIFORM_BLOCKS,
+		name = "Flatten uniform blocks",
+		description = "Workaround for driver compiler issues.",
+		section = technicalSettings
+	)
+	default DefaultBoolean flattenUniformBlocks() {
+		return DefaultBoolean.OFF;
+	}
+
 	String KEY_CENTROID_QUALIFIER = "centroidQualifier";
 	@ConfigItem(
 		keyName = KEY_CENTROID_QUALIFIER,

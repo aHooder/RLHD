@@ -1,13 +1,5 @@
 #pragma once
 
-#include <utils/constants.glsl>
-#include <utils/color_utils.glsl>
-
-#define RED linearToSrgb(uboGlobal.colorPicker.r)
-#define GREEN linearToSrgb(uboGlobal.colorPicker.g)
-#define BLUE linearToSrgb(uboGlobal.colorPicker.b)
-#define OPACITY uboGlobal.colorPicker.a
-
 layout(std140) uniform UBOGlobal {
     vec4 colorPicker;
 

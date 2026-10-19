@@ -34,6 +34,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.Stack;
 import java.util.function.Supplier;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
 import rs117.hd.opengl.uniforms.UniformBuffer;
@@ -49,6 +50,14 @@ public class ShaderIncludes {
 	enum Type { GLSL, C, UNKNOWN }
 
 	private static final Pattern IDENTIFIER_PATTERN = Pattern.compile("^[a-zA-Z_]\\w*");
+	private static final Pattern COMMENTS = Pattern.compile("(?s)/\\*.*?\\*/|//[^\\r\\n]*");
+	private static final Pattern NAMED_UNIFORM_BLOCK = Pattern.compile(
+		"(\\buniform\\s+\\w+\\s*\\{)([^{}]*)(\\}\\s*)(\\w+)(\\s*;)"
+	);
+	private static final Pattern BLOCK_MEMBER = Pattern.compile("\\b(\\w+)(\\s*(?:\\[[^\\]]*\\]\\s*)*;)");
+	private static final Pattern MEMBER_ACCESS = Pattern.compile("\\b(\\w+)\\s*\\.\\s*(\\w+)\\b");
+
+	private boolean flattenUniformBlocks;
 
 	@FunctionalInterface
 	public interface IncludeProcessor {
@@ -71,6 +80,7 @@ public class ShaderIncludes {
 		clone.includePaths.addAll(includePaths);
 		clone.includeMap.putAll(includeMap);
 		clone.uniformBuffers.addAll(uniformBuffers);
+		clone.flattenUniformBlocks = flattenUniformBlocks;
 		return clone;
 	}
 
@@ -292,10 +302,41 @@ public class ShaderIncludes {
 		}
 
 		String source = loadFileInternal(path);
-		if (source != null)
+		if (source != null) {
+			if (flattenUniformBlocks && includeType == Type.GLSL) {
+				source = flattenUniformBlockInstances(source);
+				if (SHADER_DUMP_PATH != null)
+					SHADER_DUMP_PATH.resolve(path).mkdirs().writeString(source);
+			}
 			return source;
+		}
 
 		throw new IOException("Failed to load file: " + path);
+	}
+
+	public ShaderIncludes flattenUniformBlocks(boolean enabled) {
+		flattenUniformBlocks = enabled;
+		return this;
+	}
+
+	private static String flattenUniformBlockInstances(String source) {
+		// Run after expanding includes, including generated getters. Preserve line numbers for diagnostics.
+		source = COMMENTS.matcher(source).replaceAll(m -> m.group().replaceAll("[^\\r\\n]", " "));
+		Map<String, String> members = new HashMap<>();
+		source = NAMED_UNIFORM_BLOCK.matcher(source).replaceAll(block -> {
+			String instance = block.group(4);
+			// Our blocks declare one member per statement; array and struct-valued members remain intact.
+			String body = BLOCK_MEMBER.matcher(block.group(2)).replaceAll(member -> {
+				String name = member.group(1);
+				String replacement = instance + "_" + name;
+				members.put(instance + "." + name, replacement);
+				return Matcher.quoteReplacement(replacement + member.group(2));
+			});
+			return Matcher.quoteReplacement(block.group(1) + body + block.group(3) + block.group(5));
+		});
+		return MEMBER_ACCESS.matcher(source).replaceAll(access -> Matcher.quoteReplacement(
+			members.getOrDefault(access.group(1) + "." + access.group(2), access.group())
+		));
 	}
 
 	public ShaderIncludes addIncludePath(Class<?> clazz) {
