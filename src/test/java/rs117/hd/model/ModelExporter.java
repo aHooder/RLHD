@@ -66,18 +66,45 @@ import org.lwjgl.assimp.AIVector3D;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.Pointer;
 import rs117.hd.HdPlugin;
-import rs117.hd.data.materials.Material;
+import rs117.hd.renderer.legacy.LegacyModelPusher;
+import rs117.hd.renderer.legacy.LegacySceneContext;
+import rs117.hd.scene.MaterialManager;
 import rs117.hd.scene.ModelOverrideManager;
 import rs117.hd.scene.SceneContext;
 import rs117.hd.scene.TextureManager;
+import rs117.hd.scene.materials.Material;
 import rs117.hd.scene.model_overrides.ModelOverride;
 import rs117.hd.utils.ColorUtils;
 import rs117.hd.utils.HDUtils;
 import rs117.hd.utils.ModelHash;
-import rs117.hd.utils.Vector;
 
 import static net.runelite.api.Perspective.*;
-import static org.lwjgl.assimp.Assimp.*;
+import static org.lwjgl.assimp.Assimp.AI_MATKEY_GLTF_ALPHAMODE;
+import static org.lwjgl.assimp.Assimp.AI_MATKEY_NAME;
+import static org.lwjgl.assimp.Assimp._AI_MATKEY_TEXTURE_BASE;
+import static org.lwjgl.assimp.Assimp.aiAttachLogStream;
+import static org.lwjgl.assimp.Assimp.aiDefaultLogStream_STDERR;
+import static org.lwjgl.assimp.Assimp.aiDetachLogStream;
+import static org.lwjgl.assimp.Assimp.aiEnableVerboseLogging;
+import static org.lwjgl.assimp.Assimp.aiExportScene;
+import static org.lwjgl.assimp.Assimp.aiGetErrorString;
+import static org.lwjgl.assimp.Assimp.aiGetExportFormatCount;
+import static org.lwjgl.assimp.Assimp.aiGetExportFormatDescription;
+import static org.lwjgl.assimp.Assimp.aiGetPredefinedLogStream;
+import static org.lwjgl.assimp.Assimp.aiPTI_String;
+import static org.lwjgl.assimp.Assimp.aiPrimitiveType_TRIANGLE;
+import static org.lwjgl.assimp.Assimp.aiProcess_EmbedTextures;
+import static org.lwjgl.assimp.Assimp.aiProcess_FindInvalidData;
+import static org.lwjgl.assimp.Assimp.aiProcess_JoinIdenticalVertices;
+import static org.lwjgl.assimp.Assimp.aiProcess_PreTransformVertices;
+import static org.lwjgl.assimp.Assimp.aiProcess_ValidateDataStructure;
+import static org.lwjgl.assimp.Assimp.aiReleaseExportFormatDescription;
+import static org.lwjgl.assimp.Assimp.aiTextureType_AMBIENT_OCCLUSION;
+import static org.lwjgl.assimp.Assimp.aiTextureType_DIFFUSE;
+import static org.lwjgl.assimp.Assimp.aiTextureType_DIFFUSE_ROUGHNESS;
+import static org.lwjgl.assimp.Assimp.aiTextureType_DISPLACEMENT;
+import static org.lwjgl.assimp.Assimp.aiTextureType_NONE;
+import static org.lwjgl.assimp.Assimp.aiTextureType_NORMALS;
 import static org.lwjgl.system.MemoryUtil.memAddress0;
 import static org.lwjgl.system.MemoryUtil.memAlloc;
 import static org.lwjgl.system.MemoryUtil.memAllocFloat;
@@ -87,8 +114,9 @@ import static org.lwjgl.system.MemoryUtil.memPutAddress;
 import static org.lwjgl.system.MemoryUtil.memSlice;
 import static org.lwjgl.system.MemoryUtil.memUTF8;
 import static org.lwjgl.system.MemoryUtil.nmemFree;
-import static rs117.hd.model.ModelPusher.MAX_MATERIAL_COUNT;
-import static rs117.hd.model.ModelPusher.interpolateHSL;
+import static rs117.hd.renderer.zone.SceneUploader.interpolateHSL;
+import static rs117.hd.scene.materials.Material.MAX_MATERIAL_INDEX;
+import static rs117.hd.utils.MathUtils.*;
 import static rs117.hd.utils.ResourcePath.path;
 
 @Slf4j
@@ -133,7 +161,10 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 	private ModelOverrideManager modelOverrideManager;
 
 	@Inject
-	private ModelPusher modelPusher;
+	private LegacyModelPusher modelPusher;
+
+	@Inject
+	private MaterialManager materialManager;
 
 	private int clientTickCount;
 	private int selectedIndex;
@@ -181,18 +212,14 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 	}
 
 	public void exportModel(Map.Entry<String, String> objectName, Object object) {
-		textureManager.ensureMaterialsAreLoaded();
+		if (materialManager.uboMaterials == null)
+			return;
 
 		SceneContext currentSceneContext = plugin.getSceneContext();
 		if (currentSceneContext == null) {
 			log.debug("Scene context is null");
 			return;
 		}
-
-		TextureProvider textureProvider = null;
-		while (textureProvider == null)
-			textureProvider = client.getTextureProvider();
-		var vanillaImage = new BufferedImage(128, 128, BufferedImage.TYPE_INT_ARGB);
 
 		long formatCount = aiGetExportFormatCount();
 		log.debug("Supported formats: {}", formatCount);
@@ -242,6 +269,10 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 
 		var cleanup = new ArrayList<Long>();
 		var cleanupFaceBuffers = new ArrayList<AIFace.Buffer>();
+		var sceneContext = new LegacySceneContext(
+			client, currentSceneContext.scene,
+			currentSceneContext.expandedMapLoadingChunks, null
+		);
 		try (var stack = MemoryStack.stackPush()) {
 			int totalFaceCount = modelInfos.stream().mapToInt(info -> info.model.getFaceCount()).sum();
 			int totalVertexCount = totalFaceCount * 3;
@@ -269,16 +300,8 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 			scene.mRootNode(rootNode);
 
 			var meshList = new ArrayList<AIMesh>();
-			var materialList = new ArrayList<TextureManager.MaterialEntry>();
+			var materialList = new ArrayList<Material>();
 
-			// Dummy scene context for writing model data
-			var sceneContext = new SceneContext(
-				client,
-				client.getScene(),
-				currentSceneContext.expandedMapLoadingChunks,
-				false,
-				null
-			);
 			boolean worldUvWarningSent = false;
 			for (ModelInfo modelInfo : modelInfos) {
 				long hash = getHash(modelInfo.object);
@@ -299,16 +322,16 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 				int numFaces = numVertices / 3;
 				assert numUvs == numVertices || numUvs == 0;
 
-				var meshDataMap = new HashMap<TextureManager.MaterialEntry, MeshData>();
+				var meshDataMap = new HashMap<Material, MeshData>();
 				for (int face = 0; face < numFaces; face++) {
 					int faceVertexOffset = vertexOffset + face * 3;
 					int faceUvOffset = uvOffset + face * 3;
 
 					int materialData = 0;
-					TextureManager.MaterialEntry materialEntry = textureManager.materialUniformEntries.get(0);
+					Material materialEntry = Material.NONE;
 					if (numUvs > 0) {
-						materialData = (int) sceneContext.stagingBufferUvs.getBuffer().get(faceUvOffset * 4 + 3);
-						materialEntry = textureManager.materialUniformEntries.get(materialData >> 12 & MAX_MATERIAL_COUNT);
+						materialData = Float.floatToRawIntBits(sceneContext.stagingBufferUvs.getBuffer().get(faceUvOffset * 4 + 3));
+						materialEntry = materialManager.uboMaterials.materials[materialData >>> 21 & MAX_MATERIAL_INDEX];
 					}
 
 					var buffers = meshDataMap.get(materialEntry);
@@ -364,7 +387,7 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 						}
 
 						if (vanillaUvs) {
-							// Since vanilla UVs are computed in the geometry shader in HD, we can't use the data from ModelPusher
+							// The legacy upload stores a texture triangle rather than the final UV coordinates
 							fillVanillaUvs(uvs, model, face);
 						} else {
 							for (int i = 0; i < 3; i++)
@@ -374,14 +397,15 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 									.put(0);
 						}
 
+						float[] textureScale = (float[]) materialProperty(materialEntry, "textureScale");
 						for (int i = 0; i < 3; i++) {
 							int offset = uvs.position() - 9 + i * 3;
 							float u = uvs.get(offset);
 							float v = uvs.get(offset + 1);
 
 							// Apply HD's texture scale parameter
-							u = (u - .5f) / materialEntry.material.textureScale[0] + .5f;
-							v = (v - .5f) / materialEntry.material.textureScale[1] + .5f;
+							u = (u - .5f) / textureScale[0] + .5f;
+							v = (v - .5f) / textureScale[1] + .5f;
 
 							// Flip UVs horizontally & vertically to match exported image orientation
 							u = 1 - u;
@@ -413,17 +437,17 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 
 					float[] flatNormal = null;
 					for (int i = 0; i < 3; i++) {
-						if (Vector.dot(n[i], n[i]) == 0) {
+						if (dot(n[i], n[i]) == 0) {
 							if (flatNormal == null) {
 								// Compute flat normal
 								flatNormal = new float[3];
 								float[] a = new float[3];
 								float[] b = new float[3];
-								Vector.subtract(a, v[1], v[0]);
-								Vector.subtract(b, v[2], v[0]);
-								Vector.cross(flatNormal, a, b);
+								subtract(a, v[1], v[0]);
+								subtract(b, v[2], v[0]);
+								cross(flatNormal, a, b);
 
-								float len = Vector.length(flatNormal);
+								float len = length(flatNormal);
 								if (len == 0) {
 									// Force invalid faces to have valid normals, so Assimp doesn't delete all normals
 									flatNormal[1] = -1;
@@ -436,7 +460,7 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 							n[i] = flatNormal;
 						} else {
 							// Normalize
-							Vector.normalize(n[i]);
+							normalize(n[i], n[i]);
 						}
 
 						normals.put(n[i]);
@@ -465,18 +489,16 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 
 			var materialPointers = stack.callocPointer(materialList.size());
 			var expandedMaterials = new ArrayList<Material>();
-			for (var materialEntry : materialList) {
-				var material = materialEntry.material;
+			for (var material : materialList) {
 				var aiMaterial = AIMaterial.calloc(stack);
 				materialPointers.put(aiMaterial);
 
 				Material[] materialTextures = {
-					material.parent != null ? material.parent : material,
-					material.normalMap,
-					material.displacementMap,
-					material.roughnessMap,
-					material.ambientOcclusionMap
-//					material.flowMap // Has an erroneous default value I think
+					material.resolveTextureOwner(),
+					(Material) materialProperty(material, "normalMap"),
+					(Material) materialProperty(material, "displacementMap"),
+					(Material) materialProperty(material, "roughnessMap"),
+					(Material) materialProperty(material, "ambientOcclusionMap")
 				};
 
 				// Writing properties is unfortunately quite cumbersome
@@ -485,7 +507,7 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 				AIString propertyKey;
 				ByteBuffer propertyBuffer;
 				propertyKey = AIString.malloc(stack).data(stack.UTF8(AI_MATKEY_NAME));
-				var materialName = AIString.malloc(stack).data(stack.UTF8(material.name()));
+				var materialName = AIString.malloc(stack).data(stack.UTF8(material.name));
 				propertyBuffer = stack.malloc(AIMaterialProperty.ALIGNOF, AIMaterialProperty.SIZEOF)
 					// property name aiString
 					.put(memByteBuffer(propertyKey))
@@ -522,25 +544,24 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 					.put(memByteBuffer(stack.pointers(alphaMode)));
 				materialPropertyPointers.add(memAddress0(propertyBuffer));
 
-				for (var texture : materialTextures) {
-					if (texture == null || texture == Material.NONE || expandedMaterials.contains(texture))
+				int[] textureTypes = {
+					aiTextureType_DIFFUSE, aiTextureType_NORMALS, aiTextureType_DISPLACEMENT,
+					aiTextureType_DIFFUSE_ROUGHNESS, aiTextureType_AMBIENT_OCCLUSION
+				};
+				for (int i = 0; i < materialTextures.length; i++) {
+					var texture = materialTextures[i];
+					if (texture == null)
+						continue;
+					texture = texture.resolveTextureOwner();
+					if (texture.textureLayer < 0)
 						continue;
 
-					int index = expandedMaterials.size();
-					expandedMaterials.add(texture);
-
-					int type = aiTextureType_DIFFUSE; // FBX doesn't like aiTextureType_BASE_COLOR;
-					if (texture == material.normalMap) {
-						type = aiTextureType_NORMALS;
-					} else if (texture == material.displacementMap) {
-						type = aiTextureType_DISPLACEMENT;
-					} else if (texture == material.roughnessMap) {
-						type = aiTextureType_DIFFUSE_ROUGHNESS;
-					} else if (texture == material.ambientOcclusionMap) {
-						type = aiTextureType_AMBIENT_OCCLUSION;
-					} else if (texture == material.flowMap) {
-						type = aiTextureType_UNKNOWN;
+					int index = expandedMaterials.indexOf(texture);
+					if (index == -1) {
+						index = expandedMaterials.size();
+						expandedMaterials.add(texture);
 					}
+					int type = textureTypes[i];
 
 					propertyKey = AIString.malloc(stack).data(stack.UTF8(_AI_MATKEY_TEXTURE_BASE));
 					var materialTextureUri = AIString.malloc(stack).data(stack.UTF8("*" + index)); // reference embedded texture by index
@@ -580,44 +601,14 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 
 			var texturePointers = stack.callocPointer(expandedMaterials.size());
 			for (Material material : expandedMaterials) {
-				String textureName = material.name().toLowerCase();
+				String textureName = material.name.toLowerCase();
 
-				BufferedImage textureImage = null;
-				// Check if HD provides a texture for the material
-				if (material != Material.VANILLA) {
-					textureImage = textureManager.loadTextureImage(material);
-					if (textureImage == null && material.vanillaTextureIndex == -1) {
-						log.warn("No texture found for material: {}", material);
-						continue;
-					}
-				}
-
-				// Fallback to loading a vanilla image
-				if (textureImage == null) {
-					int vanillaIndex = material.vanillaTextureIndex;
-					var texture = textureProvider.getTextures()[vanillaIndex];
-					if (texture != null) {
-						int[] pixels = textureProvider.load(vanillaIndex);
-						if (pixels == null) {
-							log.warn("No pixels for vanilla texture at index {}", vanillaIndex);
-							continue;
-						}
-						int resolution = (int) Math.round(Math.sqrt(pixels.length));
-						if (resolution * resolution != pixels.length) {
-							log.warn("Unknown dimensions for vanilla texture at index {} ({} pixels)", vanillaIndex, pixels.length);
-							continue;
-						}
-
-						for (int j = 0; j < pixels.length; j++) {
-							int rgb = pixels[j];
-							// Black is considered transparent in vanilla, with anything else being fully opaque
-							int alpha = rgb == 0 ? 0 : 0xFF;
-							vanillaImage.setRGB(j % 128, j / 128, alpha << 24 | rgb & 0xFFFFFF);
-						}
-
-						textureImage = vanillaImage;
-					}
-				}
+				var textureOwner = material.resolveTextureOwner();
+				String textureFile = textureOwner.getTextureName();
+				BufferedImage textureImage = textureFile == null ? null : textureManager.loadTexture(textureFile);
+				boolean vanillaImage = textureImage == null;
+				if (vanillaImage)
+					textureImage = textureManager.loadTexture(null, textureOwner.vanillaTextureIndex);
 
 				if (textureImage == null) {
 					log.error("Failed to load texture for material: {}", material);
@@ -631,7 +622,7 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 				} else {
 					AffineTransform t = new AffineTransform();
 					// Flip vanilla textures horizontally
-					if (textureImage == vanillaImage) {
+					if (vanillaImage) {
 						t.translate(textureImage.getWidth(), 0);
 						t.scale(-1, 1);
 					}
@@ -720,6 +711,8 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 					.build());
 			}
 		} finally {
+			sceneContext.destroy();
+			sceneContext.staticUnorderedModelBuffer.destroy();
 			for (long address : cleanup)
 				if (address != 0)
 					nmemFree(address);
@@ -816,6 +809,17 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 				.put(vertexNormalsX[triC]).put(vertexNormalsY[triC]).put(vertexNormalsZ[triC]);
 
 			fillVanillaUvs(uvs, model, face);
+		}
+	}
+
+	// This development-only exporter reads authored material data without widening the production API.
+	private static Object materialProperty(Material material, String name) {
+		try {
+			var field = Material.class.getDeclaredField(name);
+			field.setAccessible(true);
+			return field.get(material);
+		} catch (ReflectiveOperationException ex) {
+			throw new IllegalStateException("Unable to read material property " + name, ex);
 		}
 	}
 
@@ -980,7 +984,7 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 		int camY = client.getCameraY();
 		int camZ = client.getCameraZ(); // up
 
-		selectedIndex = HDUtils.clamp(selectedIndex, 0, Math.max(0, hoverSet.size() - 1));
+		selectedIndex = clamp(selectedIndex, 0, Math.max(0, hoverSet.size() - 1));
 		selectedObject = hoverSet.stream()
 			.map(e -> {
 				int x = 0, y = 0, z = 0;
@@ -1186,7 +1190,7 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 
 	private int getBakedOrientation(Object object, Renderable renderable) {
 		if (object instanceof GameObject)
-			return HDUtils.getBakedOrientation(((GameObject) object).getConfig());
+			return HDUtils.getModelPreOrientation(((GameObject) object).getConfig());
 		if (object instanceof WallObject) {
 			var wallObject = (WallObject) object;
 			return renderable == wallObject.getRenderable1() ?
@@ -1194,9 +1198,9 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 				HDUtils.convertWallObjectOrientation(wallObject.getOrientationB());
 		}
 		if (object instanceof DecorativeObject)
-			return HDUtils.getBakedOrientation(((DecorativeObject) object).getConfig());
+			return HDUtils.getModelPreOrientation(((DecorativeObject) object).getConfig());
 		if (object instanceof GroundObject)
-			return HDUtils.getBakedOrientation(((GroundObject) object).getConfig());
+			return HDUtils.getModelPreOrientation(((GroundObject) object).getConfig());
 		return 0;
 	}
 

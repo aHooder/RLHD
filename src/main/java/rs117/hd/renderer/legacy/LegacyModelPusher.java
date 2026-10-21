@@ -165,7 +165,7 @@ public class LegacyModelPusher {
 		@Nullable Tile tile,
 		int uuid,
 		Model model,
-		@Nonnull ModelOverride modelOverride,
+		ModelOverride modelOverride,
 		int preOrientation,
 		boolean needsCaching
 	) {
@@ -621,25 +621,5 @@ public class LegacyModelPusher {
 		data[10] = Float.floatToIntBits(zVertices[triC]);
 		data[11] = color3;
 		return data;
-	}
-
-	public static int interpolateHSL(int hsl, byte hue2, byte sat2, byte lum2, byte lerp) {
-		int hue = hsl >> 10 & 63;
-		int sat = hsl >> 7 & 7;
-		int lum = hsl & 127;
-		int var9 = lerp & 255;
-		if (hue2 != -1) {
-			hue += var9 * (hue2 - hue) >> 7;
-		}
-
-		if (sat2 != -1) {
-			sat += var9 * (sat2 - sat) >> 7;
-		}
-
-		if (lum2 != -1) {
-			lum += var9 * (lum2 - lum) >> 7;
-		}
-
-		return (hue << 10 | sat << 7 | lum) & 65535;
 	}
 }

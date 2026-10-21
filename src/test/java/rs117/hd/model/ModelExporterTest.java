@@ -12,6 +12,7 @@ import net.runelite.client.callback.ClientThread;
 import net.runelite.client.externalplugins.ExternalPluginManager;
 import org.slf4j.LoggerFactory;
 import rs117.hd.HdPlugin;
+import rs117.hd.renderer.legacy.LegacyModelPusher;
 import rs117.hd.utils.DeveloperTools;
 import rs117.hd.utils.ModelHash;
 
@@ -29,7 +30,7 @@ public class ModelExporterTest {
 		ExternalPluginManager.loadBuiltin(HdPlugin.class);
 		RuneLite.main(args);
 		((Logger) LoggerFactory.getLogger(ModelExporterTest.class)).setLevel(Level.DEBUG);
-		((Logger) LoggerFactory.getLogger(ModelPusher.class)).setLevel(Level.DEBUG);
+		((Logger) LoggerFactory.getLogger(LegacyModelPusher.class)).setLevel(Level.DEBUG);
 		((Logger) LoggerFactory.getLogger(ModelExporter.class)).setLevel(Level.DEBUG);
 	}
 
@@ -90,6 +91,10 @@ public class ModelExporterTest {
 					public Node getPrevious() {return null;}
 
 					public int getModelHeight() {return 0;}
+
+					public int getRenderMode() {return 0;}
+
+					public int getAnimationHeightOffset() {return 0;}
 
 					public void setModelHeight(int i) {}
 
