@@ -355,13 +355,17 @@ public class LegacyModelPusher {
 						uvType = isVanillaUVMapped && textureFaces[face] != -1 ? UvType.VANILLA : UvType.GEOMETRY;
 				}
 
+				final float[] uvData = sceneContext.modelFaceUvs;
+				boolean customUvs = modelOverride.fillUvOverride(uvData, model, face);
+				if (customUvs)
+					uvType = UvType.GEOMETRY;
 				int materialData = material.packMaterialData(faceOverride, uvType, false);
 
-				final float[] uvData = sceneContext.modelFaceUvs;
 				if (materialData == 0) {
 					Arrays.fill(uvData, 0);
 				} else {
-					faceOverride.fillUvsForFace(uvData, model, preOrientation, uvType, face, sceneContext.modelFaceNormals);
+					if (!customUvs)
+						faceOverride.fillUvsForFace(uvData, model, preOrientation, uvType, face, sceneContext.modelFaceNormals);
 					uvData[3] = uvData[7] = uvData[11] = Float.intBitsToFloat(materialData);
 				}
 

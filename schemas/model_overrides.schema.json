@@ -64,6 +64,13 @@
         "type": "string",
         "description": "Case-sensitive name of the material to apply to textured faces."
       },
+      "uvs": {
+        "type": "array",
+        "description": "Custom UVs for the full model: [u1, v1, u2, v2, ...].",
+        "items": {
+          "type": "number"
+        }
+      },
       "uvType": {
         "type": "string",
         "description": "What to base UV coordinates on for object texturing. Defaults to GEOMETRY.",

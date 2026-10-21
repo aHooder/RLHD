@@ -1795,16 +1795,19 @@ public class SceneUploader implements AutoCloseable {
 			if (uvType == UvType.VANILLA && (textureId == -1 || textureFace == -1))
 				uvType = UvType.GEOMETRY;
 
-			final int materialData = material.packMaterialData(faceOverride, uvType, false);
-
-			final float[] faceUVs;
-			if (uvType == UvType.VANILLA) {
-				computeFaceUvsInline(faceUVs = modelUvs, model, textureFace, triangleA, triangleB, triangleC, null);
+			float[] faceUVs = modelUvs;
+			boolean hasCustomUvs = modelOverride.fillUvOverride(modelUvs, model, face);
+			if (hasCustomUvs) {
+				uvType = UvType.GEOMETRY;
+			} else if (uvType == UvType.VANILLA) {
+				computeFaceUvsInline(faceUVs, model, textureFace, triangleA, triangleB, triangleC, null);
 			} else if (uvType != UvType.GEOMETRY) {
-				faceOverride.fillUvsForFace(faceUVs = modelUvs, model, preOrientation, uvType, face, workingSpace);
+				faceOverride.fillUvsForFace(faceUVs, model, preOrientation, uvType, face, workingSpace);
 			} else {
 				faceUVs = GEOMETRY_UVS;
 			}
+
+			final int materialData = material.packMaterialData(faceOverride, uvType, false);
 
 			final boolean shouldRotateNormals;
 			boolean shouldCalculateFaceNormal;
@@ -2234,7 +2237,7 @@ public class SceneUploader implements AutoCloseable {
 			int transparency = readFaceTransparency(modelTransparency, transparencies, face);
 			final int textureFace = textureFaces != null ? textureFaces[face] : -1;
 			final int textureId = isVanillaTextured ? faceTextures[face] : -1;
-			final UvType uvType = faceUVTypes.get(face);
+			UvType uvType = faceUVTypes.get(face);
 			final Material material = faceMaterials.get(face);
 			final ModelOverride faceOverride = faceOverrides.get(face);
 
@@ -2247,8 +2250,6 @@ public class SceneUploader implements AutoCloseable {
 				color3 = faceOverride.modifyColor(color3);
 			}
 
-			final int materialData = material.packMaterialData(faceOverride, uvType, false);
-
 			final int triangleA = indices1[face];
 			final int vertexOffsetA = triangleA * 3;
 
@@ -2258,14 +2259,19 @@ public class SceneUploader implements AutoCloseable {
 			final int triangleC = indices3[face];
 			final int vertexOffsetC = triangleC * 3;
 
-			final float[] faceUVs;
-			if (uvType == UvType.VANILLA) {
-				computeFaceUvsInline(faceUVs = modelUvs, model, textureFace, triangleA, triangleB, triangleC, modelProjected);
+			float[] faceUVs = modelUvs;
+			boolean customUvs = modelOverride.fillUvOverride(faceUVs, model, face);
+			if (customUvs) {
+				uvType = UvType.GEOMETRY;
+			} else if (uvType == UvType.VANILLA) {
+				computeFaceUvsInline(faceUVs, model, textureFace, triangleA, triangleB, triangleC, modelProjected);
 			} else if (uvType != UvType.GEOMETRY) {
-				faceOverride.fillUvsForFace(faceUVs = modelUvs, model, preOrientation, uvType, face, workingSpace);
+				faceOverride.fillUvsForFace(faceUVs, model, preOrientation, uvType, face, workingSpace);
 			} else {
 				faceUVs = GEOMETRY_UVS;
 			}
+
+			final int materialData = material.packMaterialData(faceOverride, uvType, false);
 
 			if (!isShadow) {
 				final boolean shouldRotateNormals;

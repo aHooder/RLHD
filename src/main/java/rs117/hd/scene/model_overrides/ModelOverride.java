@@ -57,6 +57,7 @@ public class ModelOverride
 	public Material baseMaterial = Material.NONE;
 	public Material textureMaterial = Material.NONE;
 	public UvType uvType = UvType.VANILLA;
+	public float[] uvs;
 	public float uvScale = 1;
 	public int uvOrientation = 0;
 	public int uvOrientationX = 0;
@@ -296,6 +297,7 @@ public class ModelOverride
 			baseMaterial,
 			textureMaterial,
 			uvType,
+			uvs,
 			uvScale,
 			uvOrientation,
 			uvOrientationX,
@@ -485,6 +487,19 @@ public class ModelOverride
 			out[i] = x + .5f;
 			out[i + 1] = z + .5f;
 		}
+	}
+
+	public boolean fillUvOverride(float[] out, Model model, int face) {
+		if (uvs == null || uvs.length != model.getFaceCount() * 6)
+			return false;
+
+		for (int i = 0; i < 3; i++) {
+			out[i * 4] = uvs[face * 6 + i * 2];
+			out[i * 4 + 1] = uvs[face * 6 + i * 2 + 1];
+			out[i * 4 + 2] = 0;
+		}
+
+		return true;
 	}
 
 	public void fillUvsForFace(float[] out, Model model, int orientation, UvType uvType, int face, float[] workingSpace) {
