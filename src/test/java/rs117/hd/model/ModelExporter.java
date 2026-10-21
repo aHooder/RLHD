@@ -493,10 +493,25 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 //			p.getPlayerComposition().getEquipmentIds() // 12 slots, convert IDs to model IDs
 //			client.loadModelData(id)
 
-			if (!EMBED_TEXTURES)
+			if (!EMBED_TEXTURES) {
+				// Identify auxiliary maps by their usage, not naming conventions such as _N or _D.
+				// They are exported below in their owners' texture slots, not as standalone materials.
+				var textureMaps = new HashSet<Material>();
+				String[] mapProperties = { "normalMap", "displacementMap", "roughnessMap", "ambientOcclusionMap" };
+				for (var material : MaterialManager.MATERIALS) {
+					for (String property : mapProperties) {
+						var map = (Material) materialProperty(material, property);
+						if (map != null) {
+							textureMaps.add(map);
+							textureMaps.add(map.resolveTextureOwner());
+						}
+					}
+				}
+				// Keep materials already assigned to exported geometry, even if also used as a map.
 				for (var material : MaterialManager.MATERIALS)
-					if (!materialList.contains(material))
+					if (!textureMaps.contains(material) && !materialList.contains(material))
 						materialList.add(material);
+			}
 
 			var textureDirectory = path("model-exports", "textures").toPath().toAbsolutePath().normalize();
 			if (!EMBED_TEXTURES)
