@@ -124,7 +124,6 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 	private static final Color OUTLINE_COLOR = new Color(0xFFFF00FF, true);
 	private static final int OUTLINE_WIDTH = 4;
 	private static final int OUTLINE_FEATHER = 4;
-	private static final int EXPORTER_KEY = KeyCode.KC_CONTROL;
 	private static final float[] ZEROS = new float[12];
 
 	@Inject
@@ -281,6 +280,11 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 			cleanup.add(memAddress0(vertices));
 			var uvs = memAllocFloat(totalVertexCount * 3);
 			cleanup.add(memAddress0(uvs));
+			// UV1 is immutable corner identity, independent of vertex welding and material grouping.
+			var cornerIds = memAllocFloat(totalVertexCount * 3);
+			cleanup.add(memAddress0(cornerIds));
+			for (int corner = 0; corner < totalVertexCount; corner++)
+				cornerIds.put(corner).put(totalVertexCount).put(0);
 			var normals = memAllocFloat(totalVertexCount * 3);
 			cleanup.add(memAddress0(normals));
 			var colors = memAllocFloat(totalVertexCount * 4);
@@ -355,8 +359,8 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 							.mColors(stack.pointers(memAddress0(colors)))
 							.mMaterialIndex(materialIndex)
 							.mName(s -> s.data(stack.UTF8(meshName)))
-							.mNumUVComponents(stack.ints(2))
-							.mTextureCoords(stack.pointers(memAddress0(uvs)));
+							.mNumUVComponents(stack.ints(2, 2))
+							.mTextureCoords(stack.pointers(memAddress0(uvs), memAddress0(cornerIds)));
 
 						var faces = AIFace.malloc(numFaces);
 						cleanupFaceBuffers.add(faces);
@@ -813,7 +817,7 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 	}
 
 	// This development-only exporter reads authored material data without widening the production API.
-	private static Object materialProperty(Material material, String name) {
+	static Object materialProperty(Material material, String name) {
 		try {
 			var field = Material.class.getDeclaredField(name);
 			field.setAccessible(true);
@@ -1060,7 +1064,7 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 	private void updateHoverSet() {
 		hoverSet.clear();
 
-		if (!client.isKeyPressed(EXPORTER_KEY))
+		if (!isExporterShortcutHeld())
 			return;
 
 		Point canvasPoint = client.getMouseCanvasPosition();
@@ -1306,7 +1310,7 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 
 	@Override
 	public MouseWheelEvent mouseWheelMoved(MouseWheelEvent event) {
-		if (client.isKeyPressed(EXPORTER_KEY)) {
+		if (isExporterShortcutHeld()) {
 			selectedIndex -= Math.signum(event.getWheelRotation());
 			event.consume();
 		}
@@ -1318,7 +1322,7 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 
 	@Override
 	public void keyPressed(KeyEvent event) {
-		if (!client.isKeyPressed(EXPORTER_KEY))
+		if (!isExporterShortcutHeld())
 			return;
 
 		switch (event.getKeyCode()) {
@@ -1337,6 +1341,10 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 
 	@Override
 	public void keyReleased(KeyEvent event) {}
+
+	private boolean isExporterShortcutHeld() {
+		return client.isKeyPressed(KeyCode.KC_CONTROL) && client.isKeyPressed(KeyCode.KC_SHIFT);
+	}
 
 	private static <T> ArrayList<T> list(T... elements) {
 		var list = new ArrayList<T>();

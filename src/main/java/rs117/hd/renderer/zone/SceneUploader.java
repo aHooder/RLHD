@@ -1645,7 +1645,11 @@ public class SceneUploader implements AutoCloseable {
 
 			int textureId = isVanillaTextured ? faceTextures[face] : -1;
 			boolean isTextured = textureId != -1;
-			if (isTextured) {
+			var customOverride = modelOverride.getCustomOverride(model, face);
+			if (customOverride != null) {
+				faceOverride = customOverride;
+				material = faceOverride.baseMaterial;
+			} else if (isTextured) {
 				uvType = UvType.VANILLA;
 				if (textureMaterial != Material.NONE) {
 					material = textureMaterial;
@@ -2045,16 +2049,16 @@ public class SceneUploader implements AutoCloseable {
 			if (transparency == 255)
 				continue;
 
-			// Hide fake shadows or lighting that is often baked into models by making the fake shadow transparent
-			if (plugin.configHideFakeShadows && modelOverride.hideVanillaShadows && HDUtils.isBakedGroundShading(model, f))
-				continue;
-
 			UvType uvType = UvType.GEOMETRY;
 			Material material = baseMaterial;
 			ModelOverride faceOverride = modelOverride;
 
 			final int textureId = isVanillaTextured ? faceTextures[f] : -1;
-			if (textureId != -1) {
+			var customOverride = modelOverride.getCustomOverride(model, f);
+			if (customOverride != null) {
+				faceOverride = customOverride;
+				material = faceOverride.baseMaterial;
+			} else if (textureId != -1) {
 				uvType = UvType.VANILLA;
 				if (textureMaterial != Material.NONE) {
 					material = textureMaterial;
@@ -2098,6 +2102,10 @@ public class SceneUploader implements AutoCloseable {
 			// Fall back to geometry UVs if vanilla UVs aren't valid
 			if (uvType == UvType.VANILLA && (textureId == -1 || textureFaces == null || textureFaces[f] == -1))
 				uvType = UvType.GEOMETRY;
+
+			// Hide baked ground shading using the selected face's override.
+			if (plugin.configHideFakeShadows && faceOverride.hideVanillaShadows && HDUtils.isBakedGroundShading(model, f))
+				continue;
 
 			if (faceOverride.modifiesAlpha) {
 				transparency = 255 - faceOverride.modifyAlpha(255 - transparency);
@@ -2301,7 +2309,7 @@ public class SceneUploader implements AutoCloseable {
 					);
 				}
 
-				if (plugin.configUndoVanillaShading && modelOverride.undoVanillaShading) {
+				if (plugin.configUndoVanillaShading && faceOverride.undoVanillaShading) {
 					color1 = undoVanillaShading(color1, plugin.configLegacyGreyColors, faceNormals[0], faceNormals[1], faceNormals[2]);
 					color2 = undoVanillaShading(color2, plugin.configLegacyGreyColors, faceNormals[3], faceNormals[4], faceNormals[5]);
 					color3 = undoVanillaShading(color3, plugin.configLegacyGreyColors, faceNormals[6], faceNormals[7], faceNormals[8]);

@@ -58,6 +58,7 @@ public class ModelOverride
 	public Material textureMaterial = Material.NONE;
 	public UvType uvType = UvType.VANILLA;
 	public float[] uvs;
+	public CustomModelOverride custom;
 	public float uvScale = 1;
 	public int uvOrientation = 0;
 	public int uvOrientationX = 0;
@@ -136,6 +137,8 @@ public class ModelOverride
 	}
 
 	public void normalize(HdPlugin plugin) {
+		if (custom != null)
+			custom.normalize(plugin, this);
 		// Ensure there are no nulls in case of invalid configuration during development
 		if (baseMaterial == null) {
 			if (Props.DEVELOPMENT)
@@ -271,6 +274,11 @@ public class ModelOverride
 			shadowOpacityThreshold = 1;
 
 		shadowNormalBias |= baseMaterial.subsurface > 0 || textureMaterial.subsurface > 0;
+		if (custom != null)
+			for (var override : custom.faceOverrides) {
+				mightHaveTransparency |= override.mightHaveTransparency;
+				mightBeDoubleSided |= override.mightBeDoubleSided;
+			}
 	}
 
 	public void clearIds(){
@@ -298,6 +306,7 @@ public class ModelOverride
 			textureMaterial,
 			uvType,
 			uvs,
+			custom,
 			uvScale,
 			uvOrientation,
 			uvOrientationX,
@@ -490,6 +499,7 @@ public class ModelOverride
 	}
 
 	public boolean fillUvOverride(float[] out, Model model, int face) {
+		float[] uvs = custom == null ? this.uvs : custom.uvs;
 		if (uvs == null || uvs.length != model.getFaceCount() * 6)
 			return false;
 
@@ -500,6 +510,10 @@ public class ModelOverride
 		}
 
 		return true;
+	}
+
+	public ModelOverride getCustomOverride(Model model, int face) {
+		return custom != null && custom.uvs.length == model.getFaceCount() * 6 ? custom.faceOverrides[face] : null;
 	}
 
 	public void fillUvsForFace(float[] out, Model model, int orientation, UvType uvType, int face, float[] workingSpace) {

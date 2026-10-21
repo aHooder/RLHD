@@ -1,13 +1,16 @@
 package rs117.hd.scene;
 
+import com.google.gson.JsonElement;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.BiConsumer;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.gameval.*;
@@ -53,13 +56,24 @@ public class ModelOverrideManager {
 
 	private FileWatcher.UnregisterCallback fileWatcher;
 
+	// Development tools may resolve external assets before Gson parses the definitions.
+	@Setter
+	private BiConsumer<ResourcePath, JsonElement> developmentJsonProcessor;
+
 	public void startUp() {
 		fileWatcher = MODEL_OVERRIDES_PATH.watch((path, first) -> clientThread.invoke(() -> {
 			try (var gamevals = gamevalManager.obtainHandle()) {
 				sceneManager.getLoadingLock().lock();
 				sceneManager.completeAllStreaming();
 
-				ModelOverride[] parsedOverrides = path.loadJson(plugin.getGson(), ModelOverride[].class);
+				ModelOverride[] parsedOverrides;
+				if (Props.DEVELOPMENT && developmentJsonProcessor != null) {
+					var json = path.loadJson(plugin.getGson(), JsonElement.class);
+					developmentJsonProcessor.accept(path, json);
+					parsedOverrides = plugin.getGson().fromJson(json, ModelOverride[].class);
+				} else {
+					parsedOverrides = path.loadJson(plugin.getGson(), ModelOverride[].class);
+				}
 				if (parsedOverrides == null)
 					throw new IOException("Empty or invalid: " + path);
 

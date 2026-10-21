@@ -64,9 +64,114 @@
         "type": "string",
         "description": "Case-sensitive name of the material to apply to textured faces."
       },
+      "custom": {
+        "description": "Full-model UVs and per-face overrides, ignored if the UV count does not match. During development, a path relative to model-exports imports UV0 and named materials; Ctrl+Alt+Enter bakes it. Preserve the exported UV1 identity channel and all original triangles. Vertex welding is supported if corner UVs survive. The most prevalent imported material becomes baseMaterial.",
+        "oneOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "uvs"
+            ],
+            "properties": {
+              "uvs": {
+                "type": "array",
+                "minItems": 6,
+                "items": {
+                  "type": "number"
+                }
+              },
+              "materials": {
+                "type": "array",
+                "description": "Unspecified properties inherit from the parent. Faces use material or the parent's baseMaterial, ignoring textureMaterial and automatic material/color selection.",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "faces"
+                  ],
+                  "properties": {
+                    "material": {
+                      "type": "string"
+                    },
+                    "faces": {
+                      "type": "array",
+                      "items": {
+                        "oneOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^[0-9]+-[0-9]+$"
+                          }
+                        ]
+                      }
+                    },
+                    "description": { "$ref": "#/items/properties/description" },
+                    "uvType": { "$ref": "#/items/properties/uvType" },
+                    "uvScale": { "$ref": "#/items/properties/uvScale" },
+                    "uvOrientation": { "$ref": "#/items/properties/uvOrientation" },
+                    "uvOrientationX": { "$ref": "#/items/properties/uvOrientationX" },
+                    "uvOrientationY": { "$ref": "#/items/properties/uvOrientationY" },
+                    "uvOrientationZ": { "$ref": "#/items/properties/uvOrientationZ" },
+                    "rotate": { "$ref": "#/items/properties/rotate" },
+                    "hide": { "$ref": "#/items/properties/hide" },
+                    "disableDetailCulling": { "$ref": "#/items/properties/disableDetailCulling" },
+                    "retainVanillaUvs": { "$ref": "#/items/properties/retainVanillaUvs" },
+                    "forceMaterialChanges": { "$ref": "#/items/properties/forceMaterialChanges" },
+                    "flatNormals": { "$ref": "#/items/properties/flatNormals" },
+                    "upwardsNormals": { "$ref": "#/items/properties/upwardsNormals" },
+                    "hideVanillaShadows": { "$ref": "#/items/properties/hideVanillaShadows" },
+                    "retainVanillaShadowsInPvm": { "$ref": "#/items/properties/retainVanillaShadowsInPvm" },
+                    "hideHdShadowsInPvm": { "$ref": "#/items/properties/hideHdShadowsInPvm" },
+                    "castShadows": { "$ref": "#/items/properties/castShadows" },
+                    "receiveShadows": { "$ref": "#/items/properties/receiveShadows" },
+                    "doubleSidedFaces": { "$ref": "#/items/properties/doubleSidedFaces" },
+                    "terrainVertexSnap": { "$ref": "#/items/properties/terrainVertexSnap" },
+                    "terrainVertexSnapThreshold": { "$ref": "#/items/properties/terrainVertexSnapThreshold" },
+                    "undoVanillaShading": { "$ref": "#/items/properties/undoVanillaShading" },
+                    "hideAsWaterEffect": { "$ref": "#/items/properties/hideAsWaterEffect" },
+                    "shadowOpacityThreshold": { "$ref": "#/items/properties/shadowOpacityThreshold" },
+                    "shadowNormalBias": { "$ref": "#/items/properties/shadowNormalBias" },
+                    "tzHaarRecolorType": { "$ref": "#/items/properties/tzHaarRecolorType" },
+                    "inheritTileColorType": { "$ref": "#/items/properties/inheritTileColorType" },
+                    "windDisplacementMode": { "$ref": "#/items/properties/windDisplacementMode" },
+                    "windDisplacementModifier": { "$ref": "#/items/properties/windDisplacementModifier" },
+                    "invertDisplacementStrength": { "$ref": "#/items/properties/invertDisplacementStrength" },
+                    "depthBias": { "$ref": "#/items/properties/depthBias" },
+                    "disablePrioritySorting": { "$ref": "#/items/properties/disablePrioritySorting" },
+                    "setHue": { "$ref": "#/items/properties/setHue" },
+                    "shiftHue": { "$ref": "#/items/properties/shiftHue" },
+                    "minHue": { "$ref": "#/items/properties/minHue" },
+                    "maxHue": { "$ref": "#/items/properties/maxHue" },
+                    "setSaturation": { "$ref": "#/items/properties/setSaturation" },
+                    "shiftSaturation": { "$ref": "#/items/properties/shiftSaturation" },
+                    "minSaturation": { "$ref": "#/items/properties/minSaturation" },
+                    "maxSaturation": { "$ref": "#/items/properties/maxSaturation" },
+                    "setLightness": { "$ref": "#/items/properties/setLightness" },
+                    "shiftLightness": { "$ref": "#/items/properties/shiftLightness" },
+                    "minLightness": { "$ref": "#/items/properties/minLightness" },
+                    "maxLightness": { "$ref": "#/items/properties/maxLightness" },
+                    "setAlpha": { "$ref": "#/items/properties/setAlpha" },
+                    "shiftAlpha": { "$ref": "#/items/properties/shiftAlpha" },
+                    "minAlpha": { "$ref": "#/items/properties/minAlpha" },
+                    "maxAlpha": { "$ref": "#/items/properties/maxAlpha" },
+                    "heightOffset": { "$ref": "#/items/properties/heightOffset" }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
       "uvs": {
-        "type": "array",
-        "description": "Custom UVs for the full model: [u1, v1, u2, v2, ...].",
+        "type": [ "array", "string" ],
+        "description": "Custom UVs for the full model: [u1, v1, u2, v2, ...]. During development, a string path to an exported model, relative to model-exports, can be specified instead, to load UVs from it. Pressing Ctrl+Alt+Enter will bake the UVs, replacing the specified path with UVs loaded from the model.",
         "items": {
           "type": "number"
         }

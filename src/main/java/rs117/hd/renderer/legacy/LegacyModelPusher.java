@@ -193,7 +193,7 @@ public class LegacyModelPusher {
 		boolean skipUVs =
 			!isVanillaTextured &&
 			baseMaterial.packMaterialData(modelOverride, UvType.GEOMETRY, false) == 0 &&
-			modelOverride.colorOverrides == null;
+			modelOverride.colorOverrides == null && modelOverride.custom == null;
 
 		// ensure capacity upfront
 		sceneContext.stagingBufferVertices.ensureCapacity(bufferSize);
@@ -320,7 +320,11 @@ public class LegacyModelPusher {
 				Material material = baseMaterial;
 				ModelOverride faceOverride = modelOverride;
 
-				if (textureId != -1) {
+				var customOverride = modelOverride.getCustomOverride(model, face);
+				if (customOverride != null) {
+					faceOverride = customOverride;
+					material = faceOverride.baseMaterial;
+				} else if (textureId != -1) {
 					uvType = UvType.VANILLA;
 					if (textureMaterial != Material.NONE) {
 						material = textureMaterial;
@@ -345,9 +349,6 @@ public class LegacyModelPusher {
 						}
 					}
 				}
-
-				if (faceOverride.hide)
-					continue;
 
 				if (material != Material.NONE) {
 					uvType = faceOverride.uvType;
@@ -392,6 +393,9 @@ public class LegacyModelPusher {
 	}
 
 	private void getNormalDataForFace(LegacySceneContext sceneContext, Model model, @Nonnull ModelOverride modelOverride, int face) {
+		var customOverride = modelOverride.getCustomOverride(model, face);
+		if (customOverride != null)
+			modelOverride = customOverride;
 		assert packTerrainData(false, 0, WaterType.NONE, 0) == 0;
 		if (modelOverride.flatNormals || !plugin.configPreserveVanillaNormals && model.getFaceColors3()[face] == -1) {
 			Arrays.fill(sceneContext.modelFaceNormals, 0);
@@ -435,6 +439,11 @@ public class LegacyModelPusher {
 		@Nonnull ModelOverride modelOverride,
 		int face
 	) {
+		var customOverride = modelOverride.getCustomOverride(model, face);
+		if (customOverride != null)
+			modelOverride = customOverride;
+		if (modelOverride.hide)
+			return ZEROED_INTS;
 		if (model.getFaceColors3()[face] == -2)
 			return ZEROED_INTS; // Hide the face
 
@@ -604,6 +613,19 @@ public class LegacyModelPusher {
 					color2 = tzHaarRecolored[1];
 					color3 = tzHaarRecolored[2];
 				}
+			}
+		}
+
+		if (customOverride != null) {
+			if (modelOverride.modifiesColor) {
+				color1 = modelOverride.modifyColor(color1);
+				color2 = modelOverride.modifyColor(color2);
+				color3 = modelOverride.modifyColor(color3);
+			}
+			if (modelOverride.modifiesAlpha) {
+				int alpha = 255 - (packedAlphaPriorityFlags >>> 24);
+				packedAlphaPriorityFlags = (packedAlphaPriorityFlags & 0xFFFFFF) |
+					(255 - modelOverride.modifyAlpha(alpha)) << 24;
 			}
 		}
 
