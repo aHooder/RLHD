@@ -17,6 +17,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -121,6 +122,7 @@ import static rs117.hd.utils.ResourcePath.path;
 
 @Slf4j
 public class ModelExporter extends Overlay implements MouseListener, MouseWheelListener, KeyListener, AutoCloseable {
+	private static final boolean EMBED_TEXTURES = false;
 	private static final Color OUTLINE_COLOR = new Color(0xFFFF00FF, true);
 	private static final int OUTLINE_WIDTH = 4;
 	private static final int OUTLINE_FEATHER = 4;
@@ -491,10 +493,24 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 //			p.getPlayerComposition().getEquipmentIds() // 12 slots, convert IDs to model IDs
 //			client.loadModelData(id)
 
-			var materialPointers = stack.callocPointer(materialList.size());
+			if (!EMBED_TEXTURES)
+				for (var material : MaterialManager.MATERIALS)
+					if (!materialList.contains(material))
+						materialList.add(material);
+
+			var textureDirectory = path("model-exports", "textures").toPath().toAbsolutePath().normalize();
+			if (!EMBED_TEXTURES)
+				Files.createDirectories(textureDirectory);
+
+			// Seven properties per material, each with two AIStrings and an AIMaterialProperty.
+			// The complete material library is too large for the thread-local LWJGL stack.
+			var materialStorage = memAlloc(Math.multiplyExact(max(1, materialList.size()), 32 * 1024));
+			cleanup.add(memAddress0(materialStorage));
+			var materialStack = MemoryStack.create(materialStorage);
+			var materialPointers = materialStack.callocPointer(materialList.size());
 			var expandedMaterials = new ArrayList<Material>();
 			for (var material : materialList) {
-				var aiMaterial = AIMaterial.calloc(stack);
+				var aiMaterial = AIMaterial.calloc(materialStack);
 				materialPointers.put(aiMaterial);
 
 				Material[] materialTextures = {
@@ -510,9 +526,9 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 
 				AIString propertyKey;
 				ByteBuffer propertyBuffer;
-				propertyKey = AIString.malloc(stack).data(stack.UTF8(AI_MATKEY_NAME));
-				var materialName = AIString.malloc(stack).data(stack.UTF8(material.name));
-				propertyBuffer = stack.malloc(AIMaterialProperty.ALIGNOF, AIMaterialProperty.SIZEOF)
+				propertyKey = AIString.malloc(materialStack).data(materialStack.UTF8(AI_MATKEY_NAME));
+				var materialName = AIString.malloc(materialStack).data(materialStack.UTF8(material.name));
+				propertyBuffer = materialStack.malloc(AIMaterialProperty.ALIGNOF, AIMaterialProperty.SIZEOF)
 					// property name aiString
 					.put(memByteBuffer(propertyKey))
 					// texture type
@@ -526,12 +542,12 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 					.putInt(aiPTI_String)
 					// pointer to the data
 					.position(AIMaterialProperty.MDATA) // alignment is important
-					.put(memByteBuffer(stack.pointers(materialName)));
+					.put(memByteBuffer(materialStack.pointers(materialName)));
 				materialPropertyPointers.add(memAddress0(propertyBuffer));
 
-				propertyKey = AIString.malloc(stack).data(stack.UTF8(AI_MATKEY_GLTF_ALPHAMODE));
-				var alphaMode = AIString.malloc(stack).data(stack.UTF8("MASK"));
-				propertyBuffer = stack.malloc(AIMaterialProperty.ALIGNOF, AIMaterialProperty.SIZEOF)
+				propertyKey = AIString.malloc(materialStack).data(materialStack.UTF8(AI_MATKEY_GLTF_ALPHAMODE));
+				var alphaMode = AIString.malloc(materialStack).data(materialStack.UTF8("MASK"));
+				propertyBuffer = materialStack.malloc(AIMaterialProperty.ALIGNOF, AIMaterialProperty.SIZEOF)
 					// property name aiString
 					.put(memByteBuffer(propertyKey))
 					// texture type
@@ -545,7 +561,7 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 					.putInt(aiPTI_String)
 					// pointer to the data
 					.position(AIMaterialProperty.MDATA) // alignment is important
-					.put(memByteBuffer(stack.pointers(alphaMode)));
+					.put(memByteBuffer(materialStack.pointers(alphaMode)));
 				materialPropertyPointers.add(memAddress0(propertyBuffer));
 
 				int[] textureTypes = {
@@ -567,9 +583,11 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 					}
 					int type = textureTypes[i];
 
-					propertyKey = AIString.malloc(stack).data(stack.UTF8(_AI_MATKEY_TEXTURE_BASE));
-					var materialTextureUri = AIString.malloc(stack).data(stack.UTF8("*" + index)); // reference embedded texture by index
-					propertyBuffer = stack.malloc(AIMaterialProperty.ALIGNOF, AIMaterialProperty.SIZEOF)
+					propertyKey = AIString.malloc(materialStack).data(materialStack.UTF8(_AI_MATKEY_TEXTURE_BASE));
+					String textureUri = EMBED_TEXTURES ? "*" + index :
+						textureDirectory.resolve(texture.name.toLowerCase(java.util.Locale.ROOT) + ".png").toString().replace('\\', '/');
+					var materialTextureUri = AIString.malloc(materialStack).data(materialStack.UTF8(textureUri));
+					propertyBuffer = materialStack.malloc(AIMaterialProperty.ALIGNOF, AIMaterialProperty.SIZEOF)
 						.put(memByteBuffer(propertyKey))
 						.position(AIMaterialProperty.MSEMANTIC)
 						.putInt(type)
@@ -577,13 +595,13 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 						.putInt(materialTextureUri.length() + 1 + 4)
 						.putInt(aiPTI_String)
 						.position(AIMaterialProperty.MDATA) // alignment is important
-						.put(memByteBuffer(stack.pointers(materialTextureUri)));
+						.put(memByteBuffer(materialStack.pointers(materialTextureUri)));
 					materialPropertyPointers.add(memAddress0(propertyBuffer));
 
 					// I think this is optional when only one UV map is used
-//					propertyKey = AIString.malloc(stack).data(stack.UTF8(_AI_MATKEY_UVWSRC_BASE));
-//					var materialUvMap = stack.ints(0); // UV map index
-//					propertyBuffer = stack.malloc(AIMaterialProperty.ALIGNOF, AIMaterialProperty.SIZEOF)
+//					propertyKey = AIString.malloc(materialStack).data(materialStack.UTF8(_AI_MATKEY_UVWSRC_BASE));
+//					var materialUvMap = materialStack.ints(0); // UV map index
+//					propertyBuffer = materialStack.malloc(AIMaterialProperty.ALIGNOF, AIMaterialProperty.SIZEOF)
 //						.put(memByteBuffer(propertyKey))
 //						.position(AIMaterialProperty.MSEMANTIC)
 //						.putInt(type)
@@ -591,11 +609,11 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 //						.putInt(Integer.BYTES)
 //						.putInt(aiPTI_Integer)
 //						.position(AIMaterialProperty.MDATA) // alignment is important
-//						.put(memByteBuffer(stack.pointers(materialUvMap)));
+//						.put(memByteBuffer(materialStack.pointers(materialUvMap)));
 //					materialPropertyPointers.add(memAddress0(propertyBuffer));
 				}
 
-				var mProperties = stack.mallocPointer(materialPropertyPointers.size());
+				var mProperties = materialStack.mallocPointer(materialPropertyPointers.size());
 				for (long address : materialPropertyPointers)
 					mProperties.put(address);
 				aiMaterial
@@ -603,9 +621,9 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 					.mNumAllocated(mProperties.limit()); // used internally by Assimp when copying scenes
 			}
 
-			var texturePointers = stack.callocPointer(expandedMaterials.size());
+			var texturePointers = materialStack.callocPointer(EMBED_TEXTURES ? expandedMaterials.size() : 0);
 			for (Material material : expandedMaterials) {
-				String textureName = material.name.toLowerCase();
+				String textureName = material.name.toLowerCase(java.util.Locale.ROOT);
 
 				var textureOwner = material.resolveTextureOwner();
 				String textureFile = textureOwner.getTextureName();
@@ -639,6 +657,11 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 					op.filter(textureImage, orientedImage);
 
 					log.debug("Loaded texture {} with dimensions {}x{}", material, orientedImage.getWidth(), orientedImage.getHeight());
+					if (!EMBED_TEXTURES) {
+						if (!ImageIO.write(orientedImage, "png", textureDirectory.resolve(textureName + ".png").toFile()))
+							throw new IOException("No PNG writer available for " + textureName);
+						continue;
+					}
 					ByteBuffer textureEncoded;
 					try (var stream = new ByteArrayOutputStream()) {
 						ImageIO.write(orientedImage, "png", stream);
@@ -667,9 +690,9 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 				}
 			}
 
-			scene
-				.mMaterials(materialPointers.flip())
-				.mTextures(texturePointers.flip());
+			scene.mMaterials(materialPointers.flip());
+			if (EMBED_TEXTURES)
+				scene.mTextures(texturePointers.flip());
 
 			aiEnableVerboseLogging(true);
 			var logStream = AILogStream.calloc(stack);
@@ -686,7 +709,7 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 			memPutAddress(scene.address() + AIScene.MPRIVATE, memAddress0(scenePrivate));
 
 			int statusCode = aiExportScene(scene, formatId, exportPath.toPath().toString(),
-				aiProcess_EmbedTextures
+				(EMBED_TEXTURES ? aiProcess_EmbedTextures : 0)
 				| aiProcess_PreTransformVertices
 				| aiProcess_ValidateDataStructure
 				| aiProcess_FindInvalidData
@@ -714,6 +737,8 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 						.build())
 					.build());
 			}
+		} catch (IOException ex) {
+			log.error("Unable to write external model textures", ex);
 		} finally {
 			sceneContext.destroy();
 			sceneContext.staticUnorderedModelBuffer.destroy();

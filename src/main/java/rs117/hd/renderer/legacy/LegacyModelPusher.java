@@ -486,7 +486,7 @@ public class LegacyModelPusher {
 		if (facePriorities != null)
 			packedAlphaPriorityFlags |= (facePriorities[face] & 0xF) << 16;
 
-		if (isTextured) {
+		if (isTextured || customOverride != null && modelOverride.baseMaterial.vanillaTextureIndex != -1) {
 			// Without overriding the color for textured faces, vanilla shading remains pretty noticeable even after
 			// the approximate reversal above. Ardougne rooftops is a good example, where vanilla shading results in a
 			// weird-looking tint. The brightness clamp afterward is required to reduce the over-exposure introduced.

@@ -130,8 +130,11 @@ public class ModelUvImporter implements KeyListener, AutoCloseable {
 				if (aiGetMaterialString(AIMaterial.create(scene.mMaterials().get(mesh.mMaterialIndex())), AI_MATKEY_NAME, 0, 0, name) != aiReturn_SUCCESS)
 					throw new IllegalArgumentException("Missing material name in " + path);
 				String material = name.dataString();
+				// Blender appends numeric suffixes when a material name already exists.
 				if (!MaterialManager.MATERIAL_MAP.containsKey(material))
-					throw new IllegalArgumentException("Unknown material '" + material + "' in " + path);
+					material = material.replaceFirst("\\.[0-9]+$", "");
+				if (!MaterialManager.MATERIAL_MAP.containsKey(material))
+					throw new IllegalArgumentException("Unknown material '" + name.dataString() + "' in " + path);
 				float[] scale = (float[]) ModelExporter.materialProperty(MaterialManager.MATERIAL_MAP.get(material), "textureScale");
 				for (int f = 0; f < mesh.mNumFaces(); f++) {
 					var face = mesh.mFaces().get(f);

@@ -589,10 +589,6 @@ public class Zone implements Destructible {
 			if (color3[f] == -2)
 				continue;
 
-			// Hide fake shadows or lighting that is often baked into models by making the fake shadow transparent
-			if (plugin.configHideFakeShadows && modelOverride.hideVanillaShadows && HDUtils.isBakedGroundShading(model, f))
-				continue;
-
 			Material material = baseMaterial;
 			ModelOverride faceOverride = modelOverride;
 
@@ -601,7 +597,11 @@ public class Zone implements Destructible {
 				continue;
 
 			int textureId = faceTextures != null ? faceTextures[f] : -1;
-			if (textureId != -1) {
+			var customOverride = modelOverride.getCustomOverride(model, f);
+			if (customOverride != null) {
+				faceOverride = customOverride;
+				material = faceOverride.baseMaterial;
+			} else if (textureId != -1) {
 				if (modelOverride.textureMaterial != Material.NONE) {
 					material = textureMaterial;
 				} else {
@@ -624,6 +624,10 @@ public class Zone implements Destructible {
 			}
 
 			if (faceOverride.hide)
+				continue;
+
+			// Match uploadStaticModel's per-face baked-shadow removal.
+			if (textureId == -1 && plugin.configHideFakeShadows && faceOverride.hideVanillaShadows && HDUtils.isBakedGroundShading(model, f))
 				continue;
 
 			if (faceOverride.modifiesAlpha)

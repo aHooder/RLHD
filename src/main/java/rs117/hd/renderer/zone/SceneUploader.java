@@ -1783,6 +1783,12 @@ public class SceneUploader implements AutoCloseable {
 				}
 			}
 
+			// Imported vanilla textures supply their own color, rather than tinting the model's HSL.
+			if (customOverride != null && material.vanillaTextureIndex != -1) {
+				color1 = color2 = color3 = 90;
+				keepShading = true;
+			}
+
 			if (faceOverride.modifiesColor) {
 				color1 = faceOverride.modifyColor(color1);
 				color2 = faceOverride.modifyColor(color2);
@@ -2249,7 +2255,8 @@ public class SceneUploader implements AutoCloseable {
 			final Material material = faceMaterials.get(face);
 			final ModelOverride faceOverride = faceOverrides.get(face);
 
-			if (textureId != -1)
+			boolean customVanillaTexture = material.vanillaTextureIndex != -1 && modelOverride.getCustomOverride(model, face) != null;
+			if (textureId != -1 || customVanillaTexture)
 				color1 = color2 = color3 = 90;
 
 			if (faceOverride.modifiesColor) {
@@ -2309,7 +2316,7 @@ public class SceneUploader implements AutoCloseable {
 					);
 				}
 
-				if (plugin.configUndoVanillaShading && faceOverride.undoVanillaShading) {
+				if (plugin.configUndoVanillaShading && faceOverride.undoVanillaShading && !customVanillaTexture) {
 					color1 = undoVanillaShading(color1, plugin.configLegacyGreyColors, faceNormals[0], faceNormals[1], faceNormals[2]);
 					color2 = undoVanillaShading(color2, plugin.configLegacyGreyColors, faceNormals[3], faceNormals[4], faceNormals[5]);
 					color3 = undoVanillaShading(color3, plugin.configLegacyGreyColors, faceNormals[6], faceNormals[7], faceNormals[8]);
@@ -2320,7 +2327,7 @@ public class SceneUploader implements AutoCloseable {
 			}
 
 			// HSL override is not applied to textured faces
-			if (overrideAmount > 0 && (!isVanillaTextured || faceTextures[face] == -1)) {
+			if (overrideAmount > 0 && textureId == -1 && !customVanillaTexture) {
 				color1 = interpolateHSL(color1, overrideHue, overrideSat, overrideLum, overrideAmount);
 				color2 = interpolateHSL(color2, overrideHue, overrideSat, overrideLum, overrideAmount);
 				color3 = interpolateHSL(color3, overrideHue, overrideSat, overrideLum, overrideAmount);

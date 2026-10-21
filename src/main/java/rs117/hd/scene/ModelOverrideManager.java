@@ -2,7 +2,11 @@ package rs117.hd.scene;
 
 import com.google.gson.JsonElement;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiConsumer;
@@ -55,13 +59,23 @@ public class ModelOverrideManager {
 	private final IntHashSet detailCullingBlacklist = new IntHashSet();
 
 	private FileWatcher.UnregisterCallback fileWatcher;
+	private final Map<Path, FileWatcher.UnregisterCallback> modelFileWatchers = new HashMap<>();
+	private boolean started;
 
 	// Development tools may resolve external assets before Gson parses the definitions.
 	@Setter
 	private BiConsumer<ResourcePath, JsonElement> developmentJsonProcessor;
 
 	public void startUp() {
-		fileWatcher = MODEL_OVERRIDES_PATH.watch((path, first) -> clientThread.invoke(() -> {
+		started = true;
+		fileWatcher = MODEL_OVERRIDES_PATH.watch((path, first) -> loadOverrides(first));
+	}
+
+	private void loadOverrides(boolean first) {
+		clientThread.invoke(() -> {
+			if (!started)
+				return;
+			var path = MODEL_OVERRIDES_PATH;
 			try (var gamevals = gamevalManager.obtainHandle()) {
 				sceneManager.getLoadingLock().lock();
 				sceneManager.completeAllStreaming();
@@ -69,9 +83,14 @@ public class ModelOverrideManager {
 				ModelOverride[] parsedOverrides;
 				if (Props.DEVELOPMENT && developmentJsonProcessor != null) {
 					var json = path.loadJson(plugin.getGson(), JsonElement.class);
+					// Watch before importing, so saving a missing or invalid model can recover the load.
+					var modelPaths = new HashSet<Path>();
+					collectModelPaths(json, modelPaths);
+					updateModelFileWatchers(modelPaths);
 					developmentJsonProcessor.accept(path, json);
 					parsedOverrides = plugin.getGson().fromJson(json, ModelOverride[].class);
 				} else {
+					updateModelFileWatchers(Set.of());
 					parsedOverrides = path.loadJson(plugin.getGson(), ModelOverride[].class);
 				}
 				if (parsedOverrides == null)
@@ -120,10 +139,56 @@ public class ModelOverrideManager {
 				sceneManager.getLoadingLock().unlock();
 				log.trace("loadingLock unlocked - holdCount: {}", sceneManager.getLoadingLock().getHoldCount());
 			}
-		}));
+		});
+	}
+
+	private static void collectModelPaths(JsonElement json, Set<Path> paths) {
+		if (json == null || json.isJsonNull())
+			return;
+		if (json.isJsonArray()) {
+			for (var value : json.getAsJsonArray())
+				collectModelPaths(value, paths);
+		} else if (json.isJsonObject()) {
+			for (var entry : json.getAsJsonObject().entrySet()) {
+				var value = entry.getValue();
+				if ((entry.getKey().equals("uvs") || entry.getKey().equals("custom")) &&
+					value.isJsonPrimitive() && value.getAsJsonPrimitive().isString()) {
+					paths.add(Path.of("model-exports").resolve(value.getAsString()).toAbsolutePath().normalize());
+				} else if (!entry.getKey().equals("uvs")) {
+					collectModelPaths(value, paths);
+				}
+			}
+		}
+	}
+
+	private void updateModelFileWatchers(Set<Path> paths) {
+		var iterator = modelFileWatchers.entrySet().iterator();
+		while (iterator.hasNext()) {
+			var entry = iterator.next();
+			if (!paths.contains(entry.getKey())) {
+				entry.getValue().unregister();
+				iterator.remove();
+			}
+		}
+		for (var modelPath : paths) {
+			if (modelFileWatchers.containsKey(modelPath))
+				continue;
+			try {
+				// Unlike ResourcePath.watch, this does not invoke the callback during registration.
+				var watcher = FileWatcher.watchPath(path(modelPath), changed -> clientThread.invoke(() -> {
+					if (started && modelFileWatchers.containsKey(modelPath))
+						loadOverrides(false);
+				}));
+				modelFileWatchers.put(modelPath, watcher);
+			} catch (RuntimeException ex) {
+				log.warn("Unable to watch model override asset {}", modelPath, ex);
+			}
+		}
 	}
 
 	public void shutDown() {
+		started = false;
+		updateModelFileWatchers(Set.of());
 		if (fileWatcher != null)
 			fileWatcher.unregister();
 		fileWatcher = null;
