@@ -5,6 +5,10 @@ import com.google.inject.Singleton;
 import java.awt.Dimension;
 import java.awt.Graphics2D;
 import java.util.ArrayDeque;
+import java.util.Arrays;
+import java.util.Formatter;
+import java.util.HashMap;
+import java.util.Map;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.overlay.OverlayLayer;
 import net.runelite.client.ui.overlay.OverlayManager;
@@ -13,6 +17,17 @@ import net.runelite.client.ui.overlay.OverlayPosition;
 import net.runelite.client.ui.overlay.components.LineComponent;
 import net.runelite.client.ui.overlay.components.TitleComponent;
 import rs117.hd.HdPlugin;
+import rs117.hd.renderer.zone.SceneManager;
+import rs117.hd.renderer.zone.WorldViewContext;
+import rs117.hd.renderer.zone.ZoneRenderer;
+import rs117.hd.scene.LightManager;
+import rs117.hd.utils.FrameTimingsRecorder;
+import rs117.hd.utils.NpcDisplacementCache;
+import rs117.hd.utils.collections.PooledArrayType;
+import rs117.hd.utils.jobs.JobSystem;
+
+import static rs117.hd.renderer.zone.SceneManager.MAX_WORLDVIEWS;
+import static rs117.hd.utils.MathUtils.*;
 
 @Singleton
 public class FrameTimerOverlay extends OverlayPanel implements FrameTimer.Listener {
@@ -20,9 +35,32 @@ public class FrameTimerOverlay extends OverlayPanel implements FrameTimer.Listen
 	private OverlayManager overlayManager;
 
 	@Inject
+	private HdPlugin plugin;
+
+	@Inject
 	private FrameTimer frameTimer;
 
+	@Inject
+	private FrameTimingsRecorder frameTimingsRecorder;
+
+	@Inject
+	private NpcDisplacementCache npcDisplacementCache;
+
+	@Inject
+	private JobSystem jobSystem;
+
+	@Inject
+	private SceneManager sceneManager;
+
+	@Inject
+	private LightManager lightManager;
+
 	private final ArrayDeque<FrameTimings> frames = new ArrayDeque<>();
+	private final long[] timings = new long[Timer.TIMERS.length];
+	private float cpuLoad;
+	private final Map<String, LineComponent> componentMap = new HashMap<>();
+	private final StringBuilder sb = new StringBuilder();
+	private final Formatter formatter = new Formatter(sb);
 
 	@Inject
 	public FrameTimerOverlay(HdPlugin plugin) {
@@ -39,15 +77,25 @@ public class FrameTimerOverlay extends OverlayPanel implements FrameTimer.Listen
 		} else {
 			frameTimer.removeTimingsListener(this);
 			overlayManager.remove(this);
-			frames.clear();
+			reset();
 		}
+	}
+
+	public void reset() {
+		frames.clear();
+	}
+
+	private String format(String format, Object... args) {
+		sb.setLength(0);
+		formatter.format(format, args);
+		return sb.toString();
 	}
 
 	@Override
 	public void onFrameCompletion(FrameTimings timings) {
-		long now = System.nanoTime();
+		long now = System.currentTimeMillis();
 		while (!frames.isEmpty()) {
-			if (now - frames.peekFirst().frameTimestamp < 3e9) // remove entries older than 3 seconds
+			if (now - frames.peekFirst().frameTimestamp < 10e3) // remove older entries
 				break;
 			frames.removeFirst();
 		}
@@ -56,58 +104,193 @@ public class FrameTimerOverlay extends OverlayPanel implements FrameTimer.Listen
 
 	@Override
 	public Dimension render(Graphics2D g) {
-		var timings = getAverageTimings();
-		if (timings.length != Timer.values().length) {
-			panelComponent.getChildren().add(TitleComponent.builder()
+		long time = System.nanoTime();
+		var boldFont = FontManager.getRunescapeBoldFont();
+
+		var children = panelComponent.getChildren();
+		if (!getAverageTimings()) {
+			children.add(TitleComponent.builder()
 				.text("Waiting for data...")
 				.build());
 		} else {
 			long cpuTime = timings[Timer.DRAW_FRAME.ordinal()];
+			long asyncCpuTime = 0;
 			addTiming("CPU", cpuTime, true);
-			for (var t : Timer.values())
-				if (!t.isGpuTimer && t != Timer.DRAW_FRAME)
+			for (var t : Timer.TIMERS) {
+				if (t.isCpuTimer() && t != Timer.DRAW_FRAME)
+					addTiming(t, timings);
+				if (t.isAsyncCpuTimer())
+					asyncCpuTime += timings[t.ordinal()];
+			}
+
+			addTiming("Async", asyncCpuTime, true);
+			for (var t : Timer.TIMERS)
+				if (t.isAsyncCpuTimer())
 					addTiming(t, timings);
 
-			long gpuTime = 0;
-			for (var t : Timer.values())
-				if (t.isGpuTimer)
-					gpuTime += timings[t.ordinal()];
+			if (cpuLoad > 0) {
+				children.add(LineComponent.builder()
+					.left("CPU Load:")
+					.right((int) (cpuLoad * 100) + "%")
+					.build());
+			}
+
+			long gpuTime = timings[Timer.RENDER_FRAME.ordinal()];
 			addTiming("GPU", gpuTime, true);
-			for (var t : Timer.values())
-				if (t.isGpuTimer)
+			for (var t : Timer.TIMERS)
+				if (t.isGpuTimer() && t != Timer.RENDER_FRAME)
 					addTiming(t, timings);
 
-			panelComponent.getChildren().add(LineComponent.builder()
-				.leftFont(FontManager.getRunescapeBoldFont())
+			children.add(LineComponent.builder()
+				.leftFont(boldFont)
 				.left("Estimated bottleneck:")
-				.rightFont(FontManager.getRunescapeBoldFont())
+				.rightFont(boldFont)
 				.right(cpuTime > gpuTime ? "CPU" : "GPU")
 				.build());
 
-			panelComponent.getChildren().add(LineComponent.builder()
-				.leftFont(FontManager.getRunescapeBoldFont())
+			children.add(LineComponent.builder()
+				.leftFont(boldFont)
 				.left("Estimated FPS:")
-				.rightFont(FontManager.getRunescapeBoldFont())
-				.right(String.format("%.1f FPS", 1 / (Math.max(cpuTime, gpuTime) / 1e9)))
+				.rightFont(boldFont)
+				.right(format("%.1f FPS", 1e9 / max(cpuTime, gpuTime)))
 				.build());
+
+			children.add(LineComponent.builder()
+				.left("Error compensation:")
+				.right(format("%d ns", frameTimer.errorCompensation))
+				.build());
+
+			children.add(LineComponent.builder()
+				.left("Pooled array size:")
+				.right(formatBytes(PooledArrayType.getCurrentTotalCacheSize()))
+				.build());
+
+			children.add(LineComponent.builder()
+				.left("Garbage collection count:")
+				.right(String.valueOf(plugin.getGarbageCollectionCount()))
+				.build());
+
+			children.add(LineComponent.builder()
+				.left("Power saving mode:")
+				.right(plugin.isPowerSaving ? "ON" : "OFF")
+				.build());
+
+			children.add(LineComponent.builder()
+				.leftFont(boldFont)
+				.left("Scene stats:")
+				.build());
+
+			children.add(LineComponent.builder()
+				.left("Lights:")
+				.right(format("%d/%d", lightManager.getNumVisibleLights(), lightManager.getLights().size()))
+				.build());
+
+			if (plugin.renderer instanceof ZoneRenderer) {
+				children.add(LineComponent.builder()
+					.left("Dynamic renderables:")
+					.right(String.valueOf(plugin.getDrawnDynamicRenderableCount()))
+					.build());
+
+				children.add(LineComponent.builder()
+					.left("Temp renderables:")
+					.right(String.valueOf(plugin.getDrawnTempRenderableCount()))
+					.build());
+			} else {
+				children.add(LineComponent.builder()
+					.left("Tiles:")
+					.right(String.valueOf(plugin.getDrawnTileCount()))
+					.build());
+
+				children.add(LineComponent.builder()
+					.left("Static renderables:")
+					.right(String.valueOf(plugin.getDrawnStaticRenderableCount()))
+					.build());
+
+				children.add(LineComponent.builder()
+					.left("Dynamic renderables:")
+					.right(String.valueOf(plugin.getDrawnDynamicRenderableCount()))
+					.build());
+
+				children.add(LineComponent.builder()
+					.left("NPC displacement cache size:")
+					.right(String.valueOf(npcDisplacementCache.size()))
+					.build());
+			}
+
+			children.add(LineComponent.builder()
+				.leftFont(boldFont)
+				.left("Streaming Stats:")
+				.build());
+
+			WorldViewContext root = sceneManager.getRoot();
+			addTiming("Root Scene Load", root.loadTime, false);
+			addTiming("Root Scene Upload", root.uploadTime, false);
+			addTiming("Root Scene Swap", root.sceneSwapTime, false);
+
+			// TODO: Maybe this should be calculated somewhere else
+			int subSceneCount = 0;
+			long subSceneLoadTime = 0;
+			long subSceneUploadTime = 0;
+			long subSceneSwapTime = 0;
+
+			for (int worldViewId = 0; worldViewId < MAX_WORLDVIEWS; worldViewId++) {
+				WorldViewContext subscene = sceneManager.getContext(worldViewId);
+				if (subscene != null) {
+					subSceneCount++;
+					subSceneLoadTime += subscene.loadTime;
+					subSceneUploadTime += subscene.uploadTime;
+					subSceneSwapTime += subscene.sceneSwapTime;
+				}
+			}
+
+			if (subSceneCount > 0) {
+				addTiming("Avg SubScene Load", subSceneLoadTime / subSceneCount, false);
+				addTiming("Avg SubScene Upload", subSceneUploadTime / subSceneCount, false);
+				addTiming("Avg SubScene Swap", subSceneSwapTime / subSceneCount, false);
+			}
+
+			children.add(LineComponent.builder()
+				.left("Sub Scene Count:")
+				.right(String.valueOf(subSceneCount))
+				.build());
+
+
+			children.add(LineComponent.builder()
+				.left("Streaming Zones:")
+				.right(String.valueOf(jobSystem.getWorkQueueSize()))
+				.build());
+
+			if (frameTimingsRecorder.isCapturingSnapshot())
+				children.add(LineComponent.builder()
+					.leftFont(boldFont)
+					.left("Capturing Snapshot...")
+					.rightFont(boldFont)
+					.right(format("%d%%", frameTimingsRecorder.getProgressPercentage()))
+					.build());
 		}
 
-		return super.render(g);
+		var result = super.render(g);
+		frameTimer.cumulativeError += System.nanoTime() - time;
+		return result;
 	}
 
-	private long[] getAverageTimings() {
+	private boolean getAverageTimings() {
 		if (frames.isEmpty())
-			return new long[0];
+			return false;
 
-		long[] timers = new long[Timer.values().length];
-		for (var frame : frames)
+		Arrays.fill(timings, 0);
+		cpuLoad = 0;
+		for (var frame : frames) {
 			for (int i = 0; i < frame.timers.length; i++)
-				timers[i] += frame.timers[i];
+				timings[i] += frame.timers[i];
+			cpuLoad += frame.cpuLoad;
+		}
 
-		for (int i = 0; i < timers.length; i++)
-			timers[i] /= frames.size();
+		for (int i = 0; i < timings.length; i++)
+			timings[i] = max(0, timings[i] / frames.size());
+		cpuLoad /= frames.size();
 
-		return timers;
+		return true;
 	}
 
 	private void addTiming(Timer timer, long[] timings) {
@@ -119,13 +302,26 @@ public class FrameTimerOverlay extends OverlayPanel implements FrameTimer.Listen
 			return;
 
 		// Round timers to zero if they are less than a microsecond off
-		String formatted = nanos < 3e3 && nanos > -1e5 ? "~0 ms" : String.format("%.3f ms", nanos / 1e6);
-		var font = bold ? FontManager.getRunescapeBoldFont() : FontManager.getRunescapeFont();
-		panelComponent.getChildren().add(LineComponent.builder()
-			.left(name + ":")
-			.leftFont(font)
-			.right(formatted)
-			.rightFont(font)
-			.build());
+		String result = "~0 ms";
+		if (abs(nanos) > 1e3) {
+			sb.setLength(0);
+			result = sb.append(round(nanos / 1e3) / 1e3).append(" ms").toString();
+		}
+
+		LineComponent component = componentMap.get(name);
+		if (component == null) {
+			var font = bold ? FontManager.getRunescapeBoldFont() : FontManager.getRunescapeFont();
+			component = LineComponent.builder()
+				.left(name + ":")
+				.leftFont(font)
+				.right(result)
+				.rightFont(font)
+				.build();
+			componentMap.put(name, component);
+		} else {
+			component.setRight(result);
+		}
+
+		panelComponent.getChildren().add(component);
 	}
 }

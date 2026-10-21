@@ -1,10 +1,13 @@
 package rs117.hd.utils;
 
-import java.awt.event.InputEvent;
+import java.awt.Color;
 import java.awt.event.KeyEvent;
 import java.util.ArrayList;
 import javax.inject.Inject;
+import javax.inject.Named;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import net.runelite.api.*;
 import net.runelite.api.events.*;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.Keybind;
@@ -12,24 +15,45 @@ import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.input.KeyListener;
 import net.runelite.client.input.KeyManager;
+import net.runelite.client.ui.components.colorpicker.ColorPickerManager;
+import net.runelite.client.ui.components.colorpicker.RuneliteColorPicker;
 import rs117.hd.HdPlugin;
+import rs117.hd.HdPluginConfig;
 import rs117.hd.overlays.FrameTimerOverlay;
 import rs117.hd.overlays.LightGizmoOverlay;
 import rs117.hd.overlays.ShadowMapOverlay;
 import rs117.hd.overlays.TileInfoOverlay;
-import rs117.hd.scene.AreaManager;
-import rs117.hd.scene.areas.AABB;
-import rs117.hd.scene.areas.Area;
+import rs117.hd.overlays.TiledLightingOverlay;
+import rs117.hd.scene.GamevalManager;
+
+import static java.awt.event.InputEvent.CTRL_DOWN_MASK;
+import static java.awt.event.InputEvent.SHIFT_DOWN_MASK;
+import static rs117.hd.utils.MathUtils.*;
 
 @Slf4j
 public class DeveloperTools implements KeyListener {
+	public static final float[] COLOR_PICKER = new float[4]; // non-linear sRGB & alpha
+	public static final float[] COLOR_PICKER_LINEAR = new float[4]; // linear sRGB, non-linear alpha
+
 	// This could be part of the config if we had developer mode config sections
-	private static final Keybind KEY_TOGGLE_TILE_INFO = new Keybind(KeyEvent.VK_F3, InputEvent.CTRL_DOWN_MASK);
-	private static final Keybind KEY_TOGGLE_FRAME_TIMINGS = new Keybind(KeyEvent.VK_F4, InputEvent.CTRL_DOWN_MASK);
-	private static final Keybind KEY_TOGGLE_SHADOW_MAP_OVERLAY = new Keybind(KeyEvent.VK_F5, InputEvent.CTRL_DOWN_MASK);
-	private static final Keybind KEY_TOGGLE_LIGHT_GIZMO_OVERLAY = new Keybind(KeyEvent.VK_F6, InputEvent.CTRL_DOWN_MASK);
-	private static final Keybind KEY_TOGGLE_FREEZE_FRAME = new Keybind(KeyEvent.VK_ESCAPE, InputEvent.SHIFT_DOWN_MASK);
-	private static final Keybind KEY_TOGGLE_ORTHOGRAPHIC = new Keybind(KeyEvent.VK_TAB, InputEvent.SHIFT_DOWN_MASK);
+	private static final Keybind KEY_TOGGLE_TILE_INFO = new Keybind(KeyEvent.VK_F3, CTRL_DOWN_MASK);
+	private static final Keybind KEY_TOGGLE_FRAME_TIMINGS = new Keybind(KeyEvent.VK_F4, CTRL_DOWN_MASK);
+	private static final Keybind KEY_RECORD_TIMINGS_SNAPSHOT = new Keybind(KeyEvent.VK_F4, CTRL_DOWN_MASK | SHIFT_DOWN_MASK);
+	private static final Keybind KEY_TOGGLE_SHADOW_MAP_OVERLAY = new Keybind(KeyEvent.VK_F5, CTRL_DOWN_MASK);
+	private static final Keybind KEY_TOGGLE_LIGHT_GIZMO_OVERLAY = new Keybind(KeyEvent.VK_F6, CTRL_DOWN_MASK);
+	private static final Keybind KEY_TOGGLE_TILED_LIGHTING_OVERLAY = new Keybind(KeyEvent.VK_F7, CTRL_DOWN_MASK);
+	private static final Keybind KEY_TOGGLE_FREEZE_FRAME = new Keybind(KeyEvent.VK_ESCAPE, SHIFT_DOWN_MASK);
+	private static final Keybind KEY_TOGGLE_ORTHOGRAPHIC = new Keybind(KeyEvent.VK_TAB, SHIFT_DOWN_MASK);
+	private static final Keybind KEY_TOGGLE_HIDE_UI = new Keybind(KeyEvent.VK_H, CTRL_DOWN_MASK);
+	private static final Keybind KEY_RELOAD_SCENE = new Keybind(KeyEvent.VK_R, CTRL_DOWN_MASK);
+	private static final Keybind KEY_COLOR_PICKER = new Keybind(KeyEvent.VK_P, CTRL_DOWN_MASK | SHIFT_DOWN_MASK);
+
+	@Inject
+	@Named("developerMode")
+	private boolean developerMode;
+
+	@Inject
+	private Client client;
 
 	private static final ArrayList<Class<?>> externalDeveloperToolClasses = new ArrayList<>();
 	private static final ArrayList<Object> externalDeveloperToolInstances = new ArrayList<>();
@@ -48,7 +72,16 @@ public class DeveloperTools implements KeyListener {
 	private KeyManager keyManager;
 
 	@Inject
+	private ColorPickerManager colorPickerManager;
+
+	@Inject
 	private HdPlugin plugin;
+
+	@Inject
+	private HdPluginConfig config;
+
+	@Inject
+	private GamevalManager gamevalManager;
 
 	@Inject
 	private TileInfoOverlay tileInfoOverlay;
@@ -57,16 +90,28 @@ public class DeveloperTools implements KeyListener {
 	private FrameTimerOverlay frameTimerOverlay;
 
 	@Inject
+	private FrameTimingsRecorder frameTimingsRecorder;
+
+	@Inject
 	private ShadowMapOverlay shadowMapOverlay;
 
 	@Inject
 	private LightGizmoOverlay lightGizmoOverlay;
 
-	private boolean keyBindingsEnabled = false;
-	private boolean tileInfoOverlayEnabled = false;
-	private boolean frameTimingsOverlayEnabled = false;
-	private boolean shadowMapOverlayEnabled = false;
-	private boolean lightGizmoOverlayEnabled = false;
+	@Inject
+	private TiledLightingOverlay tiledLightingOverlay;
+
+	private boolean keyBindingsEnabled;
+	private boolean tileInfoOverlayEnabled;
+	@Getter
+	private boolean frameTimingsOverlayEnabled;
+	private boolean shadowMapOverlayEnabled;
+	private boolean lightGizmoOverlayEnabled;
+	@Getter
+	private boolean hideUiEnabled;
+	private boolean tiledLightingOverlayEnabled;
+
+	private RuneliteColorPicker colorPicker;
 
 	public void activate() {
 		// Listen for commands
@@ -85,20 +130,8 @@ public class DeveloperTools implements KeyListener {
 			frameTimerOverlay.setActive(frameTimingsOverlayEnabled);
 			shadowMapOverlay.setActive(shadowMapOverlayEnabled);
 			lightGizmoOverlay.setActive(lightGizmoOverlayEnabled);
+			tiledLightingOverlay.setActive(tiledLightingOverlayEnabled);
 		});
-
-		// Check for any out of bounds areas
-		for (Area area : AreaManager.AREAS) {
-			if (area == Area.ALL || area == Area.NONE)
-				continue;
-
-			for (AABB aabb : area.aabbs) {
-				if (aabb.minX < -128 || aabb.minY < 1000 || aabb.maxX > 5000 || aabb.maxY > 13000) {
-					throw new IllegalArgumentException(
-						"Your definition for the area " + area + " has an incorrect AABB: " + aabb);
-				}
-			}
-		}
 
 		for (var clazz : externalDeveloperToolClasses) {
 			try {
@@ -116,6 +149,8 @@ public class DeveloperTools implements KeyListener {
 		frameTimerOverlay.setActive(false);
 		shadowMapOverlay.setActive(false);
 		lightGizmoOverlay.setActive(false);
+		tiledLightingOverlay.setActive(false);
+		hideUiEnabled = false;
 
 		for (var instance : externalDeveloperToolInstances) {
 			if (instance instanceof AutoCloseable) {
@@ -127,6 +162,10 @@ public class DeveloperTools implements KeyListener {
 			}
 		}
 		externalDeveloperToolInstances.clear();
+	}
+
+	public void updateConfig() {
+		frameTimerOverlay.reset();
 	}
 
 	@Subscribe
@@ -144,7 +183,11 @@ public class DeveloperTools implements KeyListener {
 				tileInfoOverlay.setActive(tileInfoOverlayEnabled = !tileInfoOverlayEnabled);
 				break;
 			case "timers":
+			case "timings":
 				frameTimerOverlay.setActive(frameTimingsOverlayEnabled = !frameTimingsOverlayEnabled);
+				break;
+			case "snapshot":
+				frameTimingsRecorder.recordSnapshot();
 				break;
 			case "shadowmap":
 				shadowMapOverlay.setActive(shadowMapOverlayEnabled = !shadowMapOverlayEnabled);
@@ -152,6 +195,11 @@ public class DeveloperTools implements KeyListener {
 			case "lights":
 				lightGizmoOverlay.setActive(lightGizmoOverlayEnabled = !lightGizmoOverlayEnabled);
 				break;
+			case "tiledlights":
+			case "tiledlighting":
+				tiledLightingOverlay.setActive(tiledLightingOverlayEnabled = !tiledLightingOverlayEnabled);
+				break;
+			case "keybinds":
 			case "keybindings":
 				keyBindingsEnabled = !keyBindingsEnabled;
 				if (keyBindingsEnabled) {
@@ -160,7 +208,168 @@ public class DeveloperTools implements KeyListener {
 					keyManager.unregisterKeyListener(this);
 				}
 				break;
+			case "reload":
+				plugin.renderer.reloadScene();
+				break;
+			case "culling":
+				plugin.freezeCulling = !plugin.freezeCulling;
+				break;
+			case "colorpicker":
+				toggleColorPicker();
+				break;
+			case "latlon":
+				handleLatLonCommand(args);
+				break;
 		}
+
+		// Other commands are gated behind RuneLite's --developer-mode
+		if (!developerMode)
+			return;
+
+		switch (action) {
+			case "varbit":
+			case "varp":
+				handleVarCommand(action, args);
+				break;
+		}
+	}
+
+	private void handleLatLonCommand(String[] args) {
+		if (args.length == 1) {
+			String current = config.preciseLatLon();
+			if (current.isEmpty())
+				current = config.latitudeDegrees() + "," + config.longitudeDegrees() + " (from config panel)";
+			postMessage("Current latitude & longitude: " + current);
+		} else if (
+			args.length == 2 &&
+			(args[1].equalsIgnoreCase("reset") || args[1].equalsIgnoreCase("clear"))
+		) {
+			config.setPreciseLatLon("");
+			postMessage("Reset latitude & longitude coordinates");
+		} else if (args.length == 3) {
+			float[] latLon = HDUtils.parseLatLon(args[1] + "," + args[2]);
+			if (latLon == null) {
+				postMessage("Latitude & longitude must be decimal numbers, within ±90 and ±180 degrees respectively");
+				return;
+			}
+
+			config.setPreciseLatLon(latLon[0] + "," + latLon[1]);
+			postMessage(
+				"Changed latitude & longitude to: " + latLon[0] + "," + latLon[1] + ". Note, this will not show up in the config panel.");
+		} else {
+			postMessage("Usage: ::117hd latlon <lt>latitude<gt> <lt>longitude<gt> / reset");
+		}
+	}
+
+	private void handleVarCommand(String type, String[] args) {
+		assert client.isClientThread();
+		String usage = "Usage: ::117hd " + type + " <name|id> [value]";
+		if (args.length != 2 && args.length != 3) {
+			postMessage(usage);
+			return;
+		}
+
+		String nameOrId = args[1].toUpperCase();
+		Integer id;
+		try {
+			id = Integer.parseInt(nameOrId);
+		} catch (NumberFormatException ignored) {
+			try (var gamevals = gamevalManager.obtainHandle()) {
+				switch (type) {
+					case "varbit":
+						id = gamevals.getVarbits().get(nameOrId);
+						break;
+					case "varp":
+						id = gamevals.getVarps().get(nameOrId);
+						break;
+					default:
+						throw new IllegalStateException("Unhandled variable kind: " + type);
+				}
+			}
+		}
+		if (id == null) {
+			postMessage("Unknown " + type + ": " + nameOrId);
+			return;
+		}
+
+		int[] varps = client.getVarps();
+		if (args.length == 2) {
+			int value;
+			switch (type) {
+				case "varbit":
+					value = client.getVarbitValue(varps, id);
+					break;
+				case "varp":
+					value = varps[id];
+					break;
+				default:
+					throw new IllegalStateException("Unhandled variable kind: " + type);
+			}
+			postMessage(type + " " + nameOrId + " (" + id + ") = " + value);
+			return;
+		}
+
+		final int value;
+		try {
+			value = Integer.parseInt(args[2]);
+		} catch (NumberFormatException e) {
+			postMessage("Invalid value: " + args[2]);
+			return;
+		}
+
+		VarbitChanged changed = new VarbitChanged();
+		changed.setValue(value);
+		switch (type) {
+			case "varbit":
+				client.setVarbitValue(varps, id, value);
+				client.queueChangedVarp(client.getVarbit(id).getIndex());
+				changed.setVarbitId(id);
+				break;
+			case "varp":
+				varps[id] = value;
+				client.queueChangedVarp(id);
+				changed.setVarpId(id);
+				break;
+			default:
+				throw new IllegalStateException("Unhandled variable kind: " + type);
+		}
+		eventBus.post(changed);
+		postMessage("Set " + type + " " + nameOrId + " (" + id + ") = " + value);
+	}
+
+	private void toggleColorPicker() {
+		plugin.uboGlobal.colorPicker.set(1, 1, 1, 1);
+		if (colorPicker == null) {
+			colorPicker = colorPickerManager.create(
+				client,
+				Color.WHITE,
+				"Shader Color Picker",
+				false
+			);
+			colorPicker.setLocationRelativeTo(client.getCanvas());
+			colorPicker.setOnColorChange(c -> clientThread.invoke(() -> {
+				float[] srgb = ColorUtils.srgb(c);
+				float alpha = c.getAlpha() / 255.f;
+				copyTo(COLOR_PICKER, srgb);
+				copyTo(COLOR_PICKER_LINEAR, ColorUtils.srgbToLinear(srgb));
+				COLOR_PICKER_LINEAR[3] = COLOR_PICKER[3] = alpha;
+				plugin.uboGlobal.colorPicker.set(COLOR_PICKER_LINEAR);
+			}));
+			colorPicker.setOnClose(e -> colorPicker = null);
+			colorPicker.setVisible(true);
+		} else {
+			colorPicker.setVisible(false);
+			colorPicker = null;
+		}
+	}
+
+	private void postMessage(String message) {
+		clientThread.invoke(() -> client.addChatMessage(
+			ChatMessageType.GAMEMESSAGE,
+			"117 HD",
+			"<col=006600>[117 HD] " + message + "</col>",
+			"117 HD"
+		));
 	}
 
 	@Override
@@ -169,14 +378,24 @@ public class DeveloperTools implements KeyListener {
 			tileInfoOverlay.setActive(tileInfoOverlayEnabled = !tileInfoOverlayEnabled);
 		} else if (KEY_TOGGLE_FRAME_TIMINGS.matches(e)) {
 			frameTimerOverlay.setActive(frameTimingsOverlayEnabled = !frameTimingsOverlayEnabled);
+		} else if (KEY_RECORD_TIMINGS_SNAPSHOT.matches(e)) {
+			frameTimingsRecorder.recordSnapshot();
 		} else if (KEY_TOGGLE_SHADOW_MAP_OVERLAY.matches(e)) {
 			shadowMapOverlay.setActive(shadowMapOverlayEnabled = !shadowMapOverlayEnabled);
 		} else if (KEY_TOGGLE_LIGHT_GIZMO_OVERLAY.matches(e)) {
 			lightGizmoOverlay.setActive(lightGizmoOverlayEnabled = !lightGizmoOverlayEnabled);
+		} else if (KEY_TOGGLE_TILED_LIGHTING_OVERLAY.matches(e)) {
+			tiledLightingOverlay.setActive(tiledLightingOverlayEnabled = !tiledLightingOverlayEnabled);
 		} else if (KEY_TOGGLE_FREEZE_FRAME.matches(e)) {
 			plugin.toggleFreezeFrame();
 		} else if (KEY_TOGGLE_ORTHOGRAPHIC.matches(e)) {
 			plugin.orthographicProjection = !plugin.orthographicProjection;
+		} else if (KEY_TOGGLE_HIDE_UI.matches(e)) {
+			hideUiEnabled = !hideUiEnabled;
+		} else if (KEY_RELOAD_SCENE.matches(e)) {
+			plugin.renderer.reloadScene();
+		} else if (KEY_COLOR_PICKER.matches(e)) {
+			toggleColorPicker();
 		} else {
 			return;
 		}

@@ -1,0 +1,701 @@
+[
+  {
+    "name": "WATER",
+    "surfaceColor": "#69809C",
+    "fresnelAmount": 0.85
+  },
+  {
+    "name": "TRANSPARENT",
+    "baseOpacity": 0,
+    "specularStrength": 0,
+    "specularGloss": 0,
+    "normalStrength": 0,
+    "fresnelAmount": 0
+  },
+  {
+    "name": "WATER_FLAT",
+    "surfaceColor": "#69809C",
+    "fresnelAmount": 0.85,
+    "flat": true
+  },
+  {
+    "name": "SWAMP_WATER",
+    "specularStrength": 0.1,
+    "specularGloss": 100.0,
+    "normalStrength": 0.05,
+    "baseOpacity": 0.8,
+    "fresnelAmount": 0.3,
+    "surfaceColor": "#172114",
+    "foamColor": "#737865",
+    "depthColor": "#29521a",
+    "duration": 1.2,
+    "fishingSpotRecolor": 23454
+  },
+  {
+    "name": "MLM_WATER",
+    "specularStrength": 0.1,
+    "specularGloss": 100.0,
+    "normalStrength": 0.05,
+    "baseOpacity": 0.8,
+    "fresnelAmount": 0.3,
+    "surfaceColor": [
+      30.48,
+      41.32,
+      74.4
+    ],
+    "duration": 1.2
+  },
+  {
+    "name": "SWAMP_WATER_FLAT",
+    "flat": true,
+    "specularStrength": 0.1,
+    "specularGloss": 100.0,
+    "normalStrength": 0.05,
+    "baseOpacity": 0.8,
+    "fresnelAmount": 0.3,
+    "surfaceColor": "#172114",
+    "foamColor": "#737865",
+    "depthColor": "#29521a",
+    "duration": 1.2,
+    "fishingSpotRecolor": 23454
+  },
+  {
+    "name": "POISON_WASTE",
+    "specularStrength": 0.1,
+    "specularGloss": 100.0,
+    "normalStrength": 0.05,
+    "baseOpacity": 0.9,
+    "fresnelAmount": 0.3,
+    "surfaceColor": "#16170d",
+    "foamColor": "#6a6c64",
+    "depthColor": "#32342e",
+    "duration": 1.6
+  },
+  {
+    "name": "BLACK_TAR_FLAT",
+    "flat": true,
+    "specularStrength": 0.045,
+    "specularGloss": 250,
+    "normalStrength": 0.075,
+    "baseOpacity": 0.9,
+    "fresnelAmount": 0.02,
+    "surfaceColor": [
+      4.94,
+      5.41,
+      6.16
+    ],
+    "foamColor": "#000000",
+    "depthColor": [
+      4.94,
+      5.41,
+      6.16
+    ],
+    "duration": 4
+  },
+  {
+    "name": "BLOOD",
+    "normalStrength": 0.05,
+    "baseOpacity": 0.85,
+    "fresnelAmount": 0.0,
+    "surfaceColor": "#260000",
+    "foamColor": "#753f2d",
+    "depthColor": "#321a16",
+    "duration": 2.0
+  },
+  {
+    "name": "BLOOD_DARK",
+    "normalStrength": 0.05,
+    "baseOpacity": 0.85,
+    "fresnelAmount": 0.0,
+    "surfaceColor": "#1E0000",
+    "foamColor": "#753f2d",
+    "depthColor": "#321a16",
+    "duration": 2.0
+  },
+  {
+    "name": "BLOOD_FLAT",
+    "normalStrength": 0.05,
+    "baseOpacity": 0.85,
+    "fresnelAmount": 0.0,
+    "surfaceColor": "#260000",
+    "hasFoam": false,
+    "depthColor": "#321a16",
+    "duration": 2.0,
+    "flat": true
+  },
+  {
+    "name": "ICE",
+    "specularStrength": 0.3,
+    "specularGloss": 200.0,
+    "normalStrength": 0.04,
+    "baseOpacity": 0.85,
+    "normalMap": "WATER_NORMAL_MAP_2",
+    "foamColor": "#969696",
+    "duration": 0.0
+  },
+  {
+    "name": "ICE_FLAT",
+    "flat": true,
+    "specularStrength": 0.3,
+    "specularGloss": 200.0,
+    "normalStrength": 0.04,
+    "baseOpacity": 0.85,
+    "normalMap": "WATER_NORMAL_MAP_2",
+    "foamColor": "#969696",
+    "duration": 0.0
+  },
+  {
+    "name": "MUDDY_WATER",
+    "specularStrength": 0.1,
+    "specularGloss": 100.0,
+    "normalStrength": 0.05,
+    "baseOpacity": 0.7,
+    "fresnelAmount": 0.3,
+    "surfaceColor": "#230a00",
+    "foamColor": "#6a6c18",
+    "depthColor": "#411700",
+    "duration": 2.7
+  },
+  {
+    "name": "SCAR_SLUDGE",
+    "specularStrength": 0.2,
+    "specularGloss": 100.0,
+    "normalStrength": 0.05,
+    "baseOpacity": 0.95,
+    "fresnelAmount": 0.03,
+    "surfaceColor": "#242824",
+    "foamColor": "#21231F",
+    "duration": 2
+  },
+  {
+    "name": "ABYSS_BILE",
+    "specularStrength": 0.15,
+    "specularGloss": 60,
+    "normalStrength": 0.08,
+    "baseOpacity": 0.8,
+    "fresnelAmount": 0.3,
+    "surfaceColor": [
+      47.89,
+      30.68,
+      7.5
+    ],
+    "foamColor": [
+      47.89,
+      20.98,
+      0.0
+    ],
+    "depthColor": [
+      47.89,
+      11.15,
+      0.0
+    ],
+    "duration": 3.5
+  },
+  {
+    "name": "PLAIN_WATER",
+    "flat": true,
+    "foamColor": [
+      13.07,
+      13.07,
+      13.07
+    ],
+    "depthColor": "#000000"
+  },
+  {
+    "name": "WHISPERER_WATER",
+    "flat": true,
+    "surfaceColor": "#181823",
+    "foamColor": [
+      13.07,
+      13.07,
+      13.07
+    ],
+    "depthColor": "#0A0A0F"
+  },
+  {
+    "name": "DARK_BLUE_WATER",
+    "flat": true,
+    "specularStrength": 0.1,
+    "specularGloss": 100.0,
+    "normalStrength": 0.1,
+    "baseOpacity": 0.8,
+    "fresnelAmount": 0.2,
+    "surfaceColor": [
+      0.54,
+      5.65,
+      7.25
+    ],
+    "foamColor": [
+      13.07,
+      13.07,
+      13.07
+    ],
+    "depthColor": "#000000"
+  },
+  {
+    "name": "LIGHT_BLUE_WATER",
+    "flat": true,
+    "specularStrength": 0.1,
+    "specularGloss": 400.0,
+    "normalStrength": 0.05,
+    "baseOpacity": 0.7,
+    "fresnelAmount": 0.3,
+    "surfaceColor": [
+      90,
+      110.65,
+      100
+    ],
+    "foamColor": [
+      13.07,
+      13.07,
+      13.07
+    ],
+    "depthColor": "#000000"
+  },
+  {
+    "name": "ARAXXOR_WASTE",
+    "specularStrength": 0.1,
+    "specularGloss": 100.0,
+    "normalStrength": 0.05,
+    "baseOpacity": 0.9,
+    "fresnelAmount": 0.3,
+    "surfaceColor": "#16ff0d",
+    "foamColor": "#14ff14",
+    "depthColor": "#1eff1a",
+    "duration": 1.6
+  },
+  {
+    "name": "CAVE_WATER",
+    "specularStrength": 0.2,
+    "specularGloss": 100.0,
+    "normalStrength": 0.3,
+    "baseOpacity": 0.75,
+    "fresnelAmount": 0.1,
+    "surfaceColor": [
+      5.17,
+      13.07,
+      16.99
+    ],
+    "foamColor": [
+      0.77,
+      0.77,
+      0.77
+    ],
+    "depthColor": [
+      10.79,
+      36.75,
+      41.32
+    ]
+  },
+  {
+    "name": "CAVE_WATER_MURKY",
+    "specularStrength": 0.1,
+    "specularGloss": 75.0,
+    "normalStrength": 0.3,
+    "baseOpacity": 0.86,
+    "fresnelAmount": 0.1,
+    "surfaceColor": [
+      5.17,
+      13.07,
+      16.99
+    ],
+    "foamColor": [
+      85,
+      85,
+      85
+    ],
+    "depthColor": [
+      10.79,
+      36.75,
+      41.32
+    ]
+  },
+  {
+    "name": "CAVE_WATER_SWAMP",
+    "specularStrength": 0.15,
+    "specularGloss": 75.0,
+    "baseOpacity": 0.9,
+    "fresnelAmount": 0.13,
+    "surfaceColor": [
+      15,
+      25,
+      17
+    ],
+    "foamColor": [
+      55,
+      55,
+      55
+    ],
+    "depthColor": [
+      10.79,
+      36.75,
+      41.32
+    ]
+  },
+  {
+    "name": "WATER_OPEN",
+    "material": "WATER_OPEN",
+    "surfaceColor": "#597291",
+    "fresnelAmount": 0.85
+  },
+  {
+    "name": "WATER_SHELF",
+    "material": "WATER_SHELF",
+    "surfaceColor": "#526587",
+    "fresnelAmount": 0.85
+  },
+  {
+    "name": "WATER_DROPOFF",
+    "material": "WATER_DROPOFF",
+    "surfaceColor": "#4e5d81",
+    "fresnelAmount": 0.85
+  },
+  {
+    "name": "WATER_DEEP",
+    "material": "WATER_DEEP",
+    "surfaceColor": "#3d4b71",
+    "fresnelAmount": 0.85
+  },
+  {
+    "name": "WATER_TRENCH",
+    "material": "WATER_TRENCH",
+    "surfaceColor": "#374567",
+    "fresnelAmount": 0.85
+  },
+  {
+    "name": "WATER_STORMY",
+    "material": "WATER_STORMY",
+    "surfaceColor": "#3f545e",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_STORMY_OPEN",
+    "material": "WATER_STORMY_OPEN",
+    "surfaceColor": "#3a4d56",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_STORMY_SHELF",
+    "material": "WATER_STORMY_SHELF",
+    "surfaceColor": "#324752",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_STORMY_DROPOFF",
+    "material": "WATER_STORMY_DROPOFF",
+    "surfaceColor": "#2f3f4d",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_STORMY_DEEP",
+    "material": "WATER_STORMY_DEEP",
+    "surfaceColor": "#293744",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_SUNBAKED",
+    "material": "WATER_SUNBAKED",
+    "surfaceColor": "#2e414c",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_SUNBAKED_OPEN",
+    "material": "WATER_SUNBAKED_OPEN",
+    "surfaceColor": "#2c3d48",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_SUNBAKED_SHELF",
+    "material": "WATER_SUNBAKED_SHELF",
+    "surfaceColor": "#293b46",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_SUNBAKED_DROPOFF",
+    "material": "WATER_SUNBAKED_DROPOFF",
+    "surfaceColor": "#283744",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_SUNBAKED_DEEP",
+    "material": "WATER_SUNBAKED_DEEP",
+    "surfaceColor": "#263541",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_PROFANE",
+    "material": "WATER_PROFANE",
+    "surfaceColor": "#414861",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_PROFANE_OPEN",
+    "material": "WATER_PROFANE_OPEN",
+    "surfaceColor": "#3a415c",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_PROFANE_SHELF",
+    "material": "WATER_PROFANE_SHELF",
+    "surfaceColor": "#353856",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_PROFANE_DROPOFF",
+    "material": "WATER_PROFANE_DROPOFF",
+    "surfaceColor": "#333552",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_PROFANE_DEEP",
+    "material": "WATER_PROFANE_DEEP",
+    "surfaceColor": "#292b49",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_CURSED",
+    "material": "WATER_CURSED",
+    "surfaceColor": "#3f495e",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_CURSED_OPEN",
+    "material": "WATER_CURSED_OPEN",
+    "surfaceColor": "#3a4356",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_CURSED_SHELF",
+    "material": "WATER_CURSED_SHELF",
+    "surfaceColor": "#323c52",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_CURSED_DROPOFF",
+    "material": "WATER_CURSED_DROPOFF",
+    "surfaceColor": "#2f354d",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_CURSED_DEEP",
+    "material": "WATER_CURSED_DEEP",
+    "surfaceColor": "#262a44",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_SCALDING",
+    "material": "WATER_SCALDING",
+    "surfaceColor": "#424759",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_SCALDING_OPEN",
+    "material": "WATER_SCALDING_OPEN",
+    "surfaceColor": "#3d4152",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_SCALDING_SHELF",
+    "material": "WATER_SCALDING_SHELF",
+    "surfaceColor": "#353a4d",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_SCALDING_DROPOFF",
+    "material": "WATER_SCALDING_DROPOFF",
+    "surfaceColor": "#353546",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_SCALDING_DEEP",
+    "material": "WATER_SCALDING_DEEP",
+    "surfaceColor": "#2b2b3c",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_ICY",
+    "material": "WATER_ICY",
+    "surfaceColor": "#435468",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_ICY_OPEN",
+    "material": "WATER_ICY_OPEN",
+    "surfaceColor": "#3e4e61",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_ICY_SHELF",
+    "material": "WATER_ICY_SHELF",
+    "surfaceColor": "#37495d",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_ICY_DROPOFF",
+    "material": "WATER_ICY_DROPOFF",
+    "surfaceColor": "#344059",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_ICY_DEEP",
+    "material": "WATER_ICY_DEEP",
+    "surfaceColor": "#2a354f",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_ENDLESS",
+    "material": "WATER_ENDLESS",
+    "surfaceColor": "#8899ad",
+    "fresnelAmount": 0.85
+  },
+  {
+    "name": "WATER_ENDLESS_OPEN",
+    "material": "WATER_ENDLESS_OPEN",
+    "surfaceColor": "#8290a3",
+    "fresnelAmount": 0.85
+  },
+  {
+    "name": "WATER_ENDLESS_SHELF",
+    "material": "WATER_ENDLESS_SHELF",
+    "surfaceColor": "#798a9e",
+    "fresnelAmount": 0.85
+  },
+  {
+    "name": "WATER_ENDLESS_DROPOFF",
+    "material": "WATER_ENDLESS_DROPOFF",
+    "surfaceColor": "#747f99",
+    "fresnelAmount": 0.85
+  },
+  {
+    "name": "WATER_ENDLESS_DEEP",
+    "material": "WATER_ENDLESS_DEEP",
+    "surfaceColor": "#68728d",
+    "fresnelAmount": 0.85
+  },
+  {
+    "name": "WATER_CRYSTAL",
+    "material": "WATER_CRYSTAL",
+    "surfaceColor": "#445b6c",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_CRYSTAL_OPEN",
+    "material": "WATER_CRYSTAL_OPEN",
+    "surfaceColor": "#3a5062",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_CRYSTAL_SHELF",
+    "material": "WATER_CRYSTAL_SHELF",
+    "surfaceColor": "#32495c",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_CRYSTAL_DROPOFF",
+    "material": "WATER_CRYSTAL_DROPOFF",
+    "surfaceColor": "#2c4257",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_CRYSTAL_DEEP",
+    "material": "WATER_CRYSTAL_DEEP",
+    "surfaceColor": "#293f53",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_FETID",
+    "material": "WATER_FETID",
+    "surfaceColor": "#3b4c4e",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_FETID_OPEN",
+    "material": "WATER_FETID_OPEN",
+    "surfaceColor": "#354648",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_FETID_SHELF",
+    "material": "WATER_FETID_SHELF",
+    "surfaceColor": "#2c3e41",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_FETID_DROPOFF",
+    "material": "WATER_FETID_DROPOFF",
+    "surfaceColor": "#2c3e41",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_FETID_DEEP",
+    "material": "WATER_FETID_DEEP",
+    "surfaceColor": "#253537",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_TANGLED",
+    "material": "WATER_TANGLED",
+    "surfaceColor": "#364a56",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_TANGLED_OPEN",
+    "material": "WATER_TANGLED_OPEN",
+    "surfaceColor": "#32444f",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_TANGLED_SHELF",
+    "material": "WATER_TANGLED_SHELF",
+    "surfaceColor": "#2c3e4a",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_TANGLED_DROPOFF",
+    "material": "WATER_TANGLED_DROPOFF",
+    "surfaceColor": "#263744",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_TANGLED_DEEP",
+    "material": "WATER_TANGLED_DEEP",
+    "surfaceColor": "#1f2f41",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_JAGGED",
+    "material": "WATER_JAGGED",
+    "surfaceColor": "#333e4a",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_JAGGED_OPEN",
+    "material": "WATER_JAGGED_OPEN",
+    "surfaceColor": "#2e3841",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_JAGGED_SHELF",
+    "material": "WATER_JAGGED_SHELF",
+    "surfaceColor": "#28333d",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_JAGGED_DROPOFF",
+    "material": "WATER_JAGGED_DROPOFF",
+    "surfaceColor": "#23313a",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_JAGGED_DEEP",
+    "material": "WATER_JAGGED_DEEP",
+    "surfaceColor": "#212c35",
+    "fresnelAmount": 0.86
+  },
+  {
+    "name": "WATER_OUT_OF_BOUNDS",
+    "material": "WATER_OUT_OF_BOUNDS",
+    "surfaceColor": "#171b29",
+    "fresnelAmount": 0.86
+  }
+]

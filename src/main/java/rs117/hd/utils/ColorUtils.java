@@ -6,10 +6,8 @@
  * You should have received a copy of the CC0 Public Domain Dedication along with this software.
  * If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
  */
-
 package rs117.hd.utils;
 
-import com.google.gson.TypeAdapter;
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonToken;
 import com.google.gson.stream.JsonWriter;
@@ -17,26 +15,40 @@ import java.awt.Color;
 import java.io.IOException;
 import java.util.Arrays;
 import lombok.extern.slf4j.Slf4j;
+import rs117.hd.utils.GsonUtils.DelegateFloatAdapter;
+
+import static rs117.hd.utils.MathUtils.*;
 
 public class ColorUtils {
-	private static final float EPS = 1e-10f;
+	private static final float EPS = 1e-4f;
+
+	public static final float[] LINEAR_SRGB_LUMINANCE_COEFFICIENTS = { .2126f, .7152f, .0722f };
+
+	// Approximate mesopic vision
+	public static final float[] MESOPIC_TINT = { .85f, .95f, 1.15f };
+
+	private static final float HAZE_OPTICAL_DEPTH = .08f;
+	// Reference Rayleigh extinction plus neutral haze; independent of authored environment lighting.
+	public static final float[] ATMOSPHERIC_OPTICAL_DEPTH = {
+		log(1 + 2 * .026f) + HAZE_OPTICAL_DEPTH,
+		log(1 + 2 * .053f) + HAZE_OPTICAL_DEPTH,
+		log(1 + 2 * .136f) + HAZE_OPTICAL_DEPTH
+	};
 
 	/**
-	 * Row-major transformation matrices for conversion between RGB and XYZ color spaces.
-	 * Fairman, H. S., Brill, M. H., & Hemmendinger, H. (1997).
-	 * How the CIE 1931 color-matching functions were derived from Wright-Guild data.
-	 * Color Research & Application, 22(1), 11–23.
-	 * doi:10.1002/(sici)1520-6378(199702)22:1<11::aid-col4>3.0.co;2-7
+	 * Row-major transforms between CIE XYZ (D65) and linear sRGB.
+	 * Coefficients are the sRGB matrices from
+	 * <a href="https://www.w3.org/TR/css-color-4/#color-conversion-code">CSS Color Module Level 4</a>
 	 */
 	private static final float[] RGB_TO_XYZ_MATRIX = {
-		.49f, .31f, .2f,
-		.1769f, .8124f, .0107f,
-		.0f,    .0099f, .9901f
+		.4123908f, .35758434f, .1804808f,
+		.212639f, .7151687f, .07219232f,
+		.01933082f, .11919478f, .95053215f
 	};
 	private static final float[] XYZ_TO_RGB_MATRIX = {
-		2.36449f,    -.896553f,  -.467937f,
-		-.514935f,   1.42633f,    .0886025f,
-		 .00514883f, -.0142619f, 1.00911f
+		3.24097f, -1.5373832f, -.49861076f,
+		-.96924365f, 1.8759675f, .041555058f,
+		.05563008f, -.20397696f, 1.0569715f
 	};
 
 	/**
@@ -73,7 +85,7 @@ public class ColorUtils {
 	 * @param XYZ coordinates
 	 * @return linear RGB coordinates
 	 */
-	public static float[] XYZtoRGB(float[] XYZ) {
+	public static float[] XYZtoRGB(float... XYZ) {
 		float[] RGB = new float[3];
 		mat3MulVec3(RGB, XYZ_TO_RGB_MATRIX, XYZ);
 		return RGB;
@@ -84,7 +96,7 @@ public class ColorUtils {
 	 * @param RGB linear RGB color coordinates
 	 * @return XYZ color coordinates
 	 */
-	public static float[] RGBtoXYZ(float[] RGB) {
+	public static float[] RGBtoXYZ(float... RGB) {
 		float[] XYZ = new float[3];
 		mat3MulVec3(XYZ, RGB_TO_XYZ_MATRIX, RGB);
 		return XYZ;
@@ -101,18 +113,19 @@ public class ColorUtils {
 	// Source: https://web.archive.org/web/20220808015852/https://registry.khronos.org/DataFormat/specs/1.3/dataformat.1.3.pdf
 	// Page number 130 (146 in the PDF)
 	public static float linearToSrgb(float c) {
-		return c <= 0.0031308 ?
+		return c <= 0.0031308f ?
 			c * 12.92f :
-			(float) (1.055 * Math.pow(c, 1 / 2.4) - 0.055);
+			1.055f * pow(c, 1 / 2.4f) - 0.055f;
 	}
 
 	public static float srgbToLinear(float c) {
 		return c <= 0.04045f ?
 			c / 12.92f :
-			(float) Math.pow((c + 0.055) / 1.055, 2.4);
+			pow((c + 0.055f) / 1.055f, 2.4f);
 	}
 
 	public static float[] linearToSrgb(float... c) {
+		assert c.length <= 3;
 		float[] result = new float[c.length];
 		for (int i = 0; i < c.length; i++)
 			result[i] = linearToSrgb(c[i]);
@@ -120,6 +133,7 @@ public class ColorUtils {
 	}
 
 	public static float[] srgbToLinear(float... c) {
+		assert c.length <= 3;
 		float[] result = new float[c.length];
 		for (int i = 0; i < c.length; i++)
 			result[i] = srgbToLinear(c[i]);
@@ -127,18 +141,42 @@ public class ColorUtils {
 	}
 
 	/**
-	 * Float modulo that returns the answer with the same sign as the modulus.
+	 * Calculate the linear luminance of a linear sRGB color.
 	 */
-	private static float mod(float x, float modulus) {
-		return (float) (x - Math.floor(x / modulus) * modulus);
+	public static float linearSrgbLuminance(float[] linearSrgb) {
+		return dot(linearSrgb, LINEAR_SRGB_LUMINANCE_COEFFICIENTS, 3);
 	}
 
-	private static float clamp(float value, float min, float max) {
-		return Math.min(Math.max(value, min), max);
+	/**
+	 * Approximate downward single scattering relative to overhead, already-attenuated directional light.
+	 */
+	public static void deriveAmbientLight(float[] out, float[] directionalColor) {
+		for (int i = 0; i < 3; i++)
+			out[i] = directionalColor[i] * .5f * (exp(ATMOSPHERIC_OPTICAL_DEPTH[i]) - 1);
 	}
 
-	private static int clamp(int value, int min, int max) {
-		return Math.min(Math.max(value, min), max);
+	/**
+	 * Apply an approximate color shift due to mesopic vision, in linear sRGB, preserving luminance.
+	 */
+	public static void applyMesopicShift(float[] out) {
+		float luminance = linearSrgbLuminance(out);
+		for (int i = 0; i < 3; i++)
+			out[i] = out[i] * MESOPIC_TINT[i];
+		float shiftedLuminance = linearSrgbLuminance(out);
+		if (shiftedLuminance > 0)
+			multiply(out, out, luminance / shiftedLuminance);
+	}
+
+	/**
+	 * Approximately invert the color shift due to mesopic vision, in linear sRGB, preserving luminance.
+	 */
+	public static void invertMesopicShift(float[] out) {
+		float luminance = linearSrgbLuminance(out);
+		for (int i = 0; i < 3; i++)
+			out[i] = out[i] / MESOPIC_TINT[i];
+		float shiftedLuminance = linearSrgbLuminance(out);
+		if (shiftedLuminance > 0)
+			multiply(out, out, luminance / shiftedLuminance);
 	}
 
 	/**
@@ -148,9 +186,9 @@ public class ColorUtils {
 	 * @return hsl float[3]
 	 * @link <a href="https://web.archive.org/web/20230619214343/https://en.wikipedia.org/wiki/HSL_and_HSV#Color_conversion_formulae">Wikipedia: HSL and HSV</a>
 	 */
-	public static float[] srgbToHsl(float[] srgb) {
-		float V = Math.max(Math.max(srgb[0], srgb[1]), srgb[2]);
-		float X_min = Math.min(Math.min(srgb[0], srgb[1]), srgb[2]);
+	public static float[] srgbToHsl(float... srgb) {
+		float V = max(srgb);
+		float X_min = min(srgb);
 		float C = V - X_min;
 
 		float H = 0;
@@ -166,9 +204,9 @@ public class ColorUtils {
 		}
 
 		float L = (V + X_min) / 2;
-		float divisor = 1 - Math.abs(2 * L - 1);
-		float S_L = Math.abs(divisor) < EPS ? 0 : C / divisor;
-		return new float[] { H / 6, S_L, L };
+		float divisor = 1 - abs(2 * L - 1);
+		float S_L = abs(divisor) < EPS ? 0 : C / divisor;
+		return vec(H / 6, S_L, L);
 	}
 
 	/**
@@ -178,14 +216,14 @@ public class ColorUtils {
 	 * @return srgb float[3]
 	 * @link <a href="https://web.archive.org/web/20230619214343/https://en.wikipedia.org/wiki/HSL_and_HSV#Color_conversion_formulae">Wikipedia: HSL and HSV</a>
 	 */
-	public static float[] hslToSrgb(float[] hsl) {
-		float C = hsl[1] * (1 - Math.abs(2 * hsl[2] - 1));
-		float H_prime = hsl[0] * 6;
+	public static float[] hslToSrgb(float... hsl) {
+		float C = hsl[1] * (1 - abs(2 * hsl[2] - 1));
+		float H_prime = fract(hsl[0]) * 6;
 		float m = hsl[2] - C / 2;
 
-		float r = clamp(Math.abs(H_prime - 3) - 1, 0, 1) * C + m;
-		float g = clamp(2 - Math.abs(H_prime - 2), 0, 1) * C + m;
-		float b = clamp(2 - Math.abs(H_prime - 4), 0, 1) * C + m;
+		float r = clamp(abs(H_prime - 3) - 1, 0, 1) * C + m;
+		float g = clamp(2 - abs(H_prime - 2), 0, 1) * C + m;
+		float b = clamp(2 - abs(H_prime - 4), 0, 1) * C + m;
 		return new float[] { r, g, b };
 	}
 
@@ -195,9 +233,9 @@ public class ColorUtils {
 	 * @param hsl float[3]
 	 * @return hsv float[3]
 	 */
-	public static float[] hslToHsv(float[] hsl) {
-		float v = hsl[2] + hsl[1] * Math.min(hsl[2], 1 - hsl[2]);
-		return new float[] { hsl[0], Math.abs(v) < EPS ? 0 : 2 * (1 - hsl[2] / v), v };
+	public static float[] hslToHsv(float... hsl) {
+		float v = hsl[2] + hsl[1] * min(hsl[2], 1 - hsl[2]);
+		return vec(hsl[0], abs(v) < EPS ? 0 : 2 * (1 - hsl[2] / v), v);
 	}
 
 	/**
@@ -206,10 +244,10 @@ public class ColorUtils {
 	 * @param hsv float[3]
 	 * @return hsl float[3]
 	 */
-	public static float[] hsvToHsl(float[] hsv) {
+	public static float[] hsvToHsl(float... hsv) {
 		float l = hsv[2] * (1 - hsv[1] / 2);
-		float divisor = Math.min(l, 1 - l);
-		return new float[] { hsv[0], Math.abs(divisor) < EPS ? 0 : (hsv[2] - l) / divisor, l };
+		float divisor = min(l, 1 - l);
+		return vec(hsv[0], abs(divisor) < EPS ? 0 : (hsv[2] - l) / divisor, l);
 	}
 
 	/**
@@ -219,7 +257,7 @@ public class ColorUtils {
 	 * @return hsv float[3]
 	 * @link <a href="https://web.archive.org/web/20230619214343/https://en.wikipedia.org/wiki/HSL_and_HSV#Color_conversion_formulae">Wikipedia: HSL and HSV</a>
 	 */
-	public static float[] srgbToHsv(float[] srgb) {
+	public static float[] srgbToHsv(float... srgb) {
 		return hslToHsv(srgbToHsl(srgb));
 	}
 
@@ -230,7 +268,7 @@ public class ColorUtils {
 	 * @return srgb float[3]
 	 * @link <a href="https://web.archive.org/web/20230619214343/https://en.wikipedia.org/wiki/HSL_and_HSV#Color_conversion_formulae">Wikipedia: HSL and HSV</a>
 	 */
-	public static float[] hsvToSrgb(float[] hsv) {
+	public static float[] hsvToSrgb(float... hsv) {
 		return hslToSrgb(hsvToHsl(hsv));
 	}
 
@@ -269,6 +307,16 @@ public class ColorUtils {
 	}
 
 	/**
+	 * Convert Color instance from sRGB to linear RGB in the range 0-1.
+	 *
+	 * @param color sRGB Color instance
+	 * @return float[3] linear RGB values from 0-1
+	 */
+	public static float[] rgb(Color color) {
+		return srgbToLinear(srgb(color));
+	}
+
+	/**
 	 * Convert red, green and blue in the range 0-255 from sRGB to sRGB in the range 0-1.
 	 *
 	 * @param r red color
@@ -277,7 +325,7 @@ public class ColorUtils {
 	 * @return float[3] non-linear sRGB values from 0-1
 	 */
 	public static float[] srgb(float r, float g, float b) {
-		return new float[] { r / 255f, g / 255f, b / 255f };
+		return vec(r / 255f, g / 255f, b / 255f);
 	}
 
 	/**
@@ -287,7 +335,16 @@ public class ColorUtils {
 	 * @return float[3] non-linear sRGB values from 0-1
 	 */
 	public static float[] srgb(String hex) {
-		Color color = Color.decode(hex);
+		return srgb(Color.decode(hex));
+	}
+
+	/**
+	 * Convert Color instance from sRGB to sRGB in the range 0-1.
+	 *
+	 * @param color sRGB Color instance
+	 * @return float[3] non-linear sRGB values from 0-1
+	 */
+	public static float[] srgb(Color color) {
 		return srgb(color.getRed(), color.getGreen(), color.getBlue());
 	}
 
@@ -358,11 +415,8 @@ public class ColorUtils {
 		return rgb[0] << 16 | rgb[1] << 8 | rgb[2];
 	}
 
-	public static int packSrgb(float[] srgb) {
-		int[] ints = new int[3];
-		for (int i = 0; i < 3; i++)
-			ints[i] = clamp(Math.round(srgb[i] * 0xFF), 0, 0xFF);
-		return packRawRgb(ints);
+	public static int packSrgb(float... srgb) {
+		return packRawRgb(ivec(round(multiply(saturate(srgb), 0xFF))));
 	}
 
 	public static int packRawHsl(int... hsl) {
@@ -383,9 +437,9 @@ public class ColorUtils {
 	}
 
 	public static int packHsl(float... hsl) {
-		int H = clamp(Math.round((hsl[0] - .0078125f) * (0x3F + 1)), 0, 0x3F);
-		int S = clamp(Math.round((hsl[1] - .0625f) * (0x7 + 1)), 0, 0x7);
-		int L = clamp(Math.round(hsl[2] * (0x7F + 1)), 0, 0x7F);
+		int H = clamp(round((hsl[0] - .0078125f) * (0x3F + 1)), 0, 0x3F);
+		int S = clamp(round((hsl[1] - .0625f) * (0x7 + 1)), 0, 0x7);
+		int L = clamp(round(hsl[2] * (0x7F + 1)), 0, 0x7F);
 		return packRawHsl(H, S, L);
 	}
 
@@ -422,10 +476,7 @@ public class ColorUtils {
 	}
 
 	@Slf4j
-	public static class SrgbAdapter extends TypeAdapter<float[]> {
-		private final float[] rgba = { 0, 0, 0, 1 };
-		private final int[] rgbaInt = { 0, 0, 0, 255 };
-
+	public static class SrgbAdapter extends DelegateFloatAdapter<float[]> {
 		@Override
 		public float[] read(JsonReader in) throws IOException {
 			var token = in.peek();
@@ -436,7 +487,7 @@ public class ColorUtils {
 				throw new IOException("Expected hex color code or array of color channels at " + GsonUtils.location(in));
 
 			in.beginArray();
-
+			float[] rgba = { 0, 0, 0, 1 };
 			int i = 0;
 			while (in.hasNext() && in.peek() != JsonToken.END_ARRAY) {
 				if (in.peek() == JsonToken.NULL) {
@@ -451,7 +502,7 @@ public class ColorUtils {
 						break;
 					}
 
-					rgba[i++] = (float) in.nextDouble();
+					rgba[i++] = FLOAT_ADAPTER.read(in);
 					continue;
 				}
 
@@ -468,9 +519,7 @@ public class ColorUtils {
 			if (i == 4)
 				return rgba;
 
-			float[] rgb = new float[3];
-			System.arraycopy(rgba, 0, rgb, 0, 3);
-			return rgb;
+			return slice(rgba, 0, 3);
 		}
 
 		@Override
@@ -483,6 +532,8 @@ public class ColorUtils {
 			if (src.length != 3 && src.length != 4)
 				throw new IOException("The number of components must be 3 or 4 in a color array. Got " + Arrays.toString(src));
 
+			float[] rgba = { 0, 0, 0, 1 };
+			int[] rgbaInt = { 0, 0, 0, 255 };
 			for (int i = 0; i < src.length; i++)
 				rgba[i] = src[i] * 255;
 
@@ -490,8 +541,8 @@ public class ColorUtils {
 			boolean canfit = true;
 			for (int i = 0; i < src.length; i++) {
 				float f = rgba[i];
-				rgbaInt[i] = Math.round(f);
-				if (Math.abs(f - rgbaInt[i]) > EPS) {
+				rgbaInt[i] = round(f);
+				if (abs(f - rgbaInt[i]) > EPS) {
 					canfit = false;
 					break;
 				}
@@ -506,9 +557,8 @@ public class ColorUtils {
 				}
 			} else {
 				out.beginArray();
-				for (int i = 0; i < src.length; i++) {
-					out.value(rgba[i]);
-				}
+				for (int i = 0; i < src.length; i++)
+					FLOAT_ADAPTER.write(out, rgba[i]);
 				out.endArray();
 			}
 		}
@@ -524,6 +574,19 @@ public class ColorUtils {
 		@Override
 		public void write(JsonWriter out, float[] src) throws IOException {
 			super.write(out, linearToSrgb(src));
+		}
+	}
+
+	public static class LinearAdapter extends DelegateFloatAdapter<Float> {
+		@Override
+		public Float read(JsonReader in) throws IOException {
+			var value = FLOAT_ADAPTER.read(in);
+			return value == null ? null : srgbToLinear(value);
+		}
+
+		@Override
+		public void write(JsonWriter out, Float value) throws IOException {
+			FLOAT_ADAPTER.write(out, value == null ? null : linearToSrgb(value));
 		}
 	}
 }

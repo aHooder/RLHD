@@ -25,32 +25,68 @@
 package rs117.hd.utils.buffer;
 
 import java.nio.IntBuffer;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.lwjgl.system.MemoryUtil;
 import rs117.hd.HdPlugin;
 
-public class GpuIntBuffer
-{
+@Slf4j
+public class GpuIntBuffer {
+	@Getter
 	private IntBuffer buffer;
+	private final boolean ownsBuffer;
 
-	public GpuIntBuffer()
-	{
+	public GpuIntBuffer() {
 		this(65536);
 	}
 
 	public GpuIntBuffer(int initialCapacity) {
-		buffer = MemoryUtil.memAllocInt(initialCapacity);
+		try {
+			buffer = MemoryUtil.memAllocInt(initialCapacity);
+		} catch (OutOfMemoryError oom) {
+			// Force garbage collection and try again
+			System.gc();
+			buffer = MemoryUtil.memAllocInt(initialCapacity);
+		}
+		ownsBuffer = true;
+	}
+
+	public GpuIntBuffer(IntBuffer buffer) {
+		this.buffer = buffer;
+		ownsBuffer = false;
+	}
+
+	public GpuIntBuffer(boolean ownsBuffer) {
+		this.ownsBuffer = ownsBuffer;
 	}
 
 	public void destroy() {
-		if (buffer != null)
+		if (buffer != null && ownsBuffer)
 			MemoryUtil.memFree(buffer);
 		buffer = null;
+	}
+
+	public GpuIntBuffer setBuffer(GLMappedBuffer buffer) {
+		assert !ownsBuffer;
+		this.buffer = buffer.intView();
+		return this;
 	}
 
 	@Override
 	@SuppressWarnings("deprecation")
 	protected void finalize() {
 		destroy();
+	}
+
+	@Override
+	public String toString() {
+		return String.format(
+			"%s@%x(pos=%d, size=%d)",
+			getClass().getSimpleName(),
+			hashCode(),
+			buffer.position(),
+			buffer.capacity()
+		);
 	}
 
 	public void put(int x, int y, int z) {
@@ -73,8 +109,7 @@ public class GpuIntBuffer
 		this.buffer.put(buffer);
 	}
 
-	public int position()
-	{
+	public int position() {
 		return buffer.position();
 	}
 
@@ -96,7 +131,7 @@ public class GpuIntBuffer
 		final int position = buffer.position();
 		if ((capacity - position) < size) {
 			do {
-				capacity *= HdPlugin.BUFFER_GROWTH_MULTIPLIER;
+				capacity = (int) (capacity * HdPlugin.BUFFER_GROWTH_MULTIPLIER);
 			}
 			while ((capacity - position) < size);
 
@@ -108,10 +143,5 @@ public class GpuIntBuffer
 		}
 
 		return this;
-	}
-
-	public IntBuffer getBuffer()
-	{
-		return buffer;
 	}
 }

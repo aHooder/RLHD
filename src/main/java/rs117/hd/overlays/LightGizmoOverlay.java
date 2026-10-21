@@ -13,9 +13,9 @@ import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import javax.swing.SwingUtilities;
@@ -34,15 +34,14 @@ import net.runelite.client.ui.overlay.OverlayPosition;
 import net.runelite.client.util.ColorUtil;
 import org.apache.commons.lang3.NotImplementedException;
 import rs117.hd.HdPlugin;
+import rs117.hd.scene.LightManager;
 import rs117.hd.scene.lights.Alignment;
 import rs117.hd.scene.lights.Light;
 import rs117.hd.scene.lights.LightType;
 import rs117.hd.utils.ColorUtils;
 import rs117.hd.utils.Mat4;
-import rs117.hd.utils.Vector;
 
-import static net.runelite.api.Perspective.*;
-import static rs117.hd.HdPlugin.NEAR_PLANE;
+import static rs117.hd.utils.MathUtils.*;
 
 @Slf4j
 @Singleton
@@ -67,6 +66,9 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 	@Inject
 	private HdPlugin plugin;
 
+	@Inject
+	private LightManager lightManager;
+
 	private boolean hideInvisibleLights;
 	private boolean hideRadiusRings = true;
 	private boolean hideAnimLights;
@@ -79,14 +81,14 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 	private boolean followMouse;
 
 	private Action action = Action.SELECT;
-	private final double[] rawMousePos = new double[2];
-	private final double[] rawMousePosPrev = new double[2];
-	private final double[] mouseDelta = new double[2];
+	private final float[] rawMousePos = new float[2];
+	private final float[] rawMousePosPrev = new float[2];
+	private final float[] mouseDelta = new float[2];
 	private final float[] cameraOrientation = new float[2];
 	private Alignment originalLightAlignment = Alignment.CUSTOM;
-	private final int[] originalLightPosition = new int[3];
-	private final int[] originalLightOffset = new int[3];
-	private final int[] currentLightOffset = new int[3];
+	private final float[] originalLightPosition = new float[3];
+	private final float[] originalLightOffset = new float[3];
+	private final float[] currentLightOffset = new float[3];
 	private int freezeMode = 0;
 	private final boolean[] frozenAxes = { false, true, false }; // by default, restrict movement to the same height
 	private final ArrayList<Light> selections = new ArrayList<>();
@@ -96,14 +98,6 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 	private static final int RELATIVE_TO_CAMERA = 0;
 	private static final int RELATIVE_TO_ORIGIN = 1;
 	private static final int RELATIVE_TO_POSITION = 2;
-
-	// TODO: implement undo & redo
-	private ArrayDeque<Change> history = new ArrayDeque<>();
-
-	interface Change {
-		void undo();
-		void redo();
-	}
 
 	enum Action {
 		SELECT, GRAB, SCALE
@@ -134,6 +128,9 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 		if (sceneContext == null)
 			return null;
 
+		if (selections.removeIf(light -> !lightManager.getLights().contains(light)))
+			action = Action.SELECT;
+
 		// If the orientation changed, don't consider mouse movement
 		boolean wasCameraReoriented = isProbablyRotatingCamera;
 		for (int j = 0; j < 2; j++) {
@@ -142,7 +139,7 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 				break;
 			}
 		}
-		System.arraycopy(plugin.cameraOrientation, 0, cameraOrientation, 0, 2);
+		copyTo(cameraOrientation, plugin.cameraOrientation);
 
 		boolean isCtrlHeld = client.isKeyPressed(KeyCode.KC_CONTROL);
 		boolean isShiftHeld = client.isKeyPressed(KeyCode.KC_SHIFT);
@@ -162,13 +159,13 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 				}
 			}
 		} else if (!isAltHeld) {
-			double scalingFactor = isShiftHeld ? .1 : 1;
+			float scalingFactor = isShiftHeld ? .1f : 1f;
 			for (int j = 0; j < 2; j++)
 				mouseDelta[j] += (rawMousePos[j] - rawMousePosPrev[j]) * scalingFactor;
 		}
-		System.arraycopy(rawMousePos, 0, rawMousePosPrev, 0, 2);
+		copyTo(rawMousePosPrev, rawMousePos);
 
-		var mousePoint = new java.awt.Point((int) Math.round(rawMousePos[0]), (int) Math.round(rawMousePos[1]));
+		var mousePoint = new java.awt.Point(round(rawMousePos[0]), round(rawMousePos[1]));
 		SwingUtilities.convertPointFromScreen(mousePoint, client.getCanvas());
 		int[] mousePos = { mousePoint.x, mousePoint.y };
 
@@ -206,23 +203,7 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 		Mat4.mul(projectionMatrix, Mat4.scale(viewportWidth, viewportHeight, 1));
 		Mat4.mul(projectionMatrix, Mat4.translate(.5f, .5f, .5f));
 		Mat4.mul(projectionMatrix, Mat4.scale(.5f, -.5f, .5f));
-		// NDC clip space
-		Mat4.mul(projectionMatrix, Mat4.scale(client.getScale(), client.getScale(), 1));
-		Mat4.mul(projectionMatrix, Mat4.perspective(viewportWidth, viewportHeight, NEAR_PLANE));
-		Mat4.mul(projectionMatrix, Mat4.rotateX(plugin.cameraOrientation[1]));
-		Mat4.mul(projectionMatrix, Mat4.rotateY(plugin.cameraOrientation[0]));
-		Mat4.mul(projectionMatrix, Mat4.translate(
-			-plugin.cameraPosition[0],
-			-plugin.cameraPosition[1],
-			-plugin.cameraPosition[2]
-		));
-
-		float[] inverseProjection = null;
-		try {
-			inverseProjection = Mat4.inverse(projectionMatrix);
-		} catch (IllegalArgumentException ex) {
-			System.out.println("Not invertible");
-		}
+		Mat4.mul(projectionMatrix, plugin.viewProjMatrix);
 
 		int numFrozenAxes = 0;
 		if (freezeMode > 0)
@@ -232,8 +213,7 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 
 		hovers.clear();
 		int counter = 0;
-		final float[] lightToCamera = new float[3];
-		var lights = sceneContext.lights;
+		var lights = lightManager.getLights();
 
 		float[] point = new float[4];
 		int selectedIndex = -1;
@@ -247,9 +227,18 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 			}
 
 			Light l = lights.get(lightIndex);
+			float[] localProjection = projectionMatrix;
+			float[] inverseProjection = null;
+			if (selections.contains(l) && (l.sceneContext == null || worldProjection(l) != null)) {
+				localProjection = lightProjection(l, projectionMatrix);
+				try {
+					inverseProjection = Mat4.inverse(localProjection);
+				} catch (IllegalArgumentException ignored) {
+					// A squashed world view has no invertible projection
+				}
+			}
 
-			if (hideInvisibleLights && !l.def.visibleFromOtherPlanes &&
-				(l.plane < client.getPlane() && l.belowFloor || l.plane > client.getPlane() && l.aboveFloor))
+			if (hideInvisibleLights && l.hiddenByPlane)
 				continue;
 
 			if (hideAnimLights && !l.def.animationIds.isEmpty() && !l.parentExists)
@@ -269,20 +258,19 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 					float[] oldLightPos = new float[4];
 					float[] newLightPos = new float[4];
 
-					float radians = (float) (l.orientation * UNIT);
-					float sin = (float) Math.sin(radians);
-					float cos = (float) Math.cos(radians);
+					float radians = l.orientation * JAU_TO_RAD;
+					float sin = sin(radians);
+					float cos = cos(radians);
 
 					// Project the light's current position into screen space
-					for (int j = 0; j < 3; j++)
-						oldLightPos[j] = l.origin[j];
+					System.arraycopy(l.origin, 0, oldLightPos, 0, 3);
 					float x = currentLightOffset[0];
 					float z = currentLightOffset[2];
 					oldLightPos[0] += -cos * x - sin * z;
 					oldLightPos[1] += currentLightOffset[1];
 					oldLightPos[2] += -cos * z + sin * x;
 					oldLightPos[3] = 1;
-					Mat4.projectVec(point, projectionMatrix, oldLightPos);
+					Mat4.projectVec(point, localProjection, oldLightPos);
 
 					if (followMouse) {
 						// Move the light to the mouse position
@@ -291,7 +279,7 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 					} else {
 						// Shift the position with mouse movement
 						for (int j = 0; j < 2; j++)
-							point[j] += (float) mouseDelta[j];
+							point[j] += mouseDelta[j];
 					}
 
 					if (numFrozenAxes == 0) { // restrict to same depth plane
@@ -300,14 +288,12 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 						if (point[3] <= 0)
 							continue;
 					} else {
-						// p1 & v1 = ray from the camera in the hovered direction
-						var p1 = plugin.cameraPosition;
-						var v1 = new float[3];
-
-						// Compute a vector from the camera to the target mouse position
-						Mat4.projectVec(point, inverseProjection, point);
-						for (int j = 0; j < 3; j++)
-							v1[j] = point[j] - p1[j];
+						// Unproject two finite depths into local space, supporting orthographic projection
+						float[] p1 = { point[0], point[1], .25f, 1 };
+						float[] rayEnd = { point[0], point[1], .75f, 1 };
+						Mat4.projectVec(p1, inverseProjection, p1);
+						Mat4.projectVec(rayEnd, inverseProjection, rayEnd);
+						float[] v1 = subtract(rayEnd, p1);
 
 						if (numFrozenAxes == 1) {
 							// restrict to basis plane
@@ -322,19 +308,20 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 							}
 
 							if (freezeMode == RELATIVE_TO_ORIGIN) {
-								for (int j = 0; j < 3; j++)
-									oldLightPos[j] = l.origin[j];
+								copyTo(oldLightPos, l.origin);
 								oldLightPos[3] = 1;
-								Mat4.projectVec(point, projectionMatrix, oldLightPos);
 							}
 
-							float d = Vector.dot(n, oldLightPos);
+							float d = dot(n, oldLightPos);
 
 							// dot(p1 + v1 * t, n) = d
 							// dot(p1, n) + dot(v1 * t, n) = d
 							// dot(p1, n) + dot(v1, n) * t = d
 							// t = (d - dot(p1, n)) / dot(v1, n)
-							float t = (d - Vector.dot(p1, n)) / Vector.dot(v1, n);
+							float denominator = dot(v1, n);
+							if (abs(denominator) < 1e-6f)
+								continue;
+							float t = (d - dot(p1, n)) / denominator;
 
 							for (int j = 0; j < 3; j++)
 								newLightPos[j] = p1[j] + v1[j] * t;
@@ -348,40 +335,21 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 								}
 							}
 
-							// p2 & v2 = ray from the light's origin in the direction of the target axis
-							var p2 = new float[3];
-							var origin = freezeMode == RELATIVE_TO_ORIGIN ? l.origin : originalLightPosition;
+							// Closest point on the selected axis to the mouse ray
+							var p2 = freezeMode == RELATIVE_TO_ORIGIN ? l.origin : originalLightPosition;
+							float rayLengthSquared = dot(v1, v1);
+							float denominator = rayLengthSquared - v1[axis] * v1[axis];
+							if (denominator <= rayLengthSquared * 1e-6f)
+								continue;
+							float alongRay = 0;
 							for (int j = 0; j < 3; j++)
-								p2[j] = origin[j];
-							var v2 = new float[3];
-							v2[axis] = 1;
-
-							// v3 is the direction perpendicular to both v1 and v2, which is the direction
-							// for the shortest path between two points on the two rays
-							var v3 = new float[3];
-							Vector.cross(v3, v1, v2);
-
-							try {
-								// Solve the following set of linear equations to find t2; the distance
-								// from p2 along v2 until the closest point between the two rays:
-								// p1 + v1 * t1 + v3 * t3 = p2 + v2 * t2
-
-								// Solve for t2:
-								float t2 = -p1[0] * v1[1] * v3[2] + p1[0] * v1[2] * v3[1] + p1[1] * v1[0] * v3[2] - p1[1] * v1[2] * v3[0]
-										   - p1[2] * v1[0] * v3[1] + p1[2] * v1[1] * v3[0] + p2[0] * v1[1] * v3[2] - p2[0] * v1[2] * v3[1]
-										   - p2[1] * v1[0] * v3[2] + p2[1] * v1[2] * v3[0] + p2[2] * v1[0] * v3[1] - p2[2] * v1[1] * v3[0];
-								t2 /= v1[0] * v2[1] * v3[2] - v1[0] * v2[2] * v3[1] - v1[1] * v2[0] * v3[2] + v1[1] * v2[2] * v3[0]
-									  + v1[2] * v2[0] * v3[1] - v1[2] * v2[1] * v3[0];
-
-								for (int j = 0; j < 3; j++)
-									newLightPos[j] = p2[j] + v2[j] * t2;
-							} catch (IllegalArgumentException ex) {
-								log.debug("No solution:", ex);
-							}
+								alongRay += v1[j] * (p1[j] - p2[j]);
+							copyTo(newLightPos, p2);
+							newLightPos[axis] += (rayLengthSquared * (p1[axis] - p2[axis]) - v1[axis] * alongRay) / denominator;
 						}
 					}
 
-					float gridSize = isCtrlHeld ? 128f / (isShiftHeld ? 8 : 1) : 1;
+					int gridSize = isCtrlHeld ? 128 / (isShiftHeld ? 8 : 1) : 1;
 
 					float[] relativePos = new float[3];
 					for (int j = 0; j < 3; j++)
@@ -393,40 +361,48 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 					relativePos[2] = -cos * z - sin * x;
 
 					for (int j = 0; j < 3; j++)
-						l.offset[j] = (int) (Math.round(relativePos[j] / gridSize) * gridSize);
+						l.offset[j] = round(relativePos[j] / gridSize) * gridSize;
 
 					x = l.offset[0];
 					z = l.offset[2];
 					l.pos[0] = l.origin[0] + (int) (-cos * x - sin * z);
 					l.pos[1] = l.origin[1] + l.offset[1];
 					l.pos[2] = l.origin[2] + (int) (-cos * z + sin * x);
+					copyTo(l.sceneLocalPos, l.pos);
+					var worldProjection = worldProjection(l);
+					if (worldProjection != null)
+						Mat4.transformVecAffine(l.pos, worldProjection, l.sceneLocalPos);
 				}
 			}
 
-			for (int j = 0; j < 3; j++)
-				point[j] = l.pos[j];
+			copyTo(point, l.pos);
 			point[3] = 1;
 
-			Vector.subtract(lightToCamera, plugin.cameraPosition, point);
-			float distanceFromCamera = Vector.length(lightToCamera);
-
+			// Clip W gives perspective depth, or constant scale for an orthographic view
+			float clipW =
+				projectionMatrix[3] * point[0] + projectionMatrix[7] * point[1] +
+				projectionMatrix[11] * point[2] + projectionMatrix[15];
 			Mat4.projectVec(point, projectionMatrix, point);
 			if (point[3] <= 0)
 				continue;
-			int x = Math.round(point[0]);
-			int y = Math.round(point[1]);
+			int x = round(point[0]);
+			int y = round(point[1]);
 
-			// Take perspective depth into account
-			int currentDiameter = Math.round(l.radius * 2 / distanceFromCamera * client.getScale());
-			float definedDiameter = l.def.radius * 2 / distanceFromCamera * client.getScale();
+			float pixelsPerUnit = length(
+				projectionMatrix[0] - point[0] * projectionMatrix[3],
+				projectionMatrix[4] - point[0] * projectionMatrix[7],
+				projectionMatrix[8] - point[0] * projectionMatrix[11]
+			) / abs(clipW);
+			int currentDiameter = round(l.radius * 2 * pixelsPerUnit);
+			float definedDiameter = l.def.radius * 2 * pixelsPerUnit;
 			float fRange = l.def.range / 100f;
-			int minDiameter = Math.round(definedDiameter * (1 - fRange));
-			int maxDiameter = Math.round(definedDiameter * (1 + fRange));
+			int minDiameter = round(definedDiameter * (1 - fRange));
+			int maxDiameter = round(definedDiameter * (1 + fRange));
 
 			if (mousePosCanvas != null) {
-				float d = Vector.length(mousePosCanvas.getX() - x, mousePosCanvas.getY() - y);
+				float d = length(mousePosCanvas.getX() - x, mousePosCanvas.getY() - y);
 				if (d <= outerHandleRingDiameter / 2f + hoverDistanceMargin ||
-					!hideRadiusRings && Math.abs(d - currentDiameter / 2f) < hoverDistanceMargin * 2)
+					!hideRadiusRings && abs(d - currentDiameter / 2f) < hoverDistanceMargin * 2)
 					hovers.add(l);
 			}
 
@@ -458,7 +434,7 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 			// Draw radius rings
 			if (!hideRadiusRings) {
 				drawRing(g, x, y, currentDiameter, radiusRingColor, thinnerLine);
-				if (l.def.type == LightType.PULSE && Math.abs(currentDiameter) > .001f) {
+				if (l.def.type == LightType.PULSE && abs(currentDiameter) > .001f) {
 					drawRing(g, x, y, minDiameter, rangeRingsColor, thinLongDashedLine);
 					drawRing(g, x, y, maxDiameter, rangeRingsColor, thinLongDashedLine);
 				}
@@ -477,23 +453,23 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 				if (showDuplicationInfo) {
 					int newlines = (counter++ % 5) + 1;
 					info += "\n".repeat(newlines);
-					info += counter + ": " + l.hash;
+					info += counter + ": " + l.tileObjectId;
 					info += "\n".repeat(5 - newlines);
 				}
 				if (!hideInfo) {
-					info += String.format("\nradius: %d", liveInfo ? l.radius : l.def.radius);
+					info += String.format("\nradius: %.0f", liveInfo ? l.radius : l.def.radius);
 					info += String.format("\nstrength: %.1f", liveInfo ? l.strength : l.def.strength);
 					var color = ColorUtils.linearToSrgb(l.def.color);
 					info += String.format("\ncolor: [%.0f, %.0f, %.0f]", color[0] * 255, color[1] * 255, color[2] * 255);
 					// Technically negative Y is up, but invert this in the info shown
 					info += String.format(
-						"\norigin: [%d, %d%s, %d]",
+						"\norigin: [%.0f, %.0f%s, %.0f]",
 						l.origin[0],
 						-(l.origin[1] + l.def.height),
 						l.def.height == 0 ? "" : " + " + l.def.height,
 						l.origin[2]
 					);
-					info += String.format("\noffset: [%d, %d, %d]", l.offset[0], -l.offset[1], l.offset[2]);
+					info += String.format("\noffset: [%.0f, %.0f, %.0f]", l.offset[0], -l.offset[1], l.offset[2]);
 					info += String.format("\norientation: %d", l.orientation);
 				}
 				drawAlignedString(g, info, x, y + 25, TextAlignment.CENTER_ON_COLONS);
@@ -504,13 +480,15 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 			switch (action) {
 				case GRAB:
 					Light l = selections.get(0);
+					if (l.sceneContext != null && worldProjection(l) == null)
+						break;
+					float[] localProjection = lightProjection(l, projectionMatrix);
 					var lightOrigin = freezeMode == RELATIVE_TO_ORIGIN ? l.origin : originalLightPosition;
-					for (int i = 0; i < 3; i++)
-						point[i] = lightOrigin[i];
+					System.arraycopy(lightOrigin, 0, point, 0, 3);
 					point[3] = 1;
 					float[] origin = new float[4];
-					Mat4.projectVec(origin, projectionMatrix, point);
-					if (point[3] <= 0)
+					Mat4.projectVec(origin, localProjection, point);
+					if (origin[3] <= 0)
 						break;
 
 					if (numFrozenAxes > 0) {
@@ -526,7 +504,7 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 							if (!frozenAxes[i]) {
 								int stepSize = 1000;
 								point[i] += stepSize;
-								Mat4.projectVec(stepAlongAxis, projectionMatrix, point);
+								Mat4.projectVec(stepAlongAxis, localProjection, point);
 								point[i] -= stepSize;
 
 								g.setColor(axisColors[i]);
@@ -535,12 +513,11 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 						}
 					}
 
-					for (int i = 0; i < 3; i++)
-						point[i] = l.pos[i];
+					copyTo(point, l.pos);
 					point[3] = 1;
 					float[] pos = new float[4];
 					Mat4.projectVec(pos, projectionMatrix, point);
-					if (point[3] <= 0)
+					if (pos[3] <= 0)
 						break;
 
 					g.setColor(Color.YELLOW);
@@ -554,18 +531,29 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 		return null;
 	}
 
+	@Nullable
+	private float[] worldProjection(Light light) {
+		if (light.sceneContext == null)
+			return null;
+		var ctx = light.sceneContext.worldViewContext;
+		return ctx == null ? null : ctx.projection;
+	}
+
+	private float[] lightProjection(Light light, float[] projection) {
+		var worldProjection = worldProjection(light);
+		if (worldProjection == null)
+			return projection;
+		float[] localProjection = copy(projection);
+		Mat4.mul(localProjection, worldProjection);
+		return localProjection;
+	}
+
 	private void drawLineSegment(Graphics2D g, float[] a, float[] b) {
-		g.drawLine(
-			Math.round(a[0]),
-			Math.round(a[1]),
-			Math.round(b[0]),
-			Math.round(b[1])
-		);
+		g.drawLine(round(a[0]), round(a[1]), round(b[0]), round(b[1]));
 	}
 
 	private void drawLineSpan(Graphics2D g, float[] a, float[] b) {
-		float[] v = new float[2];
-		Vector.subtract(v, b, a);
+		float[] v = subtract(b, a);
 		if (v[0] == 0 && v[1] == 0)
 			return;
 
@@ -630,10 +618,10 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 		if (t == INF)
 			return;
 
-		int x1 = Math.round(p[0]);
-		int y1 = Math.round(p[1]);
-		int x2 = Math.round(p[0] + v[0] * t);
-		int y2 = Math.round(p[1] + v[1] * t);
+		int x1 = round(p[0]);
+		int y1 = round(p[1]);
+		int x2 = round(p[0] + v[0] * t);
+		int y2 = round(p[1] + v[1] * t);
 		g.drawLine(x1, y1, x2, y2);
 	}
 
@@ -645,8 +633,8 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 
 	private void drawRing(Graphics2D g, int centerX, int centerY, int diameter, Color strokeColor, Stroke stroke) {
 		// Round down to an odd number
-		diameter = (int) Math.ceil(diameter / 2.f) * 2 - 1;
-		int r = (int) Math.ceil(diameter / 2.f);
+		diameter = ceil(diameter / 2.f) * 2 - 1;
+		int r = ceil(diameter / 2.f);
 		g.setColor(strokeColor);
 		g.setStroke(stroke);
 		g.drawOval(centerX - r, centerY - r, diameter, diameter);
@@ -662,7 +650,7 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 	private void drawCircleOutline(
 		Graphics2D g, int centerX, int centerY, int diameter, Color strokeColor, Stroke stroke
 	) {
-		int r = (int) Math.ceil(diameter / 2.f);
+		int r = ceil(diameter / 2.f);
 		int s = diameter - 1;
 		g.setColor(strokeColor);
 		g.setStroke(stroke);
@@ -795,7 +783,7 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 			// Reset the light back to its original offset
 			var l = selections.get(0);
 			l.alignment = originalLightAlignment;
-			System.arraycopy(originalLightOffset, 0, l.offset, 0, 3);
+			copyTo(l.offset, originalLightOffset);
 		}
 
 		action = Action.SELECT;
@@ -904,12 +892,18 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 						Arrays.fill(mouseDelta, 0);
 
 						originalLightAlignment = l.alignment;
-						System.arraycopy(l.offset, 0, originalLightOffset, 0, 3);
-						System.arraycopy(l.pos, 0, originalLightPosition, 0, 3);
+						copyTo(originalLightOffset, l.offset);
+						copyTo(originalLightPosition, l.sceneLocalPos);
 
 						l.alignment = Alignment.CUSTOM;
 						for (int i = 0; i < 3; i++)
-							l.offset[i] = l.pos[i] - l.origin[i];
+							l.offset[i] = l.sceneLocalPos[i] - l.origin[i];
+						float sin = sin(l.orientation * JAU_TO_RAD);
+						float cos = cos(l.orientation * JAU_TO_RAD);
+						float x = l.offset[0];
+						float z = l.offset[2];
+						l.offset[0] = -cos * x + sin * z;
+						l.offset[2] = -cos * z - sin * x;
 						System.arraycopy(l.offset, 0, currentLightOffset, 0, 3);
 						break;
 					case KeyEvent.VK_S:
@@ -946,7 +940,7 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 						// Reset current offset
 						if (freezeMode == 0)
 							freezeMode = 1;
-						System.arraycopy(originalLightOffset, 0, l.offset, 0, 3);
+						copyTo(l.offset, originalLightOffset);
 					} else {
 						cycleFreezeMode = true;
 					}
@@ -971,8 +965,8 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 					// Reset light back to its defined offset
 					l.alignment = l.def.alignment;
 					System.arraycopy(l.def.offset, 0, l.offset, 0, 3);
-					System.arraycopy(l.offset, 0, currentLightOffset, 0, 3);
-					System.arraycopy(l.offset, 0, originalLightOffset, 0, 3);
+					copyTo(currentLightOffset, l.offset);
+					copyTo(originalLightOffset, l.offset);
 					Arrays.fill(mouseDelta, 0);
 					break;
 			}
@@ -989,9 +983,6 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 					break;
 				case KeyEvent.VK_D:
 					showDuplicationInfo = !showDuplicationInfo;
-					break;
-				case KeyEvent.VK_H:
-					hideInvisibleLights = !hideInvisibleLights;
 					break;
 				case KeyEvent.VK_I:
 					hideInfo = !hideInfo;
@@ -1010,6 +1001,12 @@ public class LightGizmoOverlay extends Overlay implements MouseListener, KeyList
 					break;
 				case KeyEvent.VK_U:
 					liveInfo = !liveInfo;
+					break;
+			}
+		} else {
+			switch (e.getKeyCode()) {
+				case KeyEvent.VK_H:
+					hideInvisibleLights = !hideInvisibleLights;
 					break;
 			}
 		}

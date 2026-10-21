@@ -24,27 +24,26 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-
 #version 330
+
+#include <uniforms/global.glsl>
+#include <uniforms/world_views.glsl>
+#include <uniforms/materials.glsl>
 
 layout(triangles) in;
 layout(triangle_strip, max_vertices = 3) out;
 
-uniform mat4 lightProjectionMatrix;
-uniform float elapsedTime;
+#include <utils/constants.glsl>
+#include <utils/misc.glsl>
+#include <utils/uvs.glsl>
 
-#include uniforms/materials.glsl
-
-#include utils/constants.glsl
-#include utils/misc.glsl
-#include utils/uvs.glsl
-
+flat in vec3 gWorldPos[3];
 flat in vec3 gPosition[3];
 flat in vec3 gUv[3];
 flat in int gMaterialData[3];
 flat in int gCastShadow[3];
 
-out vec3 fUvw;
+out vec4 fUvw;
 flat out int fMaterialData;
 
 #if SHADOW_TRANSPARENCY
@@ -57,19 +56,20 @@ void main() {
         return;
 
     int materialData = gMaterialData[0];
-    Material material = getMaterial(materialData >> MATERIAL_INDEX_SHIFT);
+    Material material = getMaterial(materialData >> MATERIAL_INDEX_SHIFT & MATERIAL_INDEX_MASK);
 
     // MacOS doesn't allow assigning these arrays directly.
     // One of the many wonders of Apple software...
     vec3 uvw[3] = vec3[](gUv[0], gUv[1], gUv[2]);
-    computeUvs(materialData, vec3[](gPosition[0], gPosition[1], gPosition[2]), uvw);
+    int worldViewIndex = -1;
+    computeUvs(materialData, worldViewIndex, vec3[](gPosition[0], gPosition[1], gPosition[2]), uvw);
 
     fMaterialData = materialData;
 
     for (int i = 0; i < 3; i++) {
-        fUvw = vec3(uvw[i].xy, material.colorMap);
+        fUvw = vec4(uvw[i].xy, material.colorMap, material.shadowAlphaMap);
         // Scroll UVs
-        fUvw.xy += material.scrollDuration * elapsedTime;
+        fUvw.xy += material.scrollDuration * uboGlobal.elapsedTime;
         // Scale from the center
         fUvw.xy = .5 + (fUvw.xy - .5) * material.textureScale.xy;
 
@@ -77,7 +77,7 @@ void main() {
             fOpacity = gOpacity[i];
         #endif
 
-        gl_Position = lightProjectionMatrix * vec4(gPosition[i], 1);
+        gl_Position = uboGlobal.lightProjectionMatrix * vec4(gPosition[i], 1);
         EmitVertex();
     }
     EndPrimitive();

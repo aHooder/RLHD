@@ -8,25 +8,24 @@
  */
 #pragma once
 
-#include utils/constants.glsl
+#include <utils/constants.glsl>
+
+const vec3 LINEAR_SRGB_LUMINANCE_COEFFICIENTS = vec3(.2126f, .7152f, .0722f);
 
 /**
- * Row-major transformation matrices for conversion between RGB and XYZ color spaces.
- *
- * Fairman, H. S., Brill, M. H., & Hemmendinger, H. (1997).
- * How the CIE 1931 color-matching functions were derived from Wright-Guild data.
- * Color Research & Application, 22(1), 11–23.
- * doi:10.1002/(sici)1520-6378(199702)22:1<11::aid-col4>3.0.co;2-7
+ * Transforms between CIE XYZ (D65) and linear sRGB.
+ * Coefficients are the sRGB matrices from CSS Color Module Level 4:
+ * https://www.w3.org/TR/css-color-4/#color-conversion-code
  */
 const mat3 RGB_TO_XYZ_MATRIX = mat3(
-    .49, .1769, .0,
-    .31, .8124, .0099,
-    .2,  .0107, .9901
+    .4123908, .212639,  .01933082,
+    .35758434, .7151687, .11919478,
+    .1804808, .07219232, .95053215
 );
 const mat3 XYZ_TO_RGB_MATRIX = mat3(
-    2.36449,  -.514935,  0.00514883,
-    -.896553, 1.42633,   -.0142619,
-    -.467937,  .0886025, 1.00911
+    3.24097,   -.96924365, .05563008,
+    -1.5373832, 1.8759675,  -.20397696,
+    -.49861076, .041555058, 1.0569715
 );
 
 /**
@@ -45,6 +44,38 @@ vec3 XYZtoRGB(vec3 XYZ) {
  */
 vec3 RGBtoXYZ(vec3 RGB) {
     return RGB_TO_XYZ_MATRIX * RGB;
+}
+
+// Linear sRGB (D65) <-> Oklab's LMS basis.
+// https://bottosson.github.io/posts/oklab/#converting-from-linear-srgb-to-oklab
+const mat3 LINEAR_SRGB_TO_LMS = mat3(
+    0.4122214708, 0.2119034982, 0.0883024619,
+    0.5363325363, 0.6806995451, 0.2817188376,
+    0.0514459929, 0.1073969566, 0.6299787005
+);
+
+const mat3 LMS_TO_LINEAR_SRGB = mat3(
+    +4.0767416621, -1.2684380046, -0.0041960863,
+    -3.3077115913, +2.6097574011, -0.7034186147,
+    +0.2309699292, -0.3413193965, +1.7076147010
+);
+
+vec3 linearSrgbToLms(vec3 rgb) {
+    return LINEAR_SRGB_TO_LMS * rgb;
+}
+
+vec3 lmsToLinearSrgb(vec3 lms) {
+    return LMS_TO_LINEAR_SRGB * lms;
+}
+
+// Signed cube-root LMS used by Oklab. This is nonlinear LMS, not Oklab itself
+vec3 linearSrgbToLmsCbrt(vec3 rgb) {
+    vec3 lms = linearSrgbToLms(rgb);
+    return sign(lms) * pow(abs(lms), vec3(1.0 / 3.0));
+}
+
+vec3 lmsCbrtToLinearSrgb(vec3 lmsCbrt) {
+    return lmsToLinearSrgb(lmsCbrt * lmsCbrt * lmsCbrt);
 }
 
 /**
@@ -96,6 +127,20 @@ vec3 linearToSrgb(vec3 rgb) {
     step(vec3(0.0031308), rgb));
 }
 
+vec2 srgbToLinear(vec2 srgb) {
+  return mix(
+    srgb / 12.92,
+    pow((srgb + vec2(0.055)) / vec2(1.055), vec2(2.4)),
+    step(vec2(0.04045), srgb));
+}
+
+vec2 linearToSrgb(vec2 rgb) {
+  return mix(
+    rgb * 12.92,
+    1.055 * pow(rgb, vec2(1 / 2.4)) - 0.055,
+    step(vec2(0.0031308), rgb));
+}
+
 float srgbToLinear(float srgb) {
   return mix(
     srgb / 12.92,
@@ -108,6 +153,11 @@ float linearToSrgb(float rgb) {
     rgb * 12.92,
     1.055 * pow(rgb, 1 / 2.4) - 0.055,
     step(0.0031308, rgb));
+}
+
+// Calculate linear perceptual luminance from a linear sRGB color
+float linearSrgbLuminance(vec3 linearSrgb) {
+    return dot(linearSrgb, LINEAR_SRGB_LUMINANCE_COEFFICIENTS);
 }
 
 // https://web.archive.org/web/20230619214343/https://en.wikipedia.org/wiki/HSL_and_HSV#Color_conversion_formulae
@@ -135,7 +185,7 @@ vec3 srgbToHsl(vec3 srgb) {
 
 vec3 hslToSrgb(vec3 hsl) {
     float C = (1 - abs(2 * hsl[2] - 1)) * hsl[1];
-    float H_prime = hsl[0] * 6;
+    float H_prime = fract(hsl[0]) * 6;
     float m = hsl[2] - C / 2;
 
     float r = clamp(abs(H_prime - 3) - 1, 0, 1);
@@ -164,19 +214,38 @@ vec3 hsvToSrgb(vec3 hsv) {
 }
 
 // Pack HSL int Jagex format
-int packHsl(vec3 hsl) {
-    int H = clamp(int(round((hsl[0] - .0078125f) * 64)), 0, 63);
-    int S = clamp(int(round((hsl[1] - .0625f) * 8)), 0, 7);
-    int L = clamp(int(round(hsl[2] * 128)), 0, 127);
+int packRawHsl(ivec3 hsl) {
+    int H = clamp(hsl[0], 0, 63);
+    int S = clamp(hsl[1], 0, 7);
+    int L = clamp(hsl[2], 0, 127);
     return H << 10 | S << 7 | L;
 }
 
+// Pack HSL int Jagex format
+int packHsl(vec3 hsl) {
+    ivec3 rawHsl = ivec3(
+        round((hsl[0] - .0078125f) * 64),
+        round((hsl[1] - .0625f) * 8),
+        round(hsl[2] * 128)
+    );
+    return packRawHsl(rawHsl);
+}
+
 // Unpack HSL from Jagex format
-vec3 unpackHsl(int hsl) {
+vec3 unpackRawHsl(int hsl) {
     // 6-bit hue | 3-bit saturation | 7-bit lightness
-    float H = (hsl >> 10 & 63) / 64.f + .0078125f;
-    float S = (hsl >> 7 & 7) / 8.f + .0625f;
-    float L = (hsl & 127) / 128.f;
+    float H = hsl >> 10 & 63;
+    float S = hsl >> 7 & 7;
+    float L = hsl & 127;
+    return vec3(H, S, L);
+}
+
+// Unpack HSL from Jagex format
+vec3 convertHsl(vec3 HSL) {
+    // 6-bit hue | 3-bit saturation | 7-bit lightness
+    float H = HSL[0] / 64.f + .0078125f;
+    float S = HSL[1] / 8.f + .0625f;
+    float L = HSL[2] / 128.f;
     return vec3(H, S, L);
 }
 
@@ -185,5 +254,5 @@ int srgbToPackedHsl(vec3 srgb) {
 }
 
 vec3 packedHslToSrgb(int hsl) {
-    return hslToSrgb(unpackHsl(hsl));
+    return hslToSrgb(convertHsl(unpackRawHsl(hsl)));
 }

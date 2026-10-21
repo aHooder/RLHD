@@ -25,20 +25,26 @@
 package rs117.hd.utils.buffer;
 
 import java.nio.FloatBuffer;
+import lombok.Getter;
 import org.lwjgl.system.MemoryUtil;
 import rs117.hd.HdPlugin;
 
-public class GpuFloatBuffer
-{
+public class GpuFloatBuffer {
+	@Getter
 	private FloatBuffer buffer;
 
-	public GpuFloatBuffer()
-	{
+	public GpuFloatBuffer() {
 		this(65536);
 	}
 
 	public GpuFloatBuffer(int initialCapacity) {
-		buffer = MemoryUtil.memAllocFloat(initialCapacity);
+		try {
+			buffer = MemoryUtil.memAllocFloat(initialCapacity);
+		} catch (OutOfMemoryError oom) {
+			// Force garbage collection and try again
+			System.gc();
+			buffer = MemoryUtil.memAllocFloat(initialCapacity);
+		}
 	}
 
 	public void destroy() {
@@ -57,6 +63,10 @@ public class GpuFloatBuffer
 		buffer.put(x).put(y).put(z).put(w);
 	}
 
+	public void put(float x, float y, float z, int w) {
+		buffer.put(x).put(y).put(z).put(Float.intBitsToFloat(w));
+	}
+
 	public void put(float[] floats) {
 		buffer.put(floats);
 	}
@@ -65,8 +75,7 @@ public class GpuFloatBuffer
 		this.buffer.put(buffer);
 	}
 
-	public int position()
-	{
+	public int position() {
 		return buffer.position();
 	}
 
@@ -83,12 +92,12 @@ public class GpuFloatBuffer
 		return buffer.capacity();
 	}
 
-	public void ensureCapacity(int size) {
+	public GpuFloatBuffer ensureCapacity(int size) {
 		int capacity = buffer.capacity();
 		final int position = buffer.position();
 		if ((capacity - position) < size) {
 			do {
-				capacity *= HdPlugin.BUFFER_GROWTH_MULTIPLIER;
+				capacity = (int) (capacity * HdPlugin.BUFFER_GROWTH_MULTIPLIER);
 			}
 			while ((capacity - position) < size);
 
@@ -98,10 +107,6 @@ public class GpuFloatBuffer
 			MemoryUtil.memFree(buffer);
 			buffer = newB;
 		}
-	}
-
-	public FloatBuffer getBuffer()
-	{
-		return buffer;
+		return this;
 	}
 }

@@ -24,176 +24,78 @@
  */
 package rs117.hd.utils;
 
-import java.util.HashSet;
+import java.awt.Canvas;
+import java.awt.Color;
+import java.awt.Container;
+import java.awt.Frame;
+import java.awt.Graphics2D;
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.lang.management.ManagementFactory;
 import java.util.Random;
+import javax.annotation.Nullable;
 import javax.inject.Singleton;
+import javax.swing.JFrame;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
+import net.runelite.client.util.OSType;
+import rs117.hd.data.ObjectType;
+import rs117.hd.scene.SceneContext;
 import rs117.hd.scene.areas.AABB;
 import rs117.hd.scene.areas.Area;
+import rs117.hd.scene.water_types.WaterType;
 
-import static net.runelite.api.Constants.SCENE_SIZE;
 import static net.runelite.api.Constants.*;
+import static net.runelite.api.Constants.SCENE_SIZE;
 import static net.runelite.api.Perspective.*;
-import static rs117.hd.scene.ProceduralGenerator.VERTICES_PER_FACE;
-import static rs117.hd.scene.ProceduralGenerator.faceLocalVertices;
 import static rs117.hd.scene.ProceduralGenerator.isOverlayFace;
-import static rs117.hd.scene.SceneContext.SCENE_OFFSET;
+import static rs117.hd.utils.MathUtils.*;
 
 @Slf4j
 @Singleton
-public class HDUtils {
-	public static final long KiB = 1024;
-	public static final long MiB = KiB * KiB;
-	public static final long GiB = MiB * KiB;
-	public static final Random rand = new Random();
-
-	// The epsilon for floating point values used by jogl
-	public static final float EPSILON = 1.1920929E-7f;
-
-	public static final float PI = (float) Math.PI;
-	public static final float TWO_PI = PI * 2;
-	public static final float HALF_PI = PI / 2;
-	public static final float QUARTER_PI = PI / 2;
-
-	public static final float MAX_FLOAT_WITH_128TH_PRECISION = 1 << 16;
-
-	public static final int MAX_SNOW_LIGHTNESS = 70;
+public final class HDUtils {
 	public static final int HIDDEN_HSL = 12345678;
+	public static final int UNDERWATER_HSL = 6676;
 
-	// directional vectors approximately opposite of the directional light used by the client
-	private static final float[] LIGHT_DIR_TILE = new float[] { 0.70710678f, 0.70710678f, 0f };
+	public static final int EXTENDED_SCENE_OFFSET = (EXTENDED_SCENE_SIZE - SCENE_SIZE) / 2;
 
-	public static float min(float... v) {
-		float min = v[0];
-		for (int i = 1; i < v.length; i++)
-			if (v[i] < min)
-				min = v[i];
-		return min;
-	}
-
-	public static float max(float... v) {
-		float max = v[0];
-		for (int i = 1; i < v.length; i++)
-			if (v[i] > max)
-				max = v[i];
-		return max;
-	}
-
-	public static float sum(float... v) {
-		float sum = 0;
-		for (float x : v)
-			sum += x;
-		return sum;
-	}
-
-	public static float avg(float... v) {
-		return sum(v) / v.length;
-	}
-
-	public static float lerp(float a, float b, float t) {
-		return a + (b - a) * t;
-	}
-
-	public static float[] lerp(float[] vecA, float[] vecB, float t) {
-		float[] out = new float[Math.min(vecA.length, vecB.length)];
-		for (int i = 0; i < out.length; i++)
-			out[i] = lerp(vecA[i], vecB[i], t);
-		return out;
-	}
-
-	static int[] lerp(int[] vecA, int[] vecB, float t) {
-		int[] out = new int[Math.min(vecA.length, vecB.length)];
-		for (int i = 0; i < out.length; i++)
-			out[i] = (int) lerp(vecA[i], vecB[i], t);
-		return out;
-	}
-
-	public static float hermite(float from, float to, float t) {
-		float t2 = t * t;
-		float t3 = t2 * t;
+	public static int tileVertexHash(int[] vertex) {
+		// Tile X and Z coordinates are always multiples of 32, so 10 bits is sufficient for 184 tiles.
+		// The tile height does not strictly fit in 12 bits, so we allow collisions beyond 4096 units.
 		return
-			from * (1 - 3 * t2 + 2 * t3) +
-			to * (3 * t2 - 2 * t3);
+			(vertex[1] & 0xFFF) << 20 |
+			(vertex[2] + EXTENDED_SCENE_OFFSET * LOCAL_TILE_SIZE >> 5) << 10 |
+			(vertex[0] + EXTENDED_SCENE_OFFSET * LOCAL_TILE_SIZE >> 5);
 	}
 
-	public static float[] hermite(float[] from, float[] to, float t) {
-		float[] result = new float[from.length];
-		for (int i = 0; i < result.length; i++)
-			result[i] = hermite(from[i], to[i], t);
-		return result;
+	public static int tileVertexUuid(Tile tile, int[] vertex) {
+		// Tile X and Z coordinates are always multiples of 32, so 10 bits is sufficient for 184 tiles.
+		// The render level is the tile's original plane prior to setting up bridge tiles, and should be unique.
+		return
+			tile.getRenderLevel() << 20 |
+			(vertex[2] + EXTENDED_SCENE_OFFSET * LOCAL_TILE_SIZE >> 5) << 10 |
+			(vertex[0] + EXTENDED_SCENE_OFFSET * LOCAL_TILE_SIZE >> 5);
 	}
 
-	public static double fract(double x) {
-		return mod(x, 1);
-	}
-
-	public static float fract(float x) {
-		return mod(x, 1);
-	}
-
-	/**
-	 * Modulo that returns the answer with the same sign as the modulus.
-	 */
-	public static double mod(double x, double modulus) {
-		return (x - Math.floor(x / modulus) * modulus);
-	}
-
-	/**
-	 * Modulo that returns the answer with the same sign as the modulus.
-	 */
-	public static float mod(float x, float modulus) {
-		return (float) (x - Math.floor(x / modulus) * modulus);
-	}
-
-	/**
-	 * Modulo that returns the answer with the same sign as the modulus.
-	 */
-	public static int mod(int x, int modulus) {
-		return ((x % modulus) + modulus) % modulus;
-	}
-
-	public static float clamp(float value, float min, float max) {
-		return Math.min(Math.max(value, min), max);
-	}
-
-	public static int clamp(int value, int min, int max) {
-		return Math.min(Math.max(value, min), max);
-	}
-
-	public static double log2(double x) {
-		return Math.log(x) / Math.log(2);
-	}
-
-	public static int vertexHash(int[] vPos) {
-		// simple custom hashing function for vertex position data
-		StringBuilder s = new StringBuilder();
-		for (int part : vPos)
-			s.append(part).append(",");
-		return s.toString().hashCode();
-	}
-
-	public static float[] calculateSurfaceNormals(float[] a, float[] b, float[] c) {
-		Vector.subtract(b, a, b);
-		Vector.subtract(c, a, c);
-		float[] n = new float[3];
-		return Vector.cross(n, b, c);
-	}
-
-	public static float dotLightDirectionTile(float x, float y, float z) {
-		// Tile normal vectors need to be normalized
-		float length = x * x + y * y + z * z;
-		if (length < EPSILON)
-			return 0;
-		return (x * LIGHT_DIR_TILE[0] + y * LIGHT_DIR_TILE[1]) / (float) Math.sqrt(length);
-	}
-
-	public static long ceilPow2(long x) {
-		return (long) Math.pow(2, Math.ceil(Math.log(x) / Math.log(2)));
+	public static int[] calculateSurfaceNormals(int[] out, int[] a, int[] b, int[] c) {
+		subtract(b, a, b);
+		subtract(c, a, c);
+		return cross(out, b, c);
 	}
 
 	public static float[] sunAngles(float altitude, float azimuth) {
-		return new float[] { (float) Math.toRadians(altitude), (float) Math.toRadians(azimuth) };
+		return multiply(vec(altitude, azimuth), DEG_TO_RAD);
+	}
+
+	public static void randomPointOnSphere(float[] out, Random rng) {
+		float z = rng.nextFloat() * 2 - 1;
+		float t = rng.nextFloat() * 2 * PI;
+		float r = sqrt(max(0, 1 - z * z));
+		vec3(out, r * cos(t), z, r * sin(t));
+	}
+
+	public static float[] ensureArrayLength(float[] array, int targetLength) {
+		return array.length == targetLength ? array : slice(array, 0, targetLength);
 	}
 
 	public static int convertWallObjectOrientation(int orientation) {
@@ -201,111 +103,91 @@ public class HDUtils {
 		// 		 i.e. extra rotation depending on wall type whatever. I'm not sure.
 		// Derived from config orientation {@link HDUtils#getBakedOrientation}
 		switch (orientation) {
-			case 1: // east (config orientation = 0)
-				return 512;
-			case 2: // south (config orientation = 1)
-				return 1024;
-			case 4: // west (config orientation = 2)
-				return 1536;
-			case 8: // north (config orientation = 3)
+			case 1:
+				return 512; // west
+			case 2:
+				return 1024; // north
+			case 4:
+				return 1536; // east
+			case 8:
 			default:
-				return 0;
-			case 16: // south-east (config orientation = 0)
-				return 768;
-			case 32: // south-west (config orientation = 1)
-				return 1280;
-			case 64: // north-west (config orientation = 2)
-				return 1792;
-			case 128: // north-east (config orientation = 3)
-				return 256;
+				return 0; // south
+			case 16:
+				return 768; // north-west
+			case 32:
+				return 1280; // north-east
+			case 64:
+				return 1792; // south-east
+			case 128:
+				return 256; // south-west
 		}
 	}
 
 	// (gameObject.getConfig() >> 6) & 3, // 2-bit orientation
 	// (gameObject.getConfig() >> 8) & 1, // 1-bit interactType != 0 (supports items)
-	// (gameObject.getConfig() & 0x3F), // 6-bit object type? (10 seems to mean movement blocker)
 	// (gameObject.getConfig() >> 9) // should always be zero
-	public static int getBakedOrientation(int config) {
-		switch (config >> 6 & 3) {
-			case 0: // Rotated 180 degrees
-				return 1024;
-			case 1: // Rotated 90 degrees counter-clockwise
-				return 1536;
-			case 2: // Not rotated
-			default:
-				return 0;
-			case 3: // Rotated 90 degrees clockwise
-				return 512;
-		}
+	public static int getObjectConfig(Tile tile, long hash) {
+		if (tile.getWallObject() != null && tile.getWallObject().getHash() == hash)
+			return tile.getWallObject().getConfig();
+		if (tile.getDecorativeObject() != null && tile.getDecorativeObject().getHash() == hash)
+			return tile.getDecorativeObject().getConfig();
+		if (tile.getGroundObject() != null && tile.getGroundObject().getHash() == hash)
+			return tile.getGroundObject().getConfig();
+		for (GameObject gameObject : tile.getGameObjects())
+			if (gameObject != null && gameObject.getHash() == hash)
+				return gameObject.getConfig();
+		return -1;
 	}
 
-	public static String getObjectType(int config) {
-		int type = config & 0x3F;
-		final String[] OBJECT_TYPES = {
-			"StraightWalls",
-			"DiagWallsConn",
-			"EntireWallsCorners",
-			"StraightWallsConn",
-			"StraightInDeco",
-			"StraightOutDeco",
-			"DiagOutDeco",
-			"DiagInDeco",
-			"DiagInWallDeco",
-			"DiagWalls",
-			"Objects",
-			"GroundObjects",
-			"StraightSlopeRoofs",
-			"DiagSlopeRoofs",
-			"DiagSlopeConnRoofs",
-			"StraightSlopeConnRoofs",
-			"StraightSlopeCorners",
-			"FlatTopRoofs",
-			"BottomEdgeRoofs",
-			"DiagBottomEdgeConn",
-			"StraightBottomEdgeConn",
-			"StraightBottomEdgeConnCorners",
-			"GroundDecoMapSigns"
-		};
-		String name = "Unknown";
-		if (type < OBJECT_TYPES.length)
-			name = OBJECT_TYPES[type];
-		return String.format("(%d) %s", type, name);
-	}
-
-	public static HashSet<Integer> getSceneRegionIds(Scene scene) {
-		HashSet<Integer> regionIds = new HashSet<>();
-
-		if (scene.isInstance()) {
-			// If the center chunk is invalid, pick any valid chunk and hope for the best
-			int[][][] chunks = scene.getInstanceTemplateChunks();
-			for (int[][] plane : chunks) {
-				for (int[] column : plane) {
-					for (int chunk : column) {
-						if (chunk == -1)
-							continue;
-
-						// Extract chunk coordinates
-						int x = chunk >> 14 & 0x3FF;
-						int y = chunk >> 3 & 0x7FF;
-						regionIds.add((x >> 3) << 8 | y >> 3);
-					}
-				}
-			}
-		}
-		else
-		{
-			int baseX = scene.getBaseX();
-			int baseY = scene.getBaseY();
-			for (int x = 0; x < SCENE_SIZE; x += REGION_SIZE)
-				for (int y = 0; y < SCENE_SIZE; y += REGION_SIZE)
-					regionIds.add((baseX + x >> 6) << 8 | baseY + y >> 6);
-		}
-
-		return regionIds;
+	public static int getObjectConfig(@Nullable TileObject tileObject) {
+		if (tileObject instanceof WallObject)
+			return ((WallObject) tileObject).getConfig();
+		if (tileObject instanceof DecorativeObject)
+			return ((DecorativeObject) tileObject).getConfig();
+		if (tileObject instanceof GroundObject)
+			return ((GroundObject) tileObject).getConfig();
+		if (tileObject instanceof GameObject)
+			return ((GameObject) tileObject).getConfig();
+		return -1;
 	}
 
 	/**
-	 * Returns the south-west coordinate of the extended scene in world coordinates, after resolving instance template
+	 * Computes the orientation used when uploading the model.
+	 * This does not include the extra 45-degree rotation of diagonal models.
+	 */
+	public static int getModelPreOrientation(int config) {
+		var objectType = ObjectType.fromConfig(config);
+		int orientation = 1024 + 512 * (config >>> 6 & 3);
+		switch (objectType) {
+			case WallDiagonalCorner:
+			case WallSquareCorner:
+			case WallDecorDiagonalOffset:
+			case WallDecorDiagonalBoth:
+				orientation += 1024;
+		}
+		return orientation % 2048;
+	}
+
+	/**
+	 * Computes the complete model orientation, including the pre-orientation when uploading,
+	 * and the extra 45-degree rotation of diagonal models.
+	 */
+	public static int getModelOrientation(int config) {
+		int orientation = getModelPreOrientation(config);
+		var objectType = ObjectType.fromConfig(config);
+		switch (objectType) {
+			// Diagonal models have an extra 45 degree rotation
+			case WallDecorDiagonalOffset:
+			case WallDecorDiagonalNoOffset:
+			case WallDecorDiagonalBoth:
+			case CentrepieceDiagonal:
+				orientation += 256;
+		}
+		return orientation % 2048;
+	}
+
+	/**
+	 * Returns the south-west coordinate of the scene in world coordinates, after resolving instance template
 	 * chunks to their original world coordinates. If the scene is instanced, the base coordinates are computed from
 	 * the center chunk instead, or any valid chunk if the center chunk is invalid.
 	 *
@@ -313,92 +195,108 @@ public class HDUtils {
 	 * @param plane to use when resolving instance template chunks
 	 * @return the south-western coordinate of the scene in world space
 	 */
-	public static int[] getSceneBaseExtended(Scene scene, int plane)
-	{
+	public static int[] getSceneBaseBestGuess(Scene scene, int plane) {
 		int baseX = scene.getBaseX();
 		int baseY = scene.getBaseY();
 
-		if (scene.isInstance())
-		{
+		if (scene.isInstance()) {
 			// Assume the player is loaded into the center chunk, and calculate the world space position of the lower
 			// left corner of the scene, assuming well-behaved template chunks are used to create the instance.
 			int chunkX = 6, chunkY = 6;
-			int chunk = scene.getInstanceTemplateChunks()[plane][chunkX][chunkY];
-			if (chunk == -1)
-			{
+			int[][] chunks = scene.getInstanceTemplateChunks()[plane];
+			int chunk = chunks[chunkX][chunkY];
+			if (chunk == -1) {
 				// If the center chunk is invalid, pick any valid chunk and hope for the best
-				int[][] chunks = scene.getInstanceTemplateChunks()[plane];
 				outer:
-				for (chunkX = 0; chunkX < chunks.length; chunkX++)
-				{
-					for (chunkY = 0; chunkY < chunks[chunkX].length; chunkY++)
-					{
+				for (chunkX = 0; chunkX < chunks.length; chunkX++) {
+					for (chunkY = 0; chunkY < chunks[chunkX].length; chunkY++) {
 						chunk = chunks[chunkX][chunkY];
 						if (chunk != -1)
-						{
 							break outer;
-						}
 					}
 				}
 			}
 
-			// Extract chunk coordinates
-			baseX = chunk >> 14 & 0x3FF;
-			baseY = chunk >> 3 & 0x7FF;
-			// Shift to what would be the lower left corner chunk if the template chunks were contiguous on the map
-			baseX -= chunkX;
-			baseY -= chunkY;
-			// Transform to world coordinates
-			baseX <<= 3;
-			baseY <<= 3;
+			if (chunk != -1) {
+				// Extract chunk coordinates
+				baseX = chunk >> 14 & 0x3FF;
+				baseY = chunk >> 3 & 0x7FF;
+				// Shift to what would be the lower left corner chunk if the template chunks were contiguous on the map
+				baseX -= chunkX;
+				baseY -= chunkY;
+				// Transform to world coordinates
+				baseX <<= 3;
+				baseY <<= 3;
+			}
 		}
 
-		return new int[] { baseX - SCENE_OFFSET, baseY - SCENE_OFFSET };
+		return ivec(baseX, baseY, 0);
 	}
 
 	/**
-	 * The returned plane may be different, so it's not safe to use for indexing into overlay IDs for instance
+	 * The returned plane may be different
 	 */
 	public static int[] localToWorld(Scene scene, int localX, int localY, int plane) {
-		int sceneX = localX >> LOCAL_COORD_BITS;
-		int sceneY = localY >> LOCAL_COORD_BITS;
+		return sceneToWorld(scene, localX >> LOCAL_COORD_BITS, localY >> LOCAL_COORD_BITS, plane);
+	}
 
-		if (scene.isInstance() && sceneX >= 0 && sceneY >= 0 && sceneX < SCENE_SIZE && sceneY < SCENE_SIZE) {
-			int chunkX = sceneX / 8;
-			int chunkY = sceneY / 8;
-			int templateChunk = scene.getInstanceTemplateChunks()[plane][chunkX][chunkY];
-			int rotation = 4 - (templateChunk >> 1 & 3);
-			int templateChunkY = (templateChunk >> 3 & 2047) * 8;
-			int templateChunkX = (templateChunk >> 14 & 1023) * 8;
-			int templateChunkPlane = templateChunk >> 24 & 3;
-			int worldX = templateChunkX + (sceneX & 7);
-			int worldY = templateChunkY + (sceneY & 7);
+	/**
+	 * The returned plane may be different
+	 */
+	public static void sceneToWorld(Scene scene, int sceneX, int sceneY, int plane, int[] result) {
+		if (scene.isInstance()) {
+			if (sceneX >= 0 && sceneY >= 0 && sceneX < SCENE_SIZE && sceneY < SCENE_SIZE) {
+				int chunkX = sceneX / CHUNK_SIZE;
+				int chunkY = sceneY / CHUNK_SIZE;
+				int templateChunk = scene.getInstanceTemplateChunks()[plane][chunkX][chunkY];
+				if (templateChunk != -1) {
+					int rotation = 4 - (templateChunk >> 1 & 3);
+					int templateChunkY = (templateChunk >> 3 & 2047) * 8;
+					int templateChunkX = (templateChunk >> 14 & 1023) * 8;
+					int templateChunkPlane = templateChunk >> 24 & 3;
+					int worldX = templateChunkX + (sceneX & 7);
+					int worldY = templateChunkY + (sceneY & 7);
 
-			int[] pos = { worldX, worldY, templateChunkPlane };
+					result[0] = worldX;
+					result[1] = worldY;
+					result[2] = templateChunkPlane;
 
-			chunkX = pos[0] & -8;
-			chunkY = pos[1] & -8;
-			int x = pos[0] & 7;
-			int y = pos[1] & 7;
-			switch (rotation) {
-				case 1:
-					pos[0] = chunkX + y;
-					pos[1] = chunkY + (7 - x);
-					break;
-				case 2:
-					pos[0] = chunkX + (7 - x);
-					pos[1] = chunkY + (7 - y);
-					break;
-				case 3:
-					pos[0] = chunkX + (7 - y);
-					pos[1] = chunkY + x;
-					break;
+					chunkX = result[0] & -8;
+					chunkY = result[1] & -8;
+					int x = result[0] & 7;
+					int y = result[1] & 7;
+					switch (rotation) {
+						case 1:
+							result[0] = chunkX + y;
+							result[1] = chunkY + (7 - x);
+							break;
+						case 2:
+							result[0] = chunkX + (7 - x);
+							result[1] = chunkY + (7 - y);
+							break;
+						case 3:
+							result[0] = chunkX + (7 - y);
+							result[1] = chunkY + x;
+							break;
+					}
+					return;
+				}
 			}
-
-			return pos;
+			result[0] = -1;
+			result[1] = -1;
+			result[2] = 0;
+			return;
 		}
 
-		return new int[] { scene.getBaseX() + sceneX, scene.getBaseY() + sceneY, plane };
+		result[0] = scene.getBaseX() + sceneX;
+		result[1] = scene.getBaseY() + sceneY;
+		result[2] = plane;
+	}
+
+	public static int[] sceneToWorld(Scene scene, int sceneX, int sceneY, int plane) {
+		int[] result = new int[3];
+		sceneToWorld(scene, sceneX, sceneY, plane, result);
+		return result;
 	}
 
 	public static int worldToRegionID(int[] worldPoint) {
@@ -472,23 +370,278 @@ public class HDUtils {
 			final int[] faceColorsB = model.getTriangleColorB();
 			final int[] faceColorsC = model.getTriangleColorC();
 
-			outer:
+			int x = tile.getSceneLocation().getX();
+			int y = tile.getSceneLocation().getY();
+			int baseX = x * LOCAL_TILE_SIZE;
+			int baseY = y * LOCAL_TILE_SIZE;
+
 			for (int face = 0; face < faceCount; face++) {
 				if (isOverlayFace(tile, face))
 					continue;
 
-				int[][] vertices = faceLocalVertices(tile, face);
-				int[] faceColors = new int[] { faceColorsA[face], faceColorsB[face], faceColorsC[face] };
+				final int vertexFaceA = model.getFaceX()[face];
+				hsl = faceColorsA[face];
+				if (model.getVertexX()[vertexFaceA] - baseX != LOCAL_TILE_SIZE &&
+					model.getVertexZ()[vertexFaceA] - baseY != LOCAL_TILE_SIZE)
+					break;
 
-				for (int vertex = 0; vertex < VERTICES_PER_FACE; vertex++) {
-					hsl = faceColors[vertex];
-					if (vertices[vertex][0] != LOCAL_TILE_SIZE && vertices[vertex][1] != LOCAL_TILE_SIZE)
-						break outer;
-				}
+				final int vertexFaceB = model.getFaceY()[face];
+				hsl = faceColorsB[face];
+				if (model.getVertexX()[vertexFaceB] - baseX != LOCAL_TILE_SIZE &&
+					model.getVertexZ()[vertexFaceB] - baseY != LOCAL_TILE_SIZE)
+					break;
+
+				final int vertexFaceC = model.getFaceZ()[face];
+				hsl = faceColorsC[face];
+				if (model.getVertexX()[vertexFaceC] - baseX != LOCAL_TILE_SIZE &&
+					model.getVertexZ()[vertexFaceC] - baseY != LOCAL_TILE_SIZE)
+					break;
 			}
 
 			ColorUtils.unpackRawHsl(out, hsl);
 		}
 		return hsl;
+	}
+
+	public static boolean isPointWithinFrustum(float x, float y, float z, float[][] cullingPlanes, int numPlanes) {
+		for (int i = 0; i < numPlanes; i++) {
+			final float[] p = cullingPlanes[i];
+			if (p[0] * x + p[1] * y + p[2] * z + p[3] < 0)
+				return false;
+		}
+		return true;
+	}
+
+	public static int classifySphereFrustum(float x, float y, float z, float radius, float[][] cullingPlanes, int numPlanes) {
+		boolean fullyInside = true;
+		for (int i = 0; i < numPlanes; i++) {
+			final float[] p = cullingPlanes[i];
+			final float distance = p[0] * x + p[1] * y + p[2] * z + p[3];
+
+			if (distance < -radius) return -1;
+			if (distance < radius) fullyInside = false;
+		}
+		return fullyInside ? 1 : 0;
+	}
+
+	public static boolean isSphereIntersectingFrustum(float x, float y, float z, float radius, float[][] cullingPlanes, int numPlanes) {
+		return classifySphereFrustum(x, y, z, radius, cullingPlanes, numPlanes) != -1;
+	}
+
+	public static boolean isTriangleIntersectingFrustum(
+		float x0, float y0, float z0,
+		float x1, float y1, float z1,
+		float x2, float y2, float z2,
+		float[][] cullingPlanes, int numPlanes
+	) {
+		for (int i = 0; i < numPlanes; i++) {
+			final float[] p = cullingPlanes[i];
+			if (p[0] * x0 + p[1] * y0 + p[2] * z0 + p[3] > 0 ||
+				p[0] * x1 + p[1] * y1 + p[2] * z1 + p[3] > 0 ||
+				p[0] * x2 + p[1] * y2 + p[2] * z2 + p[3] > 0)
+				continue;
+
+			return false;
+		}
+		return true;
+	}
+
+	public static boolean isAABBIntersectingFrustum(
+		float minX,
+		float minY,
+		float minZ,
+		float maxX,
+		float maxY,
+		float maxZ,
+		float[][] cullingPlanes
+	) {
+		for (int i = 0; i < cullingPlanes.length; i++) {
+			final float[] plane = cullingPlanes[i];
+			final float nx = plane[0];
+			final float ny = plane[1];
+			final float nz = plane[2];
+			final float d  = plane[3];
+			if (
+				nx * minX + ny * minY + nz * minZ + d < 0.0f &&
+				nx * maxX + ny * minY + nz * minZ + d < 0.0f &&
+				nx * minX + ny * maxY + nz * minZ + d < 0.0f &&
+				nx * maxX + ny * maxY + nz * minZ + d < 0.0f &&
+				nx * minX + ny * minY + nz * maxZ + d < 0.0f &&
+				nx * maxX + ny * minY + nz * maxZ + d < 0.0f &&
+				nx * minX + ny * maxY + nz * maxZ + d < 0.0f &&
+				nx * maxX + ny * maxY + nz * maxZ + d < 0.0f
+			) {
+				return false;
+			}
+		}
+
+		// Potentially visible
+		return true;
+	}
+
+	public static int packTerrainData(boolean isTerrain, int waterDepth, WaterType waterType, int plane) {
+		// Up to 12-bit water depth | 8-bit water type | 2-bit plane | terrain flag
+		assert waterType.index < 1 << 7 : "Too many water types";
+		int terrainData = (waterDepth & 0xFFF) << 11 | waterType.index << 3 | plane << 1 | (isTerrain ? 1 : 0);
+		assert (terrainData & ~0xFFFFFF) == 0 : "Only the lower 24 bits are usable, since we pass this into shaders as a float";
+		return terrainData;
+	}
+
+	private static final ThreadLocal<StringBuilder> threadLocalStringBuilder = ThreadLocal.withInitial(StringBuilder::new);
+
+	public static String getThreadStackTrace(Thread thread) {
+		var stackTrace = thread.getStackTrace();
+		if (stackTrace.length == 0)
+			return "<STACK TRACE UNAVAILABLE>";
+
+		StringBuilder sb = threadLocalStringBuilder.get();
+		for (int i = 1; i < stackTrace.length; i++)
+			sb.append('\t').append(stackTrace[i]).append('\n');
+
+		String s = sb.toString();
+		sb.setLength(0);
+		return s;
+	}
+
+	public static boolean isBakedGroundShading(Model model, int face) {
+		final byte[] faceTransparencies = model.getFaceTransparencies();
+		if (faceTransparencies == null || (faceTransparencies[face] & 0xFF) <= 100)
+			return false;
+
+		final short[] faceTextures = model.getFaceTextures();
+		if (faceTextures != null && faceTextures[face] != -1)
+			return false;
+
+		final float[] yVertices = model.getVerticesY();
+		float heightA = yVertices[model.getFaceIndices1()[face]];
+		if (heightA < -8)
+			return false;
+
+		float heightB = yVertices[model.getFaceIndices2()[face]];
+		float heightC = yVertices[model.getFaceIndices3()[face]];
+		return heightA == heightB && heightA == heightC;
+	}
+
+	public static boolean isJFrameMinimized(@Nullable JFrame f) {
+		return f != null && (f.getExtendedState() & Frame.ICONIFIED) != 0;
+	}
+
+	@Nullable
+	public static JFrame getJFrame(Canvas canvas) {
+		if (canvas == null)
+			return null;
+
+		Container parent = canvas.getParent();
+		while (parent != null) {
+			if (parent instanceof JFrame)
+				return (JFrame) parent;
+			parent = parent.getParent();
+		}
+
+		return null;
+	}
+
+	public static String getCpuName() {
+		switch (OSType.getOSType()) {
+			case Linux:
+				try (var br = new BufferedReader(new FileReader("/proc/cpuinfo"))) {
+					String line;
+					while ((line = br.readLine()) != null)
+						if (line.startsWith("model name"))
+							return line.split(":", 2)[1].trim();
+				} catch (Exception ignored) {
+				}
+				break;
+			case MacOS:
+				return "aarch64".equals(System.getProperty("os.arch")) ? "Apple Silicon" : "Intel";
+			case Windows:
+				return System.getenv().getOrDefault("PROCESSOR_IDENTIFIER", "Unknown");
+		}
+		return "Unknown";
+	}
+
+	public static long getTotalSystemMemory() {
+		try {
+			var bean = ManagementFactory.getOperatingSystemMXBean();
+			return ((com.sun.management.OperatingSystemMXBean) bean).getTotalPhysicalMemorySize();
+		} catch (Throwable ignored) {
+			return Long.MAX_VALUE;
+		}
+	}
+
+	public static void drawStringShadowed(Graphics2D g, String s, float x, float y, Color shadowColor) {
+		var c = g.getColor();
+		g.setColor(shadowColor);
+		g.drawString(s, x + 1, y + 1);
+		g.setColor(c);
+		g.drawString(s, x, y);
+	}
+
+	public static void drawStringShadowed(Graphics2D g, String s, float x, float y) {
+		drawStringShadowed(g, s, x, y, Color.BLACK);
+	}
+
+	public static void drawStringCentered(Graphics2D g, String s, float x, float y) {
+		var m = g.getFontMetrics();
+		drawStringShadowed(g, s, x - m.stringWidth(s) / 2.f, y + m.getHeight() / 2.f);
+	}
+
+	public static void drawStringCentered(Graphics2D g, String s) {
+		var b = g.getClipBounds();
+		drawStringCentered(g, s, b.width / 2.f, b.height / 2.f);
+	}
+
+	@Nullable
+	public static float[] parseLatLon(String coordinates) {
+		if (coordinates == null || coordinates.isEmpty())
+			return null;
+
+		String[] values = coordinates.split(",", 3);
+		if (values.length != 2)
+			return null;
+
+		try {
+			float latitude = Float.parseFloat(values[0]);
+			float longitude = Float.parseFloat(values[1]);
+			if (Float.isFinite(latitude) &&
+				Float.isFinite(longitude) &&
+				Math.abs(latitude) <= 90 &&
+				Math.abs(longitude) <= 180
+			) {
+				return vec(latitude, longitude);
+			}
+		} catch (NumberFormatException ignored) {
+		}
+		return null;
+	}
+
+	public static boolean containsObject(SceneContext source, TileObject object) {
+		int x, y;
+		if (object instanceof GameObject) {
+			var point = ((GameObject) object).getSceneMinLocation();
+			x = point.getX();
+			y = point.getY();
+		} else {
+			x = object.getX() >> LOCAL_COORD_BITS;
+			y = object.getY() >> LOCAL_COORD_BITS;
+		}
+		x += source.sceneOffset;
+		y += source.sceneOffset;
+		var tiles = source.scene.getExtendedTiles();
+		int plane = object.getPlane();
+		if (plane < 0 || plane >= tiles.length ||
+			x < 0 || x >= tiles[plane].length ||
+			y < 0 || y >= tiles[plane][x].length)
+			return false;
+		for (Tile tile = tiles[plane][x][y]; tile != null; tile = tile.getBridge()) {
+			if (tile.getWallObject() == object ||
+				tile.getDecorativeObject() == object ||
+				tile.getGroundObject() == object)
+				return true;
+			for (GameObject candidate : tile.getGameObjects())
+				if (candidate == object)
+					return true;
+		}
+		return false;
 	}
 }
