@@ -1617,7 +1617,7 @@ public class SceneUploader implements AutoCloseable {
 
 		boolean isVanillaTextured = faceTextures != null;
 
-		final Material baseMaterial = modelOverride.baseMaterial;
+		final Material baseMaterial = modelOverride.material;
 		final Material textureMaterial = modelOverride.textureMaterial;
 
 		int len = 0;
@@ -1648,7 +1648,7 @@ public class SceneUploader implements AutoCloseable {
 			var customOverride = modelOverride.getCustomOverride(model, face);
 			if (customOverride != null) {
 				faceOverride = customOverride;
-				material = faceOverride.baseMaterial;
+				material = faceOverride.material;
 			} else if (isTextured) {
 				uvType = UvType.VANILLA;
 				if (textureMaterial != Material.NONE) {
@@ -1668,7 +1668,7 @@ public class SceneUploader implements AutoCloseable {
 				final var override = modelOverride.testColorOverrides(ahsl);
 				if (override != null) {
 					faceOverride = override;
-					material = faceOverride.baseMaterial;
+					material = faceOverride.material;
 				}
 			}
 
@@ -1783,7 +1783,7 @@ public class SceneUploader implements AutoCloseable {
 				}
 			}
 
-			// Imported vanilla textures supply their own color, rather than tinting the model's HSL.
+			// Vanilla textures should always have a constant white background
 			if (customOverride != null && material.vanillaTextureIndex != -1) {
 				color1 = color2 = color3 = 90;
 				keepShading = true;
@@ -2027,7 +2027,7 @@ public class SceneUploader implements AutoCloseable {
 		final short[] faceTextures = model.getFaceTextures();
 		final byte[] textureFaces = model.getTextureFaces();
 
-		final Material baseMaterial = modelOverride.baseMaterial;
+		final Material baseMaterial = modelOverride.material;
 		final Material textureMaterial = modelOverride.textureMaterial;
 
 		final boolean isVanillaTextured = faceTextures != null;
@@ -2063,7 +2063,7 @@ public class SceneUploader implements AutoCloseable {
 			var customOverride = modelOverride.getCustomOverride(model, f);
 			if (customOverride != null) {
 				faceOverride = customOverride;
-				material = faceOverride.baseMaterial;
+				material = faceOverride.material;
 			} else if (textureId != -1) {
 				uvType = UvType.VANILLA;
 				if (textureMaterial != Material.NONE) {
@@ -2093,7 +2093,7 @@ public class SceneUploader implements AutoCloseable {
 
 				if (override != null) {
 					faceOverride = override;
-					material = faceOverride.baseMaterial;
+					material = faceOverride.material;
 				}
 			}
 
@@ -2110,7 +2110,9 @@ public class SceneUploader implements AutoCloseable {
 				uvType = UvType.GEOMETRY;
 
 			// Hide baked ground shading using the selected face's override.
-			if (plugin.configHideFakeShadows && faceOverride.hideVanillaShadows && HDUtils.isBakedGroundShading(model, f))
+			if (plugin.configHideFakeShadows &&
+				faceOverride.hideVanillaShadows &&
+				HDUtils.isBakedGroundShading(model, f))
 				continue;
 
 			if (faceOverride.modifiesAlpha) {
@@ -2255,7 +2257,9 @@ public class SceneUploader implements AutoCloseable {
 			final Material material = faceMaterials.get(face);
 			final ModelOverride faceOverride = faceOverrides.get(face);
 
-			boolean customVanillaTexture = material.vanillaTextureIndex != -1 && modelOverride.getCustomOverride(model, face) != null;
+			boolean customVanillaTexture =
+				material.vanillaTextureIndex != -1 &&
+				modelOverride.getCustomOverride(model, face) != null;
 			if (textureId != -1 || customVanillaTexture)
 				color1 = color2 = color3 = 90;
 

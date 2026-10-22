@@ -79698,7 +79698,7 @@
     "uvScale": 1.5
   },
   {
-    "description": "TFA Lobby - Plank Bridges - Needs Proper UV Mapping",
+    "description": "TFA Lobby - Plank Bridges",
     "baseMaterial": "WOOD_GRAIN_3",
     "undoVanillaShading": false,
     "uvOrientation": 512,
@@ -79706,10 +79706,20 @@
       "TFA_FLOORKIT_GUTHIXIAN00_PLANKS03",
       "TFA_FLOORKIT_GUTHIXIAN00_PLANKS01",
       "TFA_FLOORKIT_GUTHIXIAN00_PLANKS02",
-      "TFA_FLOORKIT_GUTHIXIAN00_PLANKS01_RAISED",
-      "TFA_FLOORKIT_GUTHIXIAN00_PLANKS04"
+      "TFA_FLOORKIT_GUTHIXIAN00_PLANKS01_RAISED"
     ],
     "uvType": "BOX"
+  },
+  {
+    "description": "TFA Lobby - Plank Bridges - Custom UV mapping",
+    "baseMaterial": "WOOD_GRAIN_3",
+    "undoVanillaShading": false,
+    "uvType": "BOX",
+    "uvOrientation": 512,
+    "objectIds": [
+      "TFA_FLOORKIT_GUTHIXIAN00_PLANKS04"
+    ],
+    "custom": "tile_object_id_63082.glb"
   },
   {
     "description": "TFA Lobby - Raid Entrance Door",

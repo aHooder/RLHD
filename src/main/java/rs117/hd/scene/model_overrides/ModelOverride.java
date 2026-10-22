@@ -2,7 +2,10 @@ package rs117.hd.scene.model_overrides;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.annotations.JsonAdapter;
+import com.google.gson.annotations.SerializedName;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -35,7 +38,7 @@ import static rs117.hd.utils.MathUtils.*;
 public class ModelOverride
 {
 	public static final ModelOverride NONE = new ModelOverride(true);
-	public static final ModelOverride UNLIT = new ModelOverride(true).baseMaterial(Material.UNLIT).undoVanillaShading(false);
+	public static final ModelOverride UNLIT = new ModelOverride(true).material(Material.UNLIT).undoVanillaShading(false);
 
 	private static final Set<Integer> EMPTY = new HashSet<>();
 
@@ -54,11 +57,14 @@ public class ModelOverride
 	@JsonAdapter(GamevalManager.SpotanimAdapter.class)
 	public Set<Integer> graphicsObjectIds = EMPTY;
 
-	public Material baseMaterial = Material.NONE;
+	@SerializedName(value = "material", alternate = "baseMaterial")
+	public Material material = Material.NONE;
 	public Material textureMaterial = Material.NONE;
 	public UvType uvType = UvType.VANILLA;
 	public float[] uvs;
-	public CustomModelOverride custom;
+	public ModelOverride custom;
+	private JsonObject[] materials;
+	private transient ModelOverride[] faceOverrides;
 	public float uvScale = 1;
 	public int uvOrientation = 0;
 	public int uvOrientationX = 0;
@@ -137,13 +143,11 @@ public class ModelOverride
 	}
 
 	public void normalize(HdPlugin plugin) {
-		if (custom != null)
-			custom.normalize(plugin, this);
 		// Ensure there are no nulls in case of invalid configuration during development
-		if (baseMaterial == null) {
+		if (material == null) {
 			if (Props.DEVELOPMENT)
-				throw new IllegalStateException("Invalid baseMaterial");
-			baseMaterial = ModelOverride.NONE.baseMaterial;
+				throw new IllegalStateException("Invalid material");
+			material = ModelOverride.NONE.material;
 		}
 		if (textureMaterial == null) {
 			if (Props.DEVELOPMENT)
@@ -181,8 +185,8 @@ public class ModelOverride
 
 		boolean disableTextures = !plugin.configModelTextures && !forceMaterialChanges;
 		if (disableTextures) {
-			if (baseMaterial.modifiesVanillaTexture)
-				baseMaterial = Material.NONE;
+			if (material.modifiesVanillaTexture)
+				material = Material.NONE;
 			if (textureMaterial.modifiesVanillaTexture)
 				textureMaterial = Material.NONE;
 		}
@@ -219,14 +223,14 @@ public class ModelOverride
 			hideInAreas = new AABB[0];
 
 		mightHaveTransparency =
-			baseMaterial.hasTransparency ||
+			material.hasTransparency ||
 			textureMaterial.hasTransparency ||
 			modifiesAlpha && minAlpha < 255 ||
 			tzHaarRecolorType != TzHaarRecolorType.NONE;
 
 		mightBeDoubleSided =
 			doubleSidedFaces ||
-			baseMaterial.doubleSidedFaces ||
+			material.doubleSidedFaces ||
 			textureMaterial.doubleSidedFaces;
 
 		hide |= hideAsWaterEffect && plugin.configHideVanillaWaterEffects;
@@ -273,12 +277,61 @@ public class ModelOverride
 		if (!castShadows && shadowOpacityThreshold == 0)
 			shadowOpacityThreshold = 1;
 
-		shadowNormalBias |= baseMaterial.subsurface > 0 || textureMaterial.subsurface > 0;
-		if (custom != null)
+		shadowNormalBias |= material.subsurface > 0 || textureMaterial.subsurface > 0;
+
+		if (custom != null && custom.faceOverrides == null) {
+			if (custom.uvs == null || custom.uvs.length == 0 || custom.uvs.length % 6 != 0)
+				throw new IllegalArgumentException("custom.uvs must contain six coordinates per triangle");
+
+			// Inherit authored values before normalization, not derived flags.
+			var defaults = copy();
+			defaults.custom = null;
+			defaults.uvs = null;
+			defaults.materials = null;
+			defaults.faceOverrides = null;
+			defaults.textureMaterial = Material.NONE;
+			defaults.materialOverrides = null;
+			defaults.colorOverrides = null;
+			defaults.clearIds();
+			var gson = plugin.getGson();
+			var inherited = gson.toJsonTree(defaults).getAsJsonObject();
+			defaults.normalize(plugin);
+			var resolved = new ModelOverride[custom.uvs.length / 6];
+			Arrays.fill(resolved, defaults);
+			if (custom.materials != null) {
+				boolean[] assigned = new boolean[resolved.length];
+				for (var material : custom.materials) {
+					var definition = inherited.deepCopy();
+					for (var entry : material.entrySet())
+						definition.add(entry.getKey(), entry.getValue());
+					if (material.has("baseMaterial") && !material.has("material"))
+						definition.add("material", material.get("baseMaterial"));
+					definition.remove("baseMaterial");
+					definition.remove("custom");
+					var override = gson.fromJson(definition, ModelOverride.class);
+					override.normalize(plugin);
+					for (var range : material.getAsJsonArray("faces")) {
+						String[] ends = range.getAsString().split("-", -1);
+						int first = Integer.parseInt(ends[0]);
+						int last = ends.length == 1 ? first : Integer.parseInt(ends[1]);
+						if (ends.length > 2 || first < 0 || last < first || last >= resolved.length)
+							throw new IllegalArgumentException("Invalid custom face range: " + range);
+						for (int face = first; face <= last; face++) {
+							if (assigned[face])
+								throw new IllegalArgumentException("Duplicate custom face: " + face);
+							assigned[face] = true;
+							resolved[face] = override;
+						}
+					}
+				}
+			}
+			custom.faceOverrides = resolved;
+
 			for (var override : custom.faceOverrides) {
 				mightHaveTransparency |= override.mightHaveTransparency;
 				mightBeDoubleSided |= override.mightBeDoubleSided;
 			}
+		}
 	}
 
 	public void clearIds(){
@@ -302,11 +355,13 @@ public class ModelOverride
 			objectIds,
 			projectileIds,
 			graphicsObjectIds,
-			baseMaterial,
+			material,
 			textureMaterial,
 			uvType,
 			uvs,
 			custom,
+			materials,
+			faceOverrides,
 			uvScale,
 			uvOrientation,
 			uvOrientationX,
@@ -513,7 +568,9 @@ public class ModelOverride
 	}
 
 	public ModelOverride getCustomOverride(Model model, int face) {
-		return custom != null && custom.uvs.length == model.getFaceCount() * 6 ? custom.faceOverrides[face] : null;
+		if (custom != null && custom.uvs.length == model.getFaceCount() * 6)
+			return custom.faceOverrides[face];
+		return null;
 	}
 
 	public void fillUvsForFace(float[] out, Model model, int orientation, UvType uvType, int face, float[] workingSpace) {

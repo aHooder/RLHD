@@ -10,8 +10,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.util.ArrayList;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.regex.Pattern;
@@ -21,18 +21,26 @@ import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.Keybind;
 import net.runelite.client.input.KeyListener;
 import net.runelite.client.input.KeyManager;
-import org.lwjgl.assimp.AIMesh;
 import org.lwjgl.assimp.AIMaterial;
+import org.lwjgl.assimp.AIMesh;
 import org.lwjgl.assimp.AIString;
 import org.lwjgl.system.MemoryStack;
 import rs117.hd.HdPlugin;
-import rs117.hd.scene.ModelOverrideManager;
 import rs117.hd.scene.MaterialManager;
+import rs117.hd.scene.ModelOverrideManager;
+import rs117.hd.utils.FileWatcher;
 import rs117.hd.utils.Props;
 import rs117.hd.utils.ResourcePath;
 
-import static java.awt.event.InputEvent.*;
-import static org.lwjgl.assimp.Assimp.*;
+import static java.awt.event.InputEvent.ALT_DOWN_MASK;
+import static java.awt.event.InputEvent.CTRL_DOWN_MASK;
+import static org.lwjgl.assimp.Assimp.AI_MATKEY_NAME;
+import static org.lwjgl.assimp.Assimp.aiGetErrorString;
+import static org.lwjgl.assimp.Assimp.aiGetMaterialString;
+import static org.lwjgl.assimp.Assimp.aiImportFile;
+import static org.lwjgl.assimp.Assimp.aiReleaseImport;
+import static org.lwjgl.assimp.Assimp.aiReturn_SUCCESS;
+import static rs117.hd.utils.ResourcePath.path;
 
 /** Imports editable UV0 and materials, using immutable UV1 corner IDs for custom models. */
 @Slf4j
@@ -46,6 +54,7 @@ public class ModelUvImporter implements KeyListener, AutoCloseable {
 	private final KeyManager keys;
 	private final ClientThread clientThread;
 	private ResourcePath source;
+	private FileWatcher.UnregisterCallback modelExportsWatcher;
 	private boolean pressed;
 	private boolean closed;
 
@@ -61,12 +70,26 @@ public class ModelUvImporter implements KeyListener, AutoCloseable {
 				resolve(json);
 			});
 			keys.registerKeyListener(this);
+			try {
+				modelExportsWatcher = FileWatcher.watchPath(
+					path("model-exports").mkdirs(),
+					changed -> clientThread.invoke(() -> {
+						if (!closed)
+							overrides.loadOverrides(false);
+					})
+				);
+			} catch (RuntimeException ex) {
+				log.warn("Unable to watch model-exports", ex);
+			}
 		}
 	}
 
 	@Override
 	public void close() {
 		closed = true;
+		if (modelExportsWatcher != null)
+			modelExportsWatcher.unregister();
+		modelExportsWatcher = null;
 		keys.unregisterKeyListener(this);
 		if (Props.DEVELOPMENT)
 			overrides.setDevelopmentJsonProcessor(null);
@@ -84,9 +107,11 @@ public class ModelUvImporter implements KeyListener, AutoCloseable {
 			var custom = object.get("custom");
 			if (custom != null && custom.isJsonPrimitive() && custom.getAsJsonPrimitive().isString()) {
 				var path = Path.of("model-exports").resolve(custom.getAsString()).normalize();
-				var imported = loadCustom(path, object.has("baseMaterial") ? object.get("baseMaterial").getAsString() : "NONE");
+				var material = object.has("material") ? object.get("material") : object.get("baseMaterial");
+				var imported = loadCustom(path, material == null ? "NONE" : material.getAsString());
 				object.add("custom", imported.get("custom"));
-				object.add("baseMaterial", imported.get("baseMaterial"));
+				object.remove("baseMaterial");
+				object.add("material", imported.get("material"));
 				log.info("Loaded custom model override '{}' from {}", object.get("description"), path);
 				count++;
 			}
@@ -205,7 +230,7 @@ public class ModelUvImporter implements KeyListener, AutoCloseable {
 			if (materials.size() > 0)
 				custom.add("materials", materials);
 			var result = new JsonObject();
-			result.addProperty("baseMaterial", baseMaterial);
+			result.addProperty("material", baseMaterial);
 			result.add("custom", custom);
 			return result;
 		} finally {
@@ -333,13 +358,13 @@ public class ModelUvImporter implements KeyListener, AutoCloseable {
 						indentEnd++;
 					String indent = original.substring(lineStart, indentEnd);
 					edits.add(new Replacement(object.customStart, object.customEnd, format(imported.get("custom"), indent, newline)));
-					String base = imported.get("baseMaterial").getAsString();
+					String base = imported.get("material").getAsString();
 					if (!base.equals(object.baseMaterial)) {
-						String value = format(imported.get("baseMaterial"), "", newline);
+						String value = format(imported.get("material"), "", newline);
 						if (object.baseEnd > 0) {
 							edits.add(new Replacement(object.baseStart, object.baseEnd, value));
 						} else {
-							edits.add(new Replacement(object.start, object.start, " \"baseMaterial\": " + value + ","));
+							edits.add(new Replacement(object.start, object.start, " \"material\": " + value + ","));
 						}
 					}
 					reports.add("Replaced custom model for '" + object.description + "' from '" + object.customPath + "' at line " + object.customLine);
@@ -353,7 +378,7 @@ public class ModelUvImporter implements KeyListener, AutoCloseable {
 					var object = objects.peek();
 					if ("description".equals(property)) {
 						object.description = value;
-					} else if ("baseMaterial".equals(property)) {
+					} else if ("material".equals(property) || "baseMaterial".equals(property)) {
 						object.baseMaterial = value;
 						object.baseStart = tokens.start();
 						object.baseEnd = tokens.end();

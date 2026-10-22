@@ -322,7 +322,13 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 				int vertexOffset = sceneContext.getVertexOffset();
 				int uvOffset = sceneContext.getUvOffset();
 				int bakedOrientation = getBakedOrientation(modelInfo.object, modelInfo.renderable);
-				modelPusher.pushModel(sceneContext, null, uuid, model, modelOverride, bakedOrientation, false);
+				boolean skipHiddenFaces = LegacyModelPusher.SKIP_HIDDEN_FACES;
+				LegacyModelPusher.SKIP_HIDDEN_FACES = false;
+				try {
+					modelPusher.pushModel(sceneContext, null, uuid, model, modelOverride, bakedOrientation, false);
+				} finally {
+					LegacyModelPusher.SKIP_HIDDEN_FACES = skipHiddenFaces;
+				}
 				int numVertices = sceneContext.modelPusherResults[0] * 3;
 				int numUvs = sceneContext.modelPusherResults[1] * 3;
 				int numFaces = numVertices / 3;

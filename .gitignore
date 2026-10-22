@@ -17,3 +17,4 @@ shader-dumps/
 **/*.log
 bin/
 model-exports/
+**/*.bak
