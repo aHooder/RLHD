@@ -1,13 +1,16 @@
 package rs117.hd.scene;
 
+import com.google.gson.JsonElement;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.BiConsumer;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.gameval.*;
@@ -52,22 +55,37 @@ public class ModelOverrideManager {
 	private final IntHashSet detailCullingBlacklist = new IntHashSet();
 
 	private FileWatcher.UnregisterCallback fileWatcher;
+	private boolean started;
+
+	@Setter
+	private BiConsumer<ResourcePath, JsonElement> developmentJsonProcessor;
 
 	public void startUp() {
-		fileWatcher = MODEL_OVERRIDES_PATH.watch((path, first) -> clientThread.invoke(() -> {
+		started = true;
+		fileWatcher = MODEL_OVERRIDES_PATH.watch((path, first) -> loadOverrides(first));
+	}
+
+	public void loadOverrides(boolean first) {
+		clientThread.invoke(() -> {
+			if (!started)
+				return;
+			var path = MODEL_OVERRIDES_PATH;
 			try (var gamevals = gamevalManager.obtainHandle()) {
 				sceneManager.getLoadingLock().lock();
 				sceneManager.completeAllStreaming();
 
-				ModelOverride[] parsedOverrides = path.loadJson(plugin.getGson(), ModelOverride[].class);
-				if (parsedOverrides == null)
+				var json = path.loadJson(plugin.getGson(), JsonElement.class);
+				if (json == null || json.isJsonNull())
 					throw new IOException("Empty or invalid: " + path);
+				if (Props.DEVELOPMENT && developmentJsonProcessor != null)
+					developmentJsonProcessor.accept(path, json);
+				var parsedOverrides = plugin.getGson().fromJson(json, ModelOverride[].class);
 
 				modelOverrides.clear();
 				for (ModelOverride override : parsedOverrides) {
 					try {
 						override.normalize(plugin);
-					} catch (IllegalStateException ex) {
+					} catch (IllegalStateException | IllegalArgumentException ex) {
 						log.error("Invalid model override '{}': {}", override.description, ex.getMessage());
 						continue;
 					}
@@ -106,10 +124,11 @@ public class ModelOverrideManager {
 				sceneManager.getLoadingLock().unlock();
 				log.trace("loadingLock unlocked - holdCount: {}", sceneManager.getLoadingLock().getHoldCount());
 			}
-		}));
+		});
 	}
 
 	public void shutDown() {
+		started = false;
 		if (fileWatcher != null)
 			fileWatcher.unregister();
 		fileWatcher = null;

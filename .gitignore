@@ -15,4 +15,6 @@ nbproject/
 hs_err_pid*
 shader-dumps/
 **/*.log
+**/*.bak
 bin/
+model-exports/

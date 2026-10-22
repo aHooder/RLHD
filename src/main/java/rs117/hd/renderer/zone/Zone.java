@@ -579,7 +579,7 @@ public class Zone implements Destructible {
 
 		Arrays.fill(doubleSidedBitSet, 0, bucketCapacity, 0);
 
-		final Material baseMaterial = modelOverride.baseMaterial;
+		final Material baseMaterial = modelOverride.material;
 		final Material textureMaterial = modelOverride.textureMaterial;
 
 		int radius = 0;
@@ -587,10 +587,6 @@ public class Zone implements Destructible {
 		char doubleSidedCount = 0;
 		for (int f = 0; f < faceCount; ++f) {
 			if (color3[f] == -2)
-				continue;
-
-			// Hide fake shadows or lighting that is often baked into models by making the fake shadow transparent
-			if (plugin.configHideFakeShadows && modelOverride.hideVanillaShadows && HDUtils.isBakedGroundShading(model, f))
 				continue;
 
 			Material material = baseMaterial;
@@ -601,7 +597,11 @@ public class Zone implements Destructible {
 				continue;
 
 			int textureId = faceTextures != null ? faceTextures[f] : -1;
-			if (textureId != -1) {
+			var customOverride = modelOverride.getCustomOverride(model, f);
+			if (customOverride != null) {
+				faceOverride = customOverride;
+				material = faceOverride.material;
+			} else if (textureId != -1) {
 				if (modelOverride.textureMaterial != Material.NONE) {
 					material = textureMaterial;
 				} else {
@@ -619,11 +619,17 @@ public class Zone implements Destructible {
 				final var override = modelOverride.testColorOverrides(ahsl);
 				if (override != null) {
 					faceOverride = override;
-					material = override.baseMaterial;
+					material = override.material;
 				}
 			}
 
 			if (faceOverride.hide)
+				continue;
+
+			// Hide fake shadows or lighting that is often baked into models by making the fake shadow transparent
+			if (textureId == -1 && plugin.configHideFakeShadows &&
+				faceOverride.hideVanillaShadows &&
+				HDUtils.isBakedGroundShading(model, f))
 				continue;
 
 			if (faceOverride.modifiesAlpha)

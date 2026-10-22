@@ -1617,7 +1617,7 @@ public class SceneUploader implements AutoCloseable {
 
 		boolean isVanillaTextured = faceTextures != null;
 
-		final Material baseMaterial = modelOverride.baseMaterial;
+		final Material baseMaterial = modelOverride.material;
 		final Material textureMaterial = modelOverride.textureMaterial;
 
 		int len = 0;
@@ -1645,7 +1645,11 @@ public class SceneUploader implements AutoCloseable {
 
 			int textureId = isVanillaTextured ? faceTextures[face] : -1;
 			boolean isTextured = textureId != -1;
-			if (isTextured) {
+			var customOverride = modelOverride.getCustomOverride(model, face);
+			if (customOverride != null) {
+				faceOverride = customOverride;
+				material = faceOverride.material;
+			} else if (isTextured) {
 				uvType = UvType.VANILLA;
 				if (textureMaterial != Material.NONE) {
 					material = textureMaterial;
@@ -1664,7 +1668,7 @@ public class SceneUploader implements AutoCloseable {
 				final var override = modelOverride.testColorOverrides(ahsl);
 				if (override != null) {
 					faceOverride = override;
-					material = faceOverride.baseMaterial;
+					material = faceOverride.material;
 				}
 			}
 
@@ -1779,6 +1783,12 @@ public class SceneUploader implements AutoCloseable {
 				}
 			}
 
+			// Vanilla textures should always have a constant white background
+			if (customOverride != null && material.vanillaTextureIndex != -1) {
+				color1 = color2 = color3 = 90;
+				keepShading = true;
+			}
+
 			if (faceOverride.modifiesColor) {
 				color1 = faceOverride.modifyColor(color1);
 				color2 = faceOverride.modifyColor(color2);
@@ -1795,16 +1805,19 @@ public class SceneUploader implements AutoCloseable {
 			if (uvType == UvType.VANILLA && (textureId == -1 || textureFace == -1))
 				uvType = UvType.GEOMETRY;
 
-			final int materialData = material.packMaterialData(faceOverride, uvType, false);
-
-			final float[] faceUVs;
-			if (uvType == UvType.VANILLA) {
-				computeFaceUvsInline(faceUVs = modelUvs, model, textureFace, triangleA, triangleB, triangleC, null);
+			float[] faceUVs = modelUvs;
+			boolean hasCustomUvs = modelOverride.fillUvOverride(modelUvs, model, face);
+			if (hasCustomUvs) {
+				uvType = UvType.GEOMETRY;
+			} else if (uvType == UvType.VANILLA) {
+				computeFaceUvsInline(faceUVs, model, textureFace, triangleA, triangleB, triangleC, null);
 			} else if (uvType != UvType.GEOMETRY) {
-				faceOverride.fillUvsForFace(faceUVs = modelUvs, model, preOrientation, uvType, face, workingSpace);
+				faceOverride.fillUvsForFace(faceUVs, model, preOrientation, uvType, face, workingSpace);
 			} else {
 				faceUVs = GEOMETRY_UVS;
 			}
+
+			final int materialData = material.packMaterialData(faceOverride, uvType, false);
 
 			final boolean shouldRotateNormals;
 			boolean shouldCalculateFaceNormal;
@@ -2014,7 +2027,7 @@ public class SceneUploader implements AutoCloseable {
 		final short[] faceTextures = model.getFaceTextures();
 		final byte[] textureFaces = model.getTextureFaces();
 
-		final Material baseMaterial = modelOverride.baseMaterial;
+		final Material baseMaterial = modelOverride.material;
 		final Material textureMaterial = modelOverride.textureMaterial;
 
 		final boolean isVanillaTextured = faceTextures != null;
@@ -2042,16 +2055,16 @@ public class SceneUploader implements AutoCloseable {
 			if (transparency == 255)
 				continue;
 
-			// Hide fake shadows or lighting that is often baked into models by making the fake shadow transparent
-			if (plugin.configHideFakeShadows && modelOverride.hideVanillaShadows && HDUtils.isBakedGroundShading(model, f))
-				continue;
-
 			UvType uvType = UvType.GEOMETRY;
 			Material material = baseMaterial;
 			ModelOverride faceOverride = modelOverride;
 
 			final int textureId = isVanillaTextured ? faceTextures[f] : -1;
-			if (textureId != -1) {
+			var customOverride = modelOverride.getCustomOverride(model, f);
+			if (customOverride != null) {
+				faceOverride = customOverride;
+				material = faceOverride.material;
+			} else if (textureId != -1) {
 				uvType = UvType.VANILLA;
 				if (textureMaterial != Material.NONE) {
 					material = textureMaterial;
@@ -2080,7 +2093,7 @@ public class SceneUploader implements AutoCloseable {
 
 				if (override != null) {
 					faceOverride = override;
-					material = faceOverride.baseMaterial;
+					material = faceOverride.material;
 				}
 			}
 
@@ -2095,6 +2108,12 @@ public class SceneUploader implements AutoCloseable {
 			// Fall back to geometry UVs if vanilla UVs aren't valid
 			if (uvType == UvType.VANILLA && (textureId == -1 || textureFaces == null || textureFaces[f] == -1))
 				uvType = UvType.GEOMETRY;
+
+			// Hide baked ground shading using the selected face's override.
+			if (plugin.configHideFakeShadows &&
+				faceOverride.hideVanillaShadows &&
+				HDUtils.isBakedGroundShading(model, f))
+				continue;
 
 			if (faceOverride.modifiesAlpha) {
 				transparency = 255 - faceOverride.modifyAlpha(255 - transparency);
@@ -2234,11 +2253,14 @@ public class SceneUploader implements AutoCloseable {
 			int transparency = readFaceTransparency(modelTransparency, transparencies, face);
 			final int textureFace = textureFaces != null ? textureFaces[face] : -1;
 			final int textureId = isVanillaTextured ? faceTextures[face] : -1;
-			final UvType uvType = faceUVTypes.get(face);
+			UvType uvType = faceUVTypes.get(face);
 			final Material material = faceMaterials.get(face);
 			final ModelOverride faceOverride = faceOverrides.get(face);
 
-			if (textureId != -1)
+			boolean customVanillaTexture =
+				material.vanillaTextureIndex != -1 &&
+				modelOverride.getCustomOverride(model, face) != null;
+			if (textureId != -1 || customVanillaTexture)
 				color1 = color2 = color3 = 90;
 
 			if (faceOverride.modifiesColor) {
@@ -2246,8 +2268,6 @@ public class SceneUploader implements AutoCloseable {
 				color2 = faceOverride.modifyColor(color2);
 				color3 = faceOverride.modifyColor(color3);
 			}
-
-			final int materialData = material.packMaterialData(faceOverride, uvType, false);
 
 			final int triangleA = indices1[face];
 			final int vertexOffsetA = triangleA * 3;
@@ -2258,14 +2278,19 @@ public class SceneUploader implements AutoCloseable {
 			final int triangleC = indices3[face];
 			final int vertexOffsetC = triangleC * 3;
 
-			final float[] faceUVs;
-			if (uvType == UvType.VANILLA) {
-				computeFaceUvsInline(faceUVs = modelUvs, model, textureFace, triangleA, triangleB, triangleC, modelProjected);
+			float[] faceUVs = modelUvs;
+			boolean customUvs = modelOverride.fillUvOverride(faceUVs, model, face);
+			if (customUvs) {
+				uvType = UvType.GEOMETRY;
+			} else if (uvType == UvType.VANILLA) {
+				computeFaceUvsInline(faceUVs, model, textureFace, triangleA, triangleB, triangleC, modelProjected);
 			} else if (uvType != UvType.GEOMETRY) {
-				faceOverride.fillUvsForFace(faceUVs = modelUvs, model, preOrientation, uvType, face, workingSpace);
+				faceOverride.fillUvsForFace(faceUVs, model, preOrientation, uvType, face, workingSpace);
 			} else {
 				faceUVs = GEOMETRY_UVS;
 			}
+
+			final int materialData = material.packMaterialData(faceOverride, uvType, false);
 
 			if (!isShadow) {
 				final boolean shouldRotateNormals;
@@ -2295,7 +2320,7 @@ public class SceneUploader implements AutoCloseable {
 					);
 				}
 
-				if (plugin.configUndoVanillaShading && modelOverride.undoVanillaShading) {
+				if (plugin.configUndoVanillaShading && faceOverride.undoVanillaShading && !customVanillaTexture) {
 					color1 = undoVanillaShading(color1, plugin.configLegacyGreyColors, faceNormals[0], faceNormals[1], faceNormals[2]);
 					color2 = undoVanillaShading(color2, plugin.configLegacyGreyColors, faceNormals[3], faceNormals[4], faceNormals[5]);
 					color3 = undoVanillaShading(color3, plugin.configLegacyGreyColors, faceNormals[6], faceNormals[7], faceNormals[8]);
@@ -2306,7 +2331,7 @@ public class SceneUploader implements AutoCloseable {
 			}
 
 			// HSL override is not applied to textured faces
-			if (overrideAmount > 0 && (!isVanillaTextured || faceTextures[face] == -1)) {
+			if (overrideAmount > 0 && textureId == -1 && !customVanillaTexture) {
 				color1 = interpolateHSL(color1, overrideHue, overrideSat, overrideLum, overrideAmount);
 				color2 = interpolateHSL(color2, overrideHue, overrideSat, overrideLum, overrideAmount);
 				color3 = interpolateHSL(color3, overrideHue, overrideSat, overrideLum, overrideAmount);

@@ -6,6 +6,9 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.RuneLite;
 import net.runelite.client.RuneLiteProperties;
 import net.runelite.client.externalplugins.ExternalPluginManager;
+import rs117.hd.model.ModelExporter;
+import rs117.hd.model.ModelUvImporter;
+import rs117.hd.utils.DeveloperTools;
 import rs117.hd.utils.Props;
 
 @Slf4j
@@ -23,6 +26,8 @@ public class HdPluginTest
 		Props.set("rlhd.resource-path", "src/main/resources");
 		ClassLoader.getSystemClassLoader().setDefaultAssertionStatus(true);
 		useLatestPluginHub();
+		DeveloperTools.addTool(ModelExporter.class);
+		DeveloperTools.addTool(ModelUvImporter.class);
 		ExternalPluginManager.loadBuiltin(HdPlugin.class);
 		RuneLite.main(args);
 	}

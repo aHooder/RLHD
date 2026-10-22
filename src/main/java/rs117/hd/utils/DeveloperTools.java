@@ -2,6 +2,7 @@ package rs117.hd.utils;
 
 import java.awt.Color;
 import java.awt.event.KeyEvent;
+import java.util.ArrayList;
 import javax.inject.Inject;
 import javax.inject.Named;
 import lombok.Getter;
@@ -53,6 +54,13 @@ public class DeveloperTools implements KeyListener {
 
 	@Inject
 	private Client client;
+
+	private static final ArrayList<Class<?>> externalDeveloperToolClasses = new ArrayList<>();
+	private static final ArrayList<Object> externalDeveloperToolInstances = new ArrayList<>();
+
+	public static void addTool(Class<?> clazz) {
+		externalDeveloperToolClasses.add(clazz);
+	}
 
 	@Inject
 	private ClientThread clientThread;
@@ -124,6 +132,14 @@ public class DeveloperTools implements KeyListener {
 			lightGizmoOverlay.setActive(lightGizmoOverlayEnabled);
 			tiledLightingOverlay.setActive(tiledLightingOverlayEnabled);
 		});
+
+		for (var clazz : externalDeveloperToolClasses) {
+			try {
+				externalDeveloperToolInstances.add(plugin.getInjector().getInstance(clazz));
+			} catch (Throwable ex) {
+				log.error("Error while activating external dev tool:", ex);
+			}
+		}
 	}
 
 	public void deactivate() {
@@ -135,6 +151,17 @@ public class DeveloperTools implements KeyListener {
 		lightGizmoOverlay.setActive(false);
 		tiledLightingOverlay.setActive(false);
 		hideUiEnabled = false;
+
+		for (var instance : externalDeveloperToolInstances) {
+			if (instance instanceof AutoCloseable) {
+				try {
+					((AutoCloseable) instance).close();
+				} catch (Exception ex) {
+					log.error("Error while deactivating external dev tool:", ex);
+				}
+			}
+		}
+		externalDeveloperToolInstances.clear();
 	}
 
 	public void updateConfig() {
