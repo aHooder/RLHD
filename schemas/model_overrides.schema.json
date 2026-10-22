@@ -96,7 +96,7 @@
                 },
                 "materials": {
                   "type": "array",
-                  "description": "Unspecified properties inherit from the parent. Faces use material or the parent's material, ignoring textureMaterial and automatic material/color selection.",
+                  "description": "Independent overrides for the listed faces; omitted properties use standard defaults, not the parent. Unlisted faces use the outer override. Custom faces ignore textureMaterial and automatic material/color selection.",
                   "items": {
                     "$ref": "#/$defs/modelOverride",
                     "required": [

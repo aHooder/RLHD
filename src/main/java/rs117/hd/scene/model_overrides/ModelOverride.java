@@ -2,10 +2,8 @@ package rs117.hd.scene.model_overrides;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
 import com.google.gson.annotations.JsonAdapter;
 import com.google.gson.annotations.SerializedName;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -61,10 +59,6 @@ public class ModelOverride
 	public Material material = Material.NONE;
 	public Material textureMaterial = Material.NONE;
 	public UvType uvType = UvType.VANILLA;
-	public float[] uvs;
-	public ModelOverride custom;
-	private JsonObject[] materials;
-	private transient ModelOverride[] faceOverrides;
 	public float uvScale = 1;
 	public int uvOrientation = 0;
 	public int uvOrientationX = 0;
@@ -98,6 +92,11 @@ public class ModelOverride
 	public boolean disablePrioritySorting = false;
 	public int heightOffset = 0;
 
+	public ModelOverride custom;
+	public float[] uvs;
+	private ModelOverride[] materials;
+	private JsonArray faces;
+
 	private int setHue = -1;
 	private int shiftHue;
 	private int minHue;
@@ -114,8 +113,6 @@ public class ModelOverride
 	private int shiftAlpha;
 	private int minAlpha;
 	private int maxAlpha = 255;
-	public boolean modifiesColor;
-	public boolean modifiesAlpha;
 
 	@JsonAdapter(AABB.ArrayAdapter.class)
 	public AABB[] hideInAreas = {};
@@ -127,12 +124,15 @@ public class ModelOverride
 
 	public transient boolean isDummy;
 	public transient boolean isGenerated;
+	private transient ModelOverride[] faceOverrides;
 	public transient ModelOverride[] areaOverrides;
 	public transient AABB[] areaOverrideBounds;
 	public transient AhslPredicate ahslCondition;
 	public transient boolean mightHaveTransparency;
 	public transient boolean mightBeDoubleSided;
 	public transient boolean modifiesVanillaTexture;
+	public transient boolean modifiesColor;
+	public transient boolean modifiesAlpha;
 
 	// Transient not volatile, since access order can be random as it'll mean we'll just fall back to the full lookup
 	private transient long cachedColorOverrideAhsl = -1;
@@ -143,6 +143,31 @@ public class ModelOverride
 	}
 
 	public void normalize(HdPlugin plugin) {
+		if (custom != null && custom.faceOverrides == null) {
+			if (custom.uvs == null || custom.uvs.length == 0 || custom.uvs.length % 6 != 0)
+				throw new IllegalArgumentException("custom.uvs must contain six coordinates per triangle");
+
+			var resolved = new ModelOverride[custom.uvs.length / 6];
+			if (custom.materials != null) {
+				for (var override : custom.materials) {
+					override.normalize(plugin);
+					for (var range : override.faces) {
+						String[] ends = range.getAsString().split("-", -1);
+						int first = Integer.parseInt(ends[0]);
+						int last = ends.length == 1 ? first : Integer.parseInt(ends[1]);
+						if (ends.length > 2 || first < 0 || last < first || last >= resolved.length)
+							throw new IllegalArgumentException("Invalid custom face range: " + range);
+						for (int face = first; face <= last; face++) {
+							if (resolved[face] != null)
+								throw new IllegalArgumentException("Duplicate custom face: " + face);
+							resolved[face] = override;
+						}
+					}
+				}
+			}
+			custom.faceOverrides = resolved;
+		}
+
 		// Ensure there are no nulls in case of invalid configuration during development
 		if (material == null) {
 			if (Props.DEVELOPMENT)
@@ -279,59 +304,13 @@ public class ModelOverride
 
 		shadowNormalBias |= material.subsurface > 0 || textureMaterial.subsurface > 0;
 
-		if (custom != null && custom.faceOverrides == null) {
-			if (custom.uvs == null || custom.uvs.length == 0 || custom.uvs.length % 6 != 0)
-				throw new IllegalArgumentException("custom.uvs must contain six coordinates per triangle");
-
-			// Inherit authored values before normalization, not derived flags.
-			var defaults = copy();
-			defaults.custom = null;
-			defaults.uvs = null;
-			defaults.materials = null;
-			defaults.faceOverrides = null;
-			defaults.textureMaterial = Material.NONE;
-			defaults.materialOverrides = null;
-			defaults.colorOverrides = null;
-			defaults.clearIds();
-			var gson = plugin.getGson();
-			var inherited = gson.toJsonTree(defaults).getAsJsonObject();
-			defaults.normalize(plugin);
-			var resolved = new ModelOverride[custom.uvs.length / 6];
-			Arrays.fill(resolved, defaults);
-			if (custom.materials != null) {
-				boolean[] assigned = new boolean[resolved.length];
-				for (var material : custom.materials) {
-					var definition = inherited.deepCopy();
-					for (var entry : material.entrySet())
-						definition.add(entry.getKey(), entry.getValue());
-					if (material.has("baseMaterial") && !material.has("material"))
-						definition.add("material", material.get("baseMaterial"));
-					definition.remove("baseMaterial");
-					definition.remove("custom");
-					var override = gson.fromJson(definition, ModelOverride.class);
-					override.normalize(plugin);
-					for (var range : material.getAsJsonArray("faces")) {
-						String[] ends = range.getAsString().split("-", -1);
-						int first = Integer.parseInt(ends[0]);
-						int last = ends.length == 1 ? first : Integer.parseInt(ends[1]);
-						if (ends.length > 2 || first < 0 || last < first || last >= resolved.length)
-							throw new IllegalArgumentException("Invalid custom face range: " + range);
-						for (int face = first; face <= last; face++) {
-							if (assigned[face])
-								throw new IllegalArgumentException("Duplicate custom face: " + face);
-							assigned[face] = true;
-							resolved[face] = override;
-						}
-					}
-				}
-			}
-			custom.faceOverrides = resolved;
-
+		if (custom != null)
 			for (var override : custom.faceOverrides) {
+				if (override == null)
+					continue;
 				mightHaveTransparency |= override.mightHaveTransparency;
 				mightBeDoubleSided |= override.mightBeDoubleSided;
 			}
-		}
 	}
 
 	public void clearIds(){
@@ -358,10 +337,6 @@ public class ModelOverride
 			material,
 			textureMaterial,
 			uvType,
-			uvs,
-			custom,
-			materials,
-			faceOverrides,
 			uvScale,
 			uvOrientation,
 			uvOrientationX,
@@ -394,6 +369,10 @@ public class ModelOverride
 			depthBias,
 			disablePrioritySorting,
 			heightOffset,
+			custom,
+			uvs,
+			materials,
+			faces,
 			setHue,
 			shiftHue,
 			minHue,
@@ -410,20 +389,21 @@ public class ModelOverride
 			shiftAlpha,
 			minAlpha,
 			maxAlpha,
-			modifiesColor,
-			modifiesAlpha,
 			hideInAreas,
 			materialOverrides,
 			colorOverrides,
 			colors,
 			isDummy,
 			isGenerated,
+			faceOverrides,
 			areaOverrides,
 			areaOverrideBounds,
 			ahslCondition,
 			mightHaveTransparency,
 			mightBeDoubleSided,
 			modifiesVanillaTexture,
+			modifiesColor,
+			modifiesAlpha,
 			// Runtime caching fields
 			-1
 		);
@@ -568,8 +548,11 @@ public class ModelOverride
 	}
 
 	public ModelOverride getCustomOverride(Model model, int face) {
-		if (custom != null && custom.uvs.length == model.getFaceCount() * 6)
-			return custom.faceOverrides[face];
+		if (custom != null && custom.uvs.length == model.getFaceCount() * 6) {
+			var override = custom.faceOverrides[face];
+			// Unassigned faces keep the outer material, without ordinary per-face selection.
+			return override == null ? this : override;
+		}
 		return null;
 	}
 

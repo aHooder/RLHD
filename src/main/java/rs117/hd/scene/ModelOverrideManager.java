@@ -74,16 +74,12 @@ public class ModelOverrideManager {
 				sceneManager.getLoadingLock().lock();
 				sceneManager.completeAllStreaming();
 
-				ModelOverride[] parsedOverrides;
-				if (Props.DEVELOPMENT && developmentJsonProcessor != null) {
-					var json = path.loadJson(plugin.getGson(), JsonElement.class);
-					developmentJsonProcessor.accept(path, json);
-					parsedOverrides = plugin.getGson().fromJson(json, ModelOverride[].class);
-				} else {
-					parsedOverrides = path.loadJson(plugin.getGson(), ModelOverride[].class);
-				}
-				if (parsedOverrides == null)
+				var json = path.loadJson(plugin.getGson(), JsonElement.class);
+				if (json == null || json.isJsonNull())
 					throw new IOException("Empty or invalid: " + path);
+				if (Props.DEVELOPMENT && developmentJsonProcessor != null)
+					developmentJsonProcessor.accept(path, json);
+				var parsedOverrides = plugin.getGson().fromJson(json, ModelOverride[].class);
 
 				modelOverrides.clear();
 				for (ModelOverride override : parsedOverrides) {
