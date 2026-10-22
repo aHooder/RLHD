@@ -6,6 +6,7 @@ import com.google.gson.JsonObject;
 import java.awt.event.KeyEvent;
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -412,7 +413,8 @@ public class ModelUvImporter implements KeyListener, AutoCloseable {
 	private String format(JsonElement json, String indent, String newline) {
 		if (json.isJsonNull() || json.isJsonPrimitive())
 			return json.isJsonPrimitive() && json.getAsJsonPrimitive().isNumber() ?
-				new BigDecimal(json.getAsString()).stripTrailingZeros().toPlainString() : plugin.getGson().toJson(json);
+				new BigDecimal(json.getAsString()).setScale(4, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString() :
+				plugin.getGson().toJson(json);
 		boolean inline = json.isJsonArray();
 		if (inline)
 			for (var value : json.getAsJsonArray())
