@@ -106006,5 +106006,29 @@
       "CRAB_SHELL_6",
       "CRAB_SHELL_7"
     ]
+  },
+  {
+    "description": "TFA Lobby - Plank Bridges",
+    "baseMaterial": "WOOD_GRAIN_3",
+    "undoVanillaShading": false,
+    "uvOrientation": 512,
+    "objectIds": [
+      "TFA_FLOORKIT_GUTHIXIAN00_PLANKS03",
+      "TFA_FLOORKIT_GUTHIXIAN00_PLANKS01",
+      "TFA_FLOORKIT_GUTHIXIAN00_PLANKS02",
+      "TFA_FLOORKIT_GUTHIXIAN00_PLANKS01_RAISED"
+    ],
+    "uvType": "BOX"
+  },
+  {
+    "description": "TFA Lobby - Plank Bridges - Custom UV mapping",
+    "baseMaterial": "WOOD_GRAIN_3",
+    "undoVanillaShading": false,
+    "uvType": "BOX",
+    "uvOrientation": 512,
+    "objectIds": [
+      "TFA_FLOORKIT_GUTHIXIAN00_PLANKS04"
+    ],
+    "custom": "tile_object_id_63082.glb"
   }
 ]

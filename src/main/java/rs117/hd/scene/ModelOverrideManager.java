@@ -83,6 +83,9 @@ public class ModelOverrideManager {
 
 				modelOverrides.clear();
 				for (ModelOverride override : parsedOverrides) {
+					// Lenient Gson parsing treats a trailing array comma as a null entry.
+					if (override == null)
+						continue;
 					try {
 						override.normalize(plugin);
 					} catch (IllegalStateException | IllegalArgumentException ex) {

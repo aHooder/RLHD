@@ -175,7 +175,7 @@ public class LegacyModelPusher {
 		if (modelCache == null)
 			useCache = false;
 
-		final int faceCount = min(model.getFaceCount(), MAX_FACE_COUNT);
+		final int faceCount = SKIP_HIDDEN_FACES ? min(model.getFaceCount(), MAX_FACE_COUNT) : model.getFaceCount();
 		final int bufferSize = faceCount * DATUM_PER_FACE;
 		int texturedFaceCount = 0;
 

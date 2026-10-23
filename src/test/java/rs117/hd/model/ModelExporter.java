@@ -19,12 +19,15 @@ import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 import javax.imageio.ImageIO;
 import javax.inject.Inject;
@@ -34,6 +37,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.coords.*;
 import net.runelite.api.events.*;
+import net.runelite.api.gameval.*;
 import net.runelite.api.model.*;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.chat.ChatMessageBuilder;
@@ -69,14 +73,18 @@ import org.lwjgl.system.Pointer;
 import rs117.hd.HdPlugin;
 import rs117.hd.renderer.legacy.LegacyModelPusher;
 import rs117.hd.renderer.legacy.LegacySceneContext;
+import rs117.hd.renderer.zone.SceneManager;
 import rs117.hd.scene.MaterialManager;
 import rs117.hd.scene.ModelOverrideManager;
 import rs117.hd.scene.SceneContext;
 import rs117.hd.scene.TextureManager;
+import rs117.hd.scene.WaterTypeManager;
+import rs117.hd.scene.water_types.WaterType;
 import rs117.hd.scene.materials.Material;
 import rs117.hd.scene.model_overrides.ModelOverride;
 import rs117.hd.utils.ColorUtils;
 import rs117.hd.utils.HDUtils;
+import rs117.hd.utils.Mat4;
 import rs117.hd.utils.ModelHash;
 
 import static net.runelite.api.Perspective.*;
@@ -97,7 +105,6 @@ import static org.lwjgl.assimp.Assimp.aiPrimitiveType_TRIANGLE;
 import static org.lwjgl.assimp.Assimp.aiProcess_EmbedTextures;
 import static org.lwjgl.assimp.Assimp.aiProcess_FindInvalidData;
 import static org.lwjgl.assimp.Assimp.aiProcess_JoinIdenticalVertices;
-import static org.lwjgl.assimp.Assimp.aiProcess_PreTransformVertices;
 import static org.lwjgl.assimp.Assimp.aiProcess_ValidateDataStructure;
 import static org.lwjgl.assimp.Assimp.aiReleaseExportFormatDescription;
 import static org.lwjgl.assimp.Assimp.aiTextureType_AMBIENT_OCCLUSION;
@@ -111,6 +118,7 @@ import static org.lwjgl.system.MemoryUtil.memAlloc;
 import static org.lwjgl.system.MemoryUtil.memAllocFloat;
 import static org.lwjgl.system.MemoryUtil.memAllocInt;
 import static org.lwjgl.system.MemoryUtil.memByteBuffer;
+import static org.lwjgl.system.MemoryUtil.memCopy;
 import static org.lwjgl.system.MemoryUtil.memPutAddress;
 import static org.lwjgl.system.MemoryUtil.memSlice;
 import static org.lwjgl.system.MemoryUtil.memUTF8;
@@ -167,10 +175,18 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 	@Inject
 	private MaterialManager materialManager;
 
+	@Inject
+	private SceneManager sceneManager;
+
+	@Inject
+	private SceneTerrainExporter terrainExporter;
+
 	private int clientTickCount;
 	private int selectedIndex;
+	private int lastSelectedIndex = -1;
 	private Object selectedObject;
 	private final HashSet<Object> hoverSet = new HashSet<>();
+	private final Set<Object> hoverChecked = Collections.newSetFromMap(new IdentityHashMap<>());
 
 	@Inject
 	public ModelExporter(
@@ -204,6 +220,19 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 		Object object;
 		Renderable renderable;
 		Model model;
+		WorldView worldView;
+		Tile tile;
+		LegacySceneContext terrain;
+
+		ModelInfo(Object object, Renderable renderable, Model model) {
+			this.object = object;
+			this.renderable = renderable;
+			this.model = model;
+		}
+
+		int faceCount() {
+			return terrain == null ? model.getFaceCount() : terrain.getVertexOffset() / 3;
+		}
 	}
 
 	@AllArgsConstructor
@@ -213,6 +242,10 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 	}
 
 	public void exportModel(Map.Entry<String, String> objectName, Object object) {
+		exportModels(objectName, resolveModels(object), false);
+	}
+
+	private void exportModels(Map.Entry<String, String> objectName, List<ModelInfo> modelInfos, boolean wholeScene) {
 		if (materialManager.uboMaterials == null)
 			return;
 
@@ -255,7 +288,6 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 		while (exportPath.exists())
 			exportPath = path("model-exports", filename + "_" + (collisionCounter++) + "." + extension);
 
-		var modelInfos = resolveModels(object);
 		if (modelInfos.isEmpty()) {
 			chatMessageManager.queue(QueuedMessage.builder()
 				.type(ChatMessageType.CONSOLE)
@@ -269,7 +301,7 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 		}
 
 		// Custom UVs are indexed against one runtime Model, not a combined object's renderables.
-		if (modelInfos.size() != 1 || modelInfos.get(0).model.getFaceCount() > HdPlugin.MAX_FACE_COUNT) {
+		if (!wholeScene && (modelInfos.size() != 1 || modelInfos.get(0).model.getFaceCount() > HdPlugin.MAX_FACE_COUNT)) {
 			chatMessageManager.queue(QueuedMessage.builder()
 				.type(ChatMessageType.CONSOLE)
 				.runeLiteFormattedMessage("Cannot export this object for custom UV mapping: select a single model with at most " +
@@ -284,8 +316,11 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 			client, currentSceneContext.scene,
 			currentSceneContext.expandedMapLoadingChunks, null
 		);
-		try (var stack = MemoryStack.stackPush()) {
-			int totalFaceCount = modelInfos.stream().mapToInt(info -> info.model.getFaceCount()).sum();
+		// Scene exports need substantially more native metadata than the thread-local stack.
+		var metadata = memAlloc(Math.max(1024 * 1024, Math.multiplyExact(modelInfos.size(), 8192)));
+		cleanup.add(memAddress0(metadata));
+		try (var stack = MemoryStack.create(metadata)) {
+			int totalFaceCount = modelInfos.stream().mapToInt(ModelInfo::faceCount).reduce(0, Math::addExact);
 			int totalVertexCount = totalFaceCount * 3;
 
 			var vertices = memAllocFloat(totalVertexCount * 3);
@@ -316,10 +351,17 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 			scene.mRootNode(rootNode);
 
 			var meshList = new ArrayList<AIMesh>();
+			var nodes = new ArrayList<AINode>();
 			var materialList = new ArrayList<Material>();
+			var waterMaterials = new HashMap<WaterType, Material>();
 
 			boolean worldUvWarningSent = false;
 			for (ModelInfo modelInfo : modelInfos) {
+				sceneContext.stagingBufferVertices.clear();
+				sceneContext.stagingBufferNormals.clear();
+				sceneContext.stagingBufferUvs.clear();
+				int firstMesh = meshList.size();
+				int firstVertex = vertices.position() / 3;
 				long hash = getHash(modelInfo.object);
 				int uuid = ModelHash.generateUuid(client, hash, modelInfo.renderable);
 				int[] worldPos = sceneContext.sceneToWorld(
@@ -327,6 +369,18 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 					ModelHash.getSceneY(hash),
 					ModelHash.getPlane(hash)
 				);
+				if (modelInfo.worldView != null) {
+					var sourceScene = modelInfo.worldView.getScene();
+					if (modelInfo.tile != null) {
+						var location = modelInfo.tile.getWorldLocation();
+						worldPos = new int[] { location.getX(), location.getY(), location.getPlane() };
+					} else if (modelInfo.object instanceof Actor) {
+						var location = ((Actor) modelInfo.object).getWorldLocation();
+						worldPos = new int[] { location.getX(), location.getY(), location.getPlane() };
+					} else {
+						worldPos = new int[] { sourceScene.getBaseX(), sourceScene.getBaseY(), modelInfo.worldView.getPlane() };
+					}
+				}
 				ModelOverride modelOverride = modelOverrideManager.getOverride(uuid, worldPos);
 				var model = modelInfo.model;
 				int vertexOffset = sceneContext.getVertexOffset();
@@ -335,7 +389,16 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 				boolean skipHiddenFaces = LegacyModelPusher.SKIP_HIDDEN_FACES;
 				LegacyModelPusher.SKIP_HIDDEN_FACES = false;
 				try {
-					modelPusher.pushModel(sceneContext, null, uuid, model, modelOverride, bakedOrientation, false);
+					if (model == null) {
+						var terrain = modelInfo.terrain;
+						int size = terrain.stagingBufferVertices.position();
+						sceneContext.stagingBufferVertices.ensureCapacity(size).put(terrain.stagingBufferVertices.getBuffer().duplicate().flip());
+						sceneContext.stagingBufferNormals.ensureCapacity(size).put(terrain.stagingBufferNormals.getBuffer().duplicate().flip());
+						sceneContext.stagingBufferUvs.ensureCapacity(size).put(terrain.stagingBufferUvs.getBuffer().duplicate().flip());
+						sceneContext.modelPusherResults[0] = sceneContext.modelPusherResults[1] = size / 12;
+					} else {
+						modelPusher.pushModel(sceneContext, modelInfo.tile, uuid, model, modelOverride, bakedOrientation, false);
+					}
 				} finally {
 					LegacyModelPusher.SKIP_HIDDEN_FACES = skipHiddenFaces;
 				}
@@ -345,22 +408,42 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 				assert numUvs == numVertices || numUvs == 0;
 
 				var meshDataMap = new HashMap<Material, MeshData>();
+				var materialFaceCounts = new HashMap<Material, Integer>();
+				var faceMaterials = new Material[numFaces];
+				for (int face = 0; face < numFaces; face++) {
+					Material material = Material.NONE;
+					if (numUvs > 0) {
+						int packed = Float.floatToRawIntBits(sceneContext.stagingBufferUvs.getBuffer().get((uvOffset + face * 3) * 4 + 3));
+						material = materialManager.uboMaterials.materials[packed >>> 21 & MAX_MATERIAL_INDEX];
+					}
+					if (model == null) {
+						int terrainData = Float.floatToRawIntBits(sceneContext.stagingBufferNormals.getBuffer().get(face * 12 + 3));
+						int waterIndex = terrainData >> 3 & 0xFF;
+						int depth = terrainData >> 11 & 0xFFF;
+						if (waterIndex != 0 && depth == 0) {
+							var water = WaterTypeManager.WATER_TYPES[waterIndex];
+							material = waterMaterials.computeIfAbsent(water, type -> new Material()
+								.name("117HD_Water_" + type.name)
+								.normalMap((Material) waterProperty(type, "normalMap")));
+						}
+					}
+					faceMaterials[face] = material;
+					materialFaceCounts.merge(material, 1, Integer::sum);
+				}
 				for (int face = 0; face < numFaces; face++) {
 					int faceVertexOffset = vertexOffset + face * 3;
 					int faceUvOffset = uvOffset + face * 3;
 
 					int materialData = 0;
-					Material materialEntry = Material.NONE;
+					Material materialEntry = faceMaterials[face];
+					boolean waterSurface = waterMaterials.containsValue(materialEntry);
 					if (numUvs > 0) {
 						materialData = Float.floatToRawIntBits(sceneContext.stagingBufferUvs.getBuffer().get(faceUvOffset * 4 + 3));
-						materialEntry = materialManager.uboMaterials.materials[materialData >>> 21 & MAX_MATERIAL_INDEX];
 					}
 
 					var buffers = meshDataMap.get(materialEntry);
 					if (buffers == null) {
-						// Model#getHash() = ObjectDefinitionId << 10 | 7-bit model type << 3 | 1-bit mirroring? | 2-bit orientation
-						int objectCompositionId = (int) (model.getHash() >> 10); // could use this to grab another name maybe
-						var meshName = objectName.getValue() + "_" + materialEntry;
+						var meshName = objectName.getValue() + "_" + nodes.size();
 
 						int materialIndex = materialList.indexOf(materialEntry);
 						if (materialIndex == -1) {
@@ -368,19 +451,22 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 							materialList.add(materialEntry);
 						}
 
-						// All meshes share the same underlying buffers, with different indices
+						// Material primitives share this model's vertex slice and belong to one node.
 						var mesh = AIMesh.calloc(stack)
 							.mPrimitiveTypes(aiPrimitiveType_TRIANGLE)
-							.mNumVertices(totalVertexCount)
-							.mVertices(AIVector3D.create(memAddress0(vertices), 0))
-							.mNormals(AIVector3D.create(memAddress0(normals), 0))
-							.mColors(stack.pointers(memAddress0(colors)))
+							.mNumVertices(numVertices)
+							.mVertices(AIVector3D.create(memAddress0(vertices) + firstVertex * 12L, numVertices))
+							.mNormals(AIVector3D.create(memAddress0(normals) + firstVertex * 12L, numVertices))
+							.mColors(stack.pointers(memAddress0(colors) + firstVertex * 16L))
 							.mMaterialIndex(materialIndex)
 							.mName(s -> s.data(stack.UTF8(meshName)))
 							.mNumUVComponents(stack.ints(2, 2))
-							.mTextureCoords(stack.pointers(memAddress0(uvs), memAddress0(cornerIds)));
+							.mTextureCoords(stack.pointers(
+								memAddress0(uvs) + firstVertex * 12L,
+								memAddress0(cornerIds) + firstVertex * 12L
+							));
 
-						var faces = AIFace.malloc(numFaces);
+						var faces = AIFace.malloc(materialFaceCounts.get(materialEntry));
 						cleanupFaceBuffers.add(faces);
 						buffers = new MeshData(mesh, faces);
 						meshDataMap.put(materialEntry, buffers);
@@ -446,13 +532,16 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 							n[i][c] = sceneContext.stagingBufferNormals.getBuffer().get(vertex * 4 + c);
 						}
 
-						indices.put(indices.position());
+						indices.put(face * 3 + i);
 
 						int packedColor = sceneContext.stagingBufferVertices.getBuffer().get(vertex * 4 + 3);
 						float alpha = 1 - (packedColor >>> 24 & 0xFF) / (float) 0xFF;
-						colors
-							.put(ColorUtils.packedHslToSrgb(packedColor))
-							.put(alpha);
+						if (waterSurface) {
+							// Shoreline vertex colors encode foam, not water albedo.
+							colors.put(1).put(1).put(1).put(1);
+						} else {
+							colors.put(ColorUtils.packedHslToSrgb(packedColor)).put(alpha);
+						}
 
 						vertices.put(v[i]);
 					}
@@ -490,18 +579,31 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 				}
 
 				// Since we don't know the number of faces per mesh in advance, assign them after
-				for (var meshData : meshDataMap.values())
+				for (var meshData : meshDataMap.values()) {
 					meshData.mesh.mFaces(meshData.faces.flip());
+					if (wholeScene)
+						compactMesh(stack, meshData.mesh, cleanup);
+				}
+				var nodeMeshes = stack.mallocInt(meshList.size() - firstMesh);
+				for (int i = firstMesh; i < meshList.size(); i++)
+					nodeMeshes.put(i);
+				var node = AINode.calloc(stack)
+					.mName(s -> s.data(stack.UTF8(model == null ? "Terrain_" + nodes.size() : "Model_" + nodes.size())))
+					.mParent(rootNode)
+					.mMeshes(nodeMeshes.flip())
+					.mTransformation(sceneTransform(stack, modelInfo, wholeScene));
+				nodes.add(node);
 			}
 
 			var meshPointers = stack.mallocPointer(meshList.size());
-			var meshIndices = stack.mallocInt(meshList.size());
 			for (int i = 0; i < meshList.size(); i++) {
-				meshIndices.put(i);
 				meshPointers.put(meshList.get(i));
 			}
 			scene.mMeshes(meshPointers.flip());
-			rootNode.mMeshes(meshIndices.flip());
+			var children = stack.mallocPointer(nodes.size());
+			for (var node : nodes)
+				children.put(node);
+			rootNode.mChildren(children.flip());
 
 			// TODO: split player mesh into one mesh per equipment
 			// TODO: if turning this into a general purpose exporter, consider exporting a material with vertex colors UV mapped
@@ -739,14 +841,20 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 				.putInt(aiProcess_JoinIdenticalVertices);
 			memPutAddress(scene.address() + AIScene.MPRIVATE, memAddress0(scenePrivate));
 
-			int statusCode = aiExportScene(scene, formatId, exportPath.toPath().toString(),
-				(EMBED_TEXTURES ? aiProcess_EmbedTextures : 0)
-				| aiProcess_PreTransformVertices
-				| aiProcess_ValidateDataStructure
-				| aiProcess_FindInvalidData
-			);
-
-			aiDetachLogStream(logStream);
+			log.info("Exporting {} nodes, {} material primitives and {} triangles to {}",
+				nodes.size(), meshList.size(), totalFaceCount, exportPath);
+			long exportStart = System.nanoTime();
+			int statusCode;
+			try {
+				statusCode = aiExportScene(scene, formatId, exportPath.toPath().toString(),
+					(EMBED_TEXTURES ? aiProcess_EmbedTextures : 0)
+					| aiProcess_ValidateDataStructure
+					| aiProcess_FindInvalidData
+				);
+			} finally {
+				aiDetachLogStream(logStream);
+				log.info("Assimp export finished after {} seconds", (System.nanoTime() - exportStart) / 1e9);
+			}
 
 			if (statusCode != 0) {
 				System.err.println(aiGetErrorString());
@@ -759,17 +867,19 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 						.build())
 					.build());
 			} else {
+				if (wholeScene)
+					SceneGltfExporter.embed(exportPath.toPath(), plugin.uboGlobal, waterMaterials);
 				chatMessageManager.queue(QueuedMessage.builder()
 					.type(ChatMessageType.CONSOLE)
 					.runeLiteFormattedMessage(new ChatMessageBuilder()
-						.append("Exported model as ")
+						.append(wholeScene ? "Exported scene as " : "Exported model as ")
 						.append(Color.CYAN, exportPath.getFilename())
 						.append(" (" + totalFaceCount + " faces)")
 						.build())
 					.build());
 			}
 		} catch (IOException ex) {
-			log.error("Unable to write external model textures", ex);
+			log.error("Unable to export model or scene", ex);
 		} finally {
 			sceneContext.destroy();
 			sceneContext.staticUnorderedModelBuffer.destroy();
@@ -880,6 +990,16 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 			return field.get(material);
 		} catch (ReflectiveOperationException ex) {
 			throw new IllegalStateException("Unable to read material property " + name, ex);
+		}
+	}
+
+	static Object waterProperty(WaterType water, String name) {
+		try {
+			var field = WaterType.class.getDeclaredField(name);
+			field.setAccessible(true);
+			return field.get(water);
+		} catch (ReflectiveOperationException ex) {
+			throw new IllegalStateException("Unable to read water property " + name, ex);
 		}
 	}
 
@@ -1017,23 +1137,46 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 
 	@Subscribe
 	public void onPostMenuSort(PostMenuSort postMenuSort) {
+		if (!client.isMenuOpen()) {
+			for (var entry : client.getMenuEntries()) {
+				if (entry.getParam1() == InterfaceID.Orbs.WORLDMAP || entry.getParam1() == InterfaceID.Orbs.ORB_WORLDMAP) {
+					client.createMenuEntry(-1)
+						.setOption("Export current scene")
+						.setTarget("117 HD")
+						.setType(MenuAction.RUNELITE)
+						.onClick(e -> clientThread.invoke(this::exportScene));
+					break;
+				}
+			}
+		}
 		// The menu is not rebuilt when it is open, so don't swap or else it will
 		// repeatedly swap entries
 		if (client.isMenuOpen() || selectedObject == null)
 			return;
 
-		var name = getTypeAndName(selectedObject);
+		var object = selectedObject;
+		var name = getTypeAndName(object);
 		client.createMenuEntry(client.getMenuEntries().length)
 			.setOption("Export " + name.getKey())
 			.setTarget("<col=00ffff>" + name.getValue() + "</col>")
-			.setIdentifier(MenuAction.RUNELITE_HIGH_PRIORITY.getId())
-			.onClick(e -> clientThread.invoke(() -> exportModel(name, selectedObject)));
+			.setType(MenuAction.RUNELITE_HIGH_PRIORITY)
+			.onClick(e -> clientThread.invoke(() -> exportModel(name, object)));
 	}
 
 	@Subscribe
 	public void onClientTick(ClientTick tick) {
-		if (clientTickCount++ % 5 == 0)
+		if (client.isMenuOpen())
+			return;
+		if (!isExporterShortcutHeld()) {
+			hoverSet.clear();
+			selectedObject = null;
+			return;
+		}
+		boolean refresh = clientTickCount++ % 5 == 0;
+		if (refresh)
 			updateHoverSet();
+		if (!refresh && selectedIndex == lastSelectedIndex)
+			return;
 
 		if (hoverSet.isEmpty()) {
 			selectedObject = null;
@@ -1045,6 +1188,7 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 		int camZ = client.getCameraZ(); // up
 
 		selectedIndex = clamp(selectedIndex, 0, Math.max(0, hoverSet.size() - 1));
+		lastSelectedIndex = selectedIndex;
 		selectedObject = hoverSet.stream()
 			.map(e -> {
 				int x = 0, y = 0, z = 0;
@@ -1058,7 +1202,7 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 						int size = client.getNpcDefinition(((NPC) a).getId()).getSize();
 						var tileHeightPoint = new LocalPoint(
 							size * LOCAL_HALF_TILE_SIZE - LOCAL_HALF_TILE_SIZE + x,
-							size * LOCAL_HALF_TILE_SIZE - LOCAL_HALF_TILE_SIZE + z
+							size * LOCAL_HALF_TILE_SIZE - LOCAL_HALF_TILE_SIZE + y
 						);
 						z = getTileHeight(client, tileHeightPoint, client.getPlane());
 					} else if (a instanceof Player) {
@@ -1084,10 +1228,10 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 				x -= camX;
 				y -= camY;
 				z -= camZ;
-				int dist = x * x + y * y + z * z;
+				long dist = (long) x * x + (long) y * y + (long) z * z;
 				return Map.entry(dist, e);
 			})
-			.sorted(Comparator.comparingInt(Map.Entry::getKey))
+			.sorted(Comparator.comparingLong(Map.Entry::getKey))
 			.skip(selectedIndex)
 			.map(Map.Entry::getValue)
 			.findFirst()
@@ -1119,6 +1263,7 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 
 	private void updateHoverSet() {
 		hoverSet.clear();
+		hoverChecked.clear();
 
 		if (!isExporterShortcutHeld())
 			return;
@@ -1153,15 +1298,13 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 			addIfHovered(hoverPoint, object);
 		for (var projectile : client.getProjectiles())
 			addIfHovered(hoverPoint, projectile);
+		hoverChecked.clear();
 	}
 
 	private void processTile(Point2D hoverPoint, Tile tile) {
 		var bridge = tile.getBridge();
 		if (bridge != null)
 			processTile(hoverPoint, bridge);
-
-		if (Perspective.getCanvasTilePoly(client, tile.getLocalLocation()) == null)
-			return;
 
 		for (GameObject gameObject : tile.getGameObjects())
 			if (gameObject != null)
@@ -1181,6 +1324,9 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 	}
 
 	private void addIfHovered(Point2D hoverPoint, Object object) {
+		// Multi-tile objects and bridged tiles may encounter the same object repeatedly.
+		if (!hoverChecked.add(object))
+			return;
 		Shape shape = null;
 		if (object instanceof Actor) {
 			shape = ((Actor) object).getConvexHull();
@@ -1198,6 +1344,8 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 
 	private Shape getConvexHull(GraphicsObject o) {
 		var model = o.getModel();
+		if (model == null)
+			return null;
 		int[] x2d = new int[model.getVerticesCount()];
 		int[] y2d = new int[model.getVerticesCount()];
 
@@ -1220,6 +1368,8 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 
 	private Shape getConvexHull(Projectile p) {
 		var model = p.getModel();
+		if (model == null)
+			return null;
 		int[] x2d = new int[model.getVerticesCount()];
 		int[] y2d = new int[model.getVerticesCount()];
 
@@ -1304,6 +1454,10 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 	}
 
 	private List<Renderable> resolveRenderables(Object object) {
+		if (object instanceof ItemLayer) {
+			var items = (ItemLayer) object;
+			return list(items.getBottom(), items.getMiddle(), items.getTop());
+		}
 		if (object instanceof WallObject) {
 			var wallObject = (WallObject) object;
 			return list(wallObject.getRenderable1(), wallObject.getRenderable2());
@@ -1324,9 +1478,198 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 	private List<ModelInfo> resolveModels(Object object) {
 		return resolveRenderables(object).stream()
 			.filter(Objects::nonNull)
-			.map(r -> new ModelInfo(object, r, r instanceof Model ? (Model) r : r.getModel()))
+			.map(r -> {
+				Model model;
+				if (r instanceof Model) {
+					model = (Model) r;
+				} else if (r instanceof DynamicObject) {
+					// Match SceneUploader's object model, including its baked orientation.
+					model = ((DynamicObject) r).getModelZbuf();
+				} else {
+					model = r.getModel();
+				}
+				return new ModelInfo(object, r, model);
+			})
 			.filter(i -> i.model != null && i.model.getFaceCount() > 0)
 			.collect(Collectors.toList());
+	}
+
+	// Assimp exports every vertex of each material primitive, including unreferenced vertices.
+	// Keep scene primitives compact; UV1 corner identities are only needed for individual-model round trips.
+	private void compactMesh(MemoryStack stack, AIMesh mesh, List<Long> cleanup) {
+		int count = mesh.mNumFaces() * 3;
+		var data = memAlloc(count * (12 + 12 + 12 + 16));
+		long positions = memAddress0(data);
+		cleanup.add(positions);
+		long normals = positions + count * 12L;
+		long uvs = normals + count * 12L;
+		long colors = uvs + count * 12L;
+		long sourcePositions = mesh.mVertices().address();
+		long sourceNormals = mesh.mNormals().address();
+		long sourceUvs = mesh.mTextureCoords(0).address();
+		long sourceColors = mesh.mColors(0).address();
+		var faces = mesh.mFaces();
+		for (int face = 0; face < mesh.mNumFaces(); face++) {
+			var indices = faces.get(face).mIndices();
+			for (int corner = 0; corner < 3; corner++) {
+				int source = indices.get(corner);
+				int target = face * 3 + corner;
+				memCopy(sourcePositions + source * 12L, positions + target * 12L, 12);
+				memCopy(sourceNormals + source * 12L, normals + target * 12L, 12);
+				memCopy(sourceUvs + source * 12L, uvs + target * 12L, 12);
+				memCopy(sourceColors + source * 16L, colors + target * 16L, 16);
+				indices.put(corner, target);
+			}
+		}
+		mesh.mNumVertices(count)
+			.mVertices(AIVector3D.create(positions, count))
+			.mNormals(AIVector3D.create(normals, count))
+			.mTextureCoords(stack.pointers(uvs, 0))
+			.mColors(stack.pointers(colors))
+			.mNumUVComponents(stack.ints(2, 0));
+	}
+
+	private void exportScene() {
+		var top = client.getTopLevelWorldView();
+		if (top == null || plugin.getSceneContext() == null)
+			return;
+		var models = new ArrayList<ModelInfo>();
+		collectScene(models, top);
+		for (var entity : top.worldEntities())
+			collectScene(models, entity.getWorldView());
+		for (var projectile : client.getProjectiles())
+			addSceneModels(models, top, null, projectile);
+		// Terrain is one object, with material primitives, rather than thousands of tiny tile meshes.
+		var terrain = new ModelInfo(null, null, null);
+		var tiles = new java.util.LinkedHashMap<WorldView, List<Tile>>();
+		models.removeIf(info -> {
+			if (info.model != null)
+				return false;
+			tiles.computeIfAbsent(info.worldView, view -> new ArrayList<>()).add(info.tile);
+			return true;
+		});
+		terrain.terrain = terrainExporter.build(tiles);
+		try {
+			if (terrain.faceCount() > 0)
+				models.add(terrain);
+			exportModels(Map.entry("scene", Integer.toString(client.getTickCount())), models, true);
+		} finally {
+			terrain.terrain.destroy();
+			terrain.terrain.staticUnorderedModelBuffer.destroy();
+		}
+	}
+
+	private void collectScene(List<ModelInfo> models, WorldView view) {
+		if (!view.isTopLevel()) {
+			var context = sceneManager.getContext(view);
+			if (context == null || context.projection == null) {
+				log.warn("Skipping worldview {}: no scene projection available", view.getId());
+				return;
+			}
+		}
+		var seen = Collections.newSetFromMap(new IdentityHashMap<Object, Boolean>());
+		for (var plane : view.getScene().getTiles())
+			for (var column : plane)
+				for (var tile : column)
+					collectTile(models, view, tile, seen);
+		for (var actor : view.players())
+			addSceneModels(models, view, null, actor);
+		for (var actor : view.npcs())
+			addSceneModels(models, view, null, actor);
+		for (var effect : view.getGraphicsObjects())
+			addSceneModels(models, view, null, effect);
+	}
+
+	private void collectTile(List<ModelInfo> models, WorldView view, Tile tile, Set<Object> seen) {
+		if (tile == null || !seen.add(tile))
+			return;
+		collectTile(models, view, tile.getBridge(), seen);
+		var terrain = new ModelInfo(tile, null, null);
+		terrain.tile = tile;
+		terrain.worldView = view;
+		models.add(terrain); // Hidden surfaces can still have generated underwater geometry.
+		var objects = new ArrayList<Object>();
+		Collections.addAll(objects, tile.getGameObjects());
+		objects.add(tile.getWallObject());
+		objects.add(tile.getDecorativeObject());
+		objects.add(tile.getGroundObject());
+		objects.add(tile.getItemLayer());
+		for (var object : objects)
+			if (object != null && seen.add(object))
+				addSceneModels(models, view, tile, object);
+	}
+
+	private void addSceneModels(List<ModelInfo> models, WorldView view, Tile tile, Object object) {
+		for (var info : resolveModels(object)) {
+			info.worldView = view;
+			info.tile = tile;
+			models.add(info);
+		}
+	}
+
+	private AIMatrix4x4 sceneTransform(MemoryStack stack, ModelInfo info, boolean wholeScene) {
+		float[] matrix = Mat4.identity();
+		if (wholeScene && info.terrain == null) {
+			float x = 0, y = 0, z = 0;
+			int orientation = 0;
+			if (info.object instanceof TileObject) {
+				var object = (TileObject) info.object;
+				x = object.getX();
+				y = object.getZ();
+				z = object.getY();
+				if (object instanceof ItemLayer)
+					y -= ((ItemLayer) object).getHeight();
+				if (object instanceof GameObject)
+					orientation = ((GameObject) object).getModelOrientation();
+				if (object instanceof DecorativeObject) {
+					var decoration = (DecorativeObject) object;
+					boolean first = info.renderable == decoration.getRenderable();
+					x += first ? decoration.getXOffset() : decoration.getXOffset2();
+					z += first ? decoration.getYOffset() : decoration.getYOffset2();
+				}
+			} else if (info.object instanceof Actor) {
+				var actor = (Actor) info.object;
+				x = actor.getLocalLocation().getX();
+				z = actor.getLocalLocation().getY();
+				y = info.worldView.getTileHeight((int) x, (int) z, info.worldView.getPlane()) + actor.getAnimationHeightOffset();
+				orientation = actor.getOrientation();
+			} else if (info.object instanceof GraphicsObject) {
+				var effect = (GraphicsObject) info.object;
+				x = effect.getLocation().getX();
+				z = effect.getLocation().getY();
+				y = effect.getZ();
+			} else if (info.object instanceof Projectile) {
+				var projectile = (Projectile) info.object;
+				x = (float) projectile.getX();
+				y = (float) projectile.getZ();
+				z = (float) projectile.getY();
+				orientation = projectile.getOrientation();
+			}
+			float angle = orientation * JAU_TO_RAD;
+			matrix[0] = matrix[10] = cos(angle);
+			matrix[2] = -sin(angle);
+			matrix[8] = sin(angle);
+			matrix[12] = x;
+			matrix[13] = y;
+			matrix[14] = z;
+			if (!info.worldView.isTopLevel()) {
+				var projection = sceneManager.getContext(info.worldView).projection;
+				// Transform the basis and origin, preserving child-worldview pitch and scale.
+				var origin = new float[] { x, y, z };
+				Mat4.transformVecAffine(origin, projection, origin);
+				for (int column = 0; column < 3; column++) {
+					var axis = new float[] { matrix[column * 4] + x, matrix[column * 4 + 1] + y, matrix[column * 4 + 2] + z };
+					Mat4.transformVecAffine(axis, projection, axis);
+					for (int row = 0; row < 3; row++)
+						matrix[column * 4 + row] = axis[row] - origin[row];
+				}
+				System.arraycopy(origin, 0, matrix, 12, 3);
+			}
+		}
+		return AIMatrix4x4.calloc(stack)
+			.a1(matrix[0]).a2(matrix[4]).a3(matrix[8]).a4(matrix[12])
+			.b1(matrix[1]).b2(matrix[5]).b3(matrix[9]).b4(matrix[13])
+			.c1(matrix[2]).c2(matrix[6]).c3(matrix[10]).c4(matrix[14]).d4(1);
 	}
 
 	@Override
