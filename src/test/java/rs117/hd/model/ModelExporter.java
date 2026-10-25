@@ -74,6 +74,7 @@ import rs117.hd.HdPlugin;
 import rs117.hd.renderer.legacy.LegacyModelPusher;
 import rs117.hd.renderer.legacy.LegacySceneContext;
 import rs117.hd.renderer.zone.SceneManager;
+import rs117.hd.scene.GamevalManager;
 import rs117.hd.scene.MaterialManager;
 import rs117.hd.scene.ModelOverrideManager;
 import rs117.hd.scene.SceneContext;
@@ -167,6 +168,9 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 	private TextureManager textureManager;
 
 	@Inject
+	private GamevalManager gamevalManager;
+
+	@Inject
 	private ModelOverrideManager modelOverrideManager;
 
 	@Inject
@@ -186,6 +190,7 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 	private int lastSelectedIndex = -1;
 	private Object selectedObject;
 	private final HashSet<Object> hoverSet = new HashSet<>();
+	private final Map<ActorSpotAnim, Actor> spotAnimActors = new IdentityHashMap<>();
 	private final Set<Object> hoverChecked = Collections.newSetFromMap(new IdentityHashMap<>());
 
 	@Inject
@@ -208,6 +213,10 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 
 	@Override
 	public void close() {
+		selectedObject = null;
+		hoverSet.clear();
+		hoverChecked.clear();
+		spotAnimActors.clear();
 		eventBus.unregister(this);
 		overlayManager.remove(this);
 		mouseManager.unregisterMouseListener(this);
@@ -278,10 +287,53 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 //		String formatId = "fbx", extension = formatId;
 //		String formatId = "gltf2", extension = "gltf";
 		String formatId = "glb2", extension = "glb";
-		var filename = (objectName.getKey() + " " + objectName.getValue())
+		String exportName = objectName.getKey() + "-" + objectName.getValue();
+		if (!wholeScene && !modelInfos.isEmpty()) {
+			var object = modelInfos.get(0).object;
+			try (var gamevals = gamevalManager.obtainHandle()) {
+				String type = objectName.getKey();
+				int id = -1;
+				String name = null;
+				String gameval = null;
+				if (object instanceof NPC) {
+					var npc = (NPC) object;
+					id = npc.getId();
+					name = npc.getName();
+					gameval = gamevals.getNpcName(id);
+				} else if (object instanceof TileObject) {
+					type = "object";
+					id = ((TileObject) object).getId();
+					var definition = client.getObjectDefinition(id);
+					if (definition.getImpostorIds() != null)
+						definition = definition.getImpostor();
+					name = definition == null ? null : definition.getName();
+					gameval = gamevals.getObjectName(id);
+				} else if (object instanceof Player) {
+					id = ((Player) object).getId();
+					name = ((Player) object).getName();
+				} else if (object instanceof ActorSpotAnim) {
+					id = ((ActorSpotAnim) object).getId();
+					gameval = gamevals.getSpotanimName(id);
+				} else if (object instanceof GraphicsObject) {
+					id = ((GraphicsObject) object).getId();
+					gameval = gamevals.getSpotanimName(id);
+				} else if (object instanceof Projectile) {
+					id = ((Projectile) object).getId();
+					gameval = gamevals.getSpotanimName(id);
+				}
+				if (id != -1) {
+					exportName = type + "-" + id;
+					if (name != null && !name.isEmpty() && !name.equals("null"))
+						exportName += "-" + name;
+					if (gameval != null && !gameval.isEmpty())
+						exportName += "-" + gameval;
+				}
+			}
+		}
+		var filename = exportName
 			.replace(' ', '_')
 			.replaceAll("[^0-9a-zA-Z_ -]", "")
-			.toLowerCase();
+			.toLowerCase(java.util.Locale.ROOT);
 		var exportPath = path("model-exports", filename + "." + extension);
 		exportPath.resolve("..").mkdirs();
 		int collisionCounter = 2;
@@ -794,7 +846,7 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 
 					log.debug("Loaded texture {} with dimensions {}x{}", material, orientedImage.getWidth(), orientedImage.getHeight());
 					if (!EMBED_TEXTURES) {
-						if (!ImageIO.write(orientedImage, "png", textureDirectory.resolve(textureName + ".png").toFile()))
+						if (!ImageIO.write(orientedImage, "png", texturePath.toFile()))
 							throw new IOException("No PNG writer available for " + textureName);
 						continue;
 					}
@@ -1172,6 +1224,7 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 			return;
 		if (!isExporterShortcutHeld()) {
 			hoverSet.clear();
+			spotAnimActors.clear();
 			selectedObject = null;
 			return;
 		}
@@ -1195,8 +1248,8 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 		selectedObject = hoverSet.stream()
 			.map(e -> {
 				int x = 0, y = 0, z = 0;
-				if (e instanceof Actor) {
-					var a = (Actor) e;
+				if (e instanceof Actor || e instanceof ActorSpotAnim) {
+					var a = e instanceof Actor ? (Actor) e : spotAnimActors.get(e);
 					var lp = a.getLocalLocation();
 					x = lp.getX();
 					y = lp.getY();
@@ -1211,6 +1264,8 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 					} else if (a instanceof Player) {
 						z = getTileHeight(client, lp, client.getPlane());
 					}
+					if (e instanceof ActorSpotAnim)
+						z += a.getAnimationHeightOffset() - ((ActorSpotAnim) e).getHeight();
 				} else if (e instanceof TileObject) {
 					var o = (TileObject) e;
 					x = o.getX();
@@ -1252,20 +1307,36 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 				modelOutlineRenderer.drawOutline((TileObject) selectedObject, OUTLINE_WIDTH, OUTLINE_COLOR, OUTLINE_FEATHER);
 			} else if (selectedObject instanceof GraphicsObject) {
 				modelOutlineRenderer.drawOutline((GraphicsObject) selectedObject, OUTLINE_WIDTH, OUTLINE_COLOR, OUTLINE_FEATHER);
-			} else if (selectedObject instanceof Projectile) {
-				Shape shape = getConvexHull((Projectile) selectedObject);
+			} else if (selectedObject instanceof Projectile || selectedObject instanceof ActorSpotAnim) {
+				Shape shape = selectedObject instanceof Projectile ? getConvexHull((Projectile) selectedObject) :
+					getConvexHull((ActorSpotAnim) selectedObject);
 				if (shape != null) {
 					g.setColor(OUTLINE_COLOR);
 					g.setStroke(new BasicStroke(OUTLINE_WIDTH));
 					g.draw(shape);
 				}
 			}
+			int faceCount = 0;
+			for (var renderable : resolveRenderables(selectedObject)) {
+				if (renderable == null)
+					continue;
+				var model = renderable instanceof Model ? (Model) renderable : renderable.getModel();
+				if (model != null)
+					faceCount += model.getFaceCount();
+			}
+			var mouse = client.getMouseCanvasPosition();
+			String label = "Faces: " + faceCount;
+			g.setColor(Color.BLACK);
+			g.drawString(label, mouse.getX() + 17, mouse.getY() + 21);
+			g.setColor(Color.WHITE);
+			g.drawString(label, mouse.getX() + 16, mouse.getY() + 20);
 		}
 		return null;
 	}
 
 	private void updateHoverSet() {
 		hoverSet.clear();
+		spotAnimActors.clear();
 		hoverChecked.clear();
 
 		if (!isExporterShortcutHeld())
@@ -1332,7 +1403,16 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 			return;
 		Shape shape = null;
 		if (object instanceof Actor) {
-			shape = ((Actor) object).getConvexHull();
+			var actor = (Actor) object;
+			shape = actor.getConvexHull();
+			for (var spotAnim : actor.getSpotAnims()) {
+				if (spotAnim.getFrame() < 0 || client.getGameCycle() < spotAnim.getStartCycle())
+					continue;
+				spotAnimActors.put(spotAnim, actor);
+				addIfHovered(hoverPoint, spotAnim);
+			}
+		} else if (object instanceof ActorSpotAnim) {
+			shape = getConvexHull((ActorSpotAnim) object);
 		} else if (object instanceof TileObject) {
 			shape = ((TileObject) object).getClickbox();
 		} else if (object instanceof GraphicsObject) {
@@ -1343,6 +1423,21 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 
 		if (shape != null && shape.contains(hoverPoint))
 			hoverSet.add(object);
+	}
+
+	private Shape getConvexHull(ActorSpotAnim spotAnim) {
+		var actor = spotAnimActors.get(spotAnim);
+		var model = spotAnim.getModel();
+		if (actor == null || model == null)
+			return null;
+		var location = actor.getLocalLocation();
+		int height = getTileHeight(client, location, actor.getWorldView().getPlane()) +
+			actor.getAnimationHeightOffset() - spotAnim.getHeight();
+		int[] x2d = new int[model.getVerticesCount()];
+		int[] y2d = new int[model.getVerticesCount()];
+		Perspective.modelToCanvas(client, model.getVerticesCount(), location.getX(), location.getY(), height, 0,
+			model.getVerticesX(), model.getVerticesZ(), model.getVerticesY(), x2d, y2d);
+		return Jarvis.convexHull(x2d, y2d);
 	}
 
 	private Shape getConvexHull(GraphicsObject o) {
@@ -1444,6 +1539,9 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 			type = "player";
 			if (player.getName() != null)
 				name = player.getName();
+		} else if (renderable instanceof ActorSpotAnim) {
+			type = "spotanim";
+			name = "ID " + ((ActorSpotAnim) renderable).getId();
 		} else if (renderable instanceof GraphicsObject) {
 			var object = (GraphicsObject) renderable;
 			type = "graphic";
