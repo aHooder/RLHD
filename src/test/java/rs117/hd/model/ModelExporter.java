@@ -757,6 +757,9 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 			var texturePointers = materialStack.callocPointer(EMBED_TEXTURES ? expandedMaterials.size() : 0);
 			for (Material material : expandedMaterials) {
 				String textureName = material.name.toLowerCase(java.util.Locale.ROOT);
+				var texturePath = textureDirectory.resolve(textureName + ".png");
+				if (!EMBED_TEXTURES && Files.exists(texturePath))
+					continue;
 
 				var textureOwner = material.resolveTextureOwner();
 				String textureFile = textureOwner.getTextureName();
