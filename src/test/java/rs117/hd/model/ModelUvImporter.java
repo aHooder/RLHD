@@ -15,6 +15,9 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 import javax.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
@@ -56,11 +59,14 @@ public class ModelUvImporter implements KeyListener, AutoCloseable {
 	private final ClientThread clientThread;
 	private ResourcePath source;
 	private FileWatcher.UnregisterCallback modelExportsWatcher;
+	private ScheduledFuture<?> debounce;
+	private long reloadRevision;
 	private boolean pressed;
 	private boolean closed;
 
 	@Inject
-	public ModelUvImporter(HdPlugin plugin, ModelOverrideManager overrides, KeyManager keys, ClientThread clientThread) {
+	public ModelUvImporter(HdPlugin plugin, ModelOverrideManager overrides, KeyManager keys, ClientThread clientThread,
+		ScheduledExecutorService executor) {
 		this.plugin = plugin;
 		this.overrides = overrides;
 		this.keys = keys;
@@ -74,10 +80,22 @@ public class ModelUvImporter implements KeyListener, AutoCloseable {
 			try {
 				modelExportsWatcher = FileWatcher.watchPath(
 					path("model-exports").mkdirs(),
-					changed -> clientThread.invoke(() -> {
-						if (!closed)
-							overrides.loadOverrides(false);
-					})
+					changed -> {
+						synchronized (this) {
+							if (closed)
+								return;
+							if (debounce != null)
+								debounce.cancel(false);
+							long revision = ++reloadRevision;
+							debounce = executor.schedule(() -> clientThread.invoke(() -> {
+								synchronized (this) {
+									// Cancellation cannot remove a callback already queued on the client thread.
+									if (!closed && revision == reloadRevision)
+										overrides.loadOverrides(false);
+								}
+							}), 100, TimeUnit.MILLISECONDS);
+						}
+					}
 				);
 			} catch (RuntimeException ex) {
 				log.warn("Unable to watch model-exports", ex);
@@ -86,8 +104,11 @@ public class ModelUvImporter implements KeyListener, AutoCloseable {
 	}
 
 	@Override
-	public void close() {
+	public synchronized void close() {
 		closed = true;
+		if (debounce != null)
+			debounce.cancel(false);
+		debounce = null;
 		if (modelExportsWatcher != null)
 			modelExportsWatcher.unregister();
 		modelExportsWatcher = null;
