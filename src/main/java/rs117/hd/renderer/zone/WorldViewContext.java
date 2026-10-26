@@ -71,7 +71,7 @@ public class WorldViewContext {
 	private final int[] lastOrigin = new int[3];
 	private int lastOrientation;
 
-	Zone[][] zones;
+	public Zone[][] zones;
 	GLBuffer vboM;
 
 	int minLevel, level, maxLevel;

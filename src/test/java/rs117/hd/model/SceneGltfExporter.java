@@ -26,7 +26,27 @@ import static rs117.hd.utils.MathUtils.*;
 final class SceneGltfExporter {
 	private static final String LIGHTS = "KHR_lights_punctual";
 
-	static void embed(Path path, UBOGlobal ubo, Map<WaterType, Material> waterMaterials) throws IOException {
+	static JsonObject snapshot(UBOGlobal ubo, Map<WaterType, Material> waterMaterials) {
+		var document = new JsonObject();
+		var scenes = new JsonArray();
+		var scene = new JsonObject();
+		scene.add("nodes", new JsonArray());
+		scenes.add(scene);
+		document.add("scenes", scenes);
+		document.add("nodes", new JsonArray());
+		var materials = new JsonArray();
+		for (var material : waterMaterials.values()) {
+			var entry = new JsonObject();
+			entry.addProperty("name", material.name);
+			materials.add(entry);
+		}
+		document.add("materials", materials);
+		addLighting(document, ubo);
+		addWaterMaterials(document, waterMaterials);
+		return document;
+	}
+
+	static void embed(Path path, JsonObject snapshot) throws IOException {
 		boolean binary = path.toString().endsWith(".glb");
 		if (!binary && !path.toString().endsWith(".gltf")) {
 			log.warn("Scene lighting export is only supported for GLB and glTF");
@@ -53,8 +73,28 @@ final class SceneGltfExporter {
 				byte[] jsonBytes = new byte[jsonLength];
 				input.readFully(jsonBytes);
 				var document = new JsonParser().parse(new String(jsonBytes, StandardCharsets.UTF_8)).getAsJsonObject();
-				addLighting(document, ubo);
-				addWaterMaterials(document, waterMaterials);
+				var scene = document.getAsJsonArray("scenes").get(document.has("scene") ? document.get("scene").getAsInt() : 0).getAsJsonObject();
+				scene.add("extras", snapshot.getAsJsonArray("scenes").get(0).getAsJsonObject().get("extras"));
+				var nodes = document.getAsJsonArray("nodes");
+				scene.getAsJsonArray("nodes").add(nodes.size());
+				nodes.add(snapshot.getAsJsonArray("nodes").get(0));
+				var extensions = document.has("extensions") ? document.getAsJsonObject("extensions") : new JsonObject();
+				extensions.add(LIGHTS, snapshot.getAsJsonObject("extensions").get(LIGHTS));
+				document.add("extensions", extensions);
+				var used = document.has("extensionsUsed") ? document.getAsJsonArray("extensionsUsed") : new JsonArray();
+				used.addAll(snapshot.getAsJsonArray("extensionsUsed"));
+				document.add("extensionsUsed", used);
+				for (var material : document.getAsJsonArray("materials")) {
+					var target = material.getAsJsonObject();
+					for (var water : snapshot.getAsJsonArray("materials")) {
+						var source = water.getAsJsonObject();
+						if (!source.get("name").equals(target.get("name")))
+							continue;
+						target.remove("alphaCutoff");
+						for (var entry : source.entrySet())
+							target.add(entry.getKey(), entry.getValue());
+					}
+				}
 				byte[] encoded = document.toString().getBytes(StandardCharsets.UTF_8);
 				int padding = binary ? (4 - encoded.length % 4) % 4 : 0;
 				if (binary) {

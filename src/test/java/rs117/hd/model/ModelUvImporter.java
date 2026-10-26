@@ -159,11 +159,24 @@ public class ModelUvImporter implements KeyListener, AutoCloseable {
 		if (scene == null)
 			throw new IllegalArgumentException("Unable to import " + path + ": " + aiGetErrorString());
 		try (var stack = MemoryStack.stackPush()) {
-			int faceCount = 0;
-			for (int m = 0; m < scene.mNumMeshes(); m++)
-				faceCount = Math.addExact(faceCount, AIMesh.create(scene.mMeshes().get(m)).mNumFaces());
-			if (faceCount == 0)
+			int cornerCount = 0;
+			for (int m = 0; m < scene.mNumMeshes(); m++) {
+				var mesh = AIMesh.create(scene.mMeshes().get(m));
+				if (mesh.mNumFaces() == 0)
+					continue;
+				var ids = mesh.mTextureCoords(1);
+				if (ids == null || mesh.mNumUVComponents(1) < 2)
+					throw new IllegalArgumentException("Missing original corner IDs in UV1; re-export the model: " + path);
+				float count = ids.get(mesh.mFaces().get(0).mIndices().get(0)).y();
+				// UV1 retains the original size, including omitted hidden faces. IDs must be exact floats.
+				if (count <= 0 || count > (1 << 24) || count != (int) count || (int) count % 3 != 0 ||
+					cornerCount != 0 && count != cornerCount)
+					throw new IllegalArgumentException("Invalid original corner count in " + path);
+				cornerCount = (int) count;
+			}
+			if (cornerCount == 0)
 				throw new IllegalArgumentException("No triangles in " + path);
+			int faceCount = cornerCount / 3;
 			float[] coordinates = new float[Math.multiplyExact(faceCount, 6)];
 			boolean[] seen = new boolean[faceCount * 3];
 			String[] faceMaterials = new String[faceCount];

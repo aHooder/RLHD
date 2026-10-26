@@ -58,7 +58,6 @@ import net.runelite.client.ui.overlay.OverlayPriority;
 import net.runelite.client.ui.overlay.outline.ModelOutlineRenderer;
 import org.lwjgl.assimp.AIExportFormatDesc;
 import org.lwjgl.assimp.AIFace;
-import org.lwjgl.assimp.AILogStream;
 import org.lwjgl.assimp.AIMaterial;
 import org.lwjgl.assimp.AIMaterialProperty;
 import org.lwjgl.assimp.AIMatrix4x4;
@@ -92,15 +91,9 @@ import static net.runelite.api.Perspective.*;
 import static org.lwjgl.assimp.Assimp.AI_MATKEY_GLTF_ALPHAMODE;
 import static org.lwjgl.assimp.Assimp.AI_MATKEY_NAME;
 import static org.lwjgl.assimp.Assimp._AI_MATKEY_TEXTURE_BASE;
-import static org.lwjgl.assimp.Assimp.aiAttachLogStream;
-import static org.lwjgl.assimp.Assimp.aiDefaultLogStream_STDERR;
-import static org.lwjgl.assimp.Assimp.aiDetachLogStream;
-import static org.lwjgl.assimp.Assimp.aiEnableVerboseLogging;
 import static org.lwjgl.assimp.Assimp.aiExportScene;
-import static org.lwjgl.assimp.Assimp.aiGetErrorString;
 import static org.lwjgl.assimp.Assimp.aiGetExportFormatCount;
 import static org.lwjgl.assimp.Assimp.aiGetExportFormatDescription;
-import static org.lwjgl.assimp.Assimp.aiGetPredefinedLogStream;
 import static org.lwjgl.assimp.Assimp.aiPTI_String;
 import static org.lwjgl.assimp.Assimp.aiPrimitiveType_TRIANGLE;
 import static org.lwjgl.assimp.Assimp.aiProcess_EmbedTextures;
@@ -250,11 +243,43 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 		AIFace.Buffer faces;
 	}
 
+	// Export-local views: the native data remains owned by exportModels until Assimp finishes.
+	private static class MeshKey {
+		private final int material;
+		private final ByteBuffer positions, normals, uvs, colors;
+		private final int hash;
+
+		MeshKey(AIMesh mesh) {
+			material = mesh.mMaterialIndex();
+			int count = mesh.mNumVertices();
+			positions = memByteBuffer(mesh.mVertices().address(), count * 12);
+			normals = memByteBuffer(mesh.mNormals().address(), count * 12);
+			uvs = memByteBuffer(mesh.mTextureCoords(0).address(), count * 12);
+			colors = memByteBuffer(mesh.mColors(0).address(), count * 16);
+			hash = (((material * 31 + positions.hashCode()) * 31 + normals.hashCode()) * 31 + uvs.hashCode()) * 31 + colors.hashCode();
+		}
+
+		@Override
+		public int hashCode() {
+			return hash;
+		}
+
+		@Override
+		public boolean equals(Object other) {
+			if (!(other instanceof MeshKey))
+				return false;
+			var key = (MeshKey) other;
+			return material == key.material && positions.equals(key.positions) && normals.equals(key.normals) &&
+				uvs.equals(key.uvs) && colors.equals(key.colors);
+		}
+	}
+
 	public void exportModel(Map.Entry<String, String> objectName, Object object) {
 		exportModels(objectName, resolveModels(object), false);
 	}
 
 	private void exportModels(Map.Entry<String, String> objectName, List<ModelInfo> modelInfos, boolean wholeScene) {
+		assert client.isClientThread();
 		if (materialManager.uboMaterials == null)
 			return;
 
@@ -363,6 +388,7 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 		}
 
 		var cleanup = new ArrayList<Long>();
+		long preparationStart = System.nanoTime();
 		var cleanupFaceBuffers = new ArrayList<AIFace.Buffer>();
 		var sceneContext = new LegacySceneContext(
 			client, currentSceneContext.scene,
@@ -371,7 +397,25 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 		// Scene exports need substantially more native metadata than the thread-local stack.
 		var metadata = memAlloc(Math.max(1024 * 1024, Math.multiplyExact(modelInfos.size(), 8192)));
 		cleanup.add(memAddress0(metadata));
-		try (var stack = MemoryStack.create(metadata)) {
+		Thread exportThread = null;
+		Runnable release = () -> {
+			for (long address : cleanup)
+				if (address != 0)
+					nmemFree(address);
+			for (var buffer : cleanupFaceBuffers)
+				buffer.free();
+		};
+		try (var stack = MemoryStack.create(metadata).push()) {
+			// Reserve the filename before returning to the client loop: an earlier export
+			// may still be running and not have written its output yet.
+			while (true) {
+				try {
+					Files.createFile(exportPath.toPath());
+					break;
+				} catch (java.nio.file.FileAlreadyExistsException ex) {
+					exportPath = path("model-exports", filename + "_" + (collisionCounter++) + "." + extension);
+				}
+			}
 			int totalFaceCount = modelInfos.stream().mapToInt(ModelInfo::faceCount).reduce(0, Math::addExact);
 			int totalVertexCount = totalFaceCount * 3;
 
@@ -380,10 +424,12 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 			var uvs = memAllocFloat(totalVertexCount * 3);
 			cleanup.add(memAddress0(uvs));
 			// UV1 is immutable corner identity, independent of vertex welding and material grouping.
-			var cornerIds = memAllocFloat(totalVertexCount * 3);
-			cleanup.add(memAddress0(cornerIds));
-			for (int corner = 0; corner < totalVertexCount; corner++)
-				cornerIds.put(corner).put(totalVertexCount).put(0);
+			var cornerIds = wholeScene ? null : memAllocFloat(totalVertexCount * 3);
+			if (cornerIds != null) {
+				cleanup.add(memAddress0(cornerIds));
+				for (int corner = 0; corner < totalVertexCount; corner++)
+					cornerIds.put(corner).put(totalVertexCount).put(0);
+			}
 			var normals = memAllocFloat(totalVertexCount * 3);
 			cleanup.add(memAddress0(normals));
 			var colors = memAllocFloat(totalVertexCount * 4);
@@ -403,16 +449,25 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 			scene.mRootNode(rootNode);
 
 			var meshList = new ArrayList<AIMesh>();
+			var meshIndices = new HashMap<MeshKey, Integer>();
+			int reusedMeshes = 0;
 			var nodes = new ArrayList<AINode>();
 			var materialList = new ArrayList<Material>();
 			var waterMaterials = new HashMap<WaterType, Material>();
+			var textureScales = new IdentityHashMap<Material, float[]>();
+			var materialIndices = new IdentityHashMap<Material, Integer>();
+			float[][] hslColors = new float[65536][];
+			float[][] positions = new float[3][3];
+			float[][] n = new float[3][3];
+			float[] flatNormal = new float[3];
+			float[] edgeA = new float[3];
+			float[] edgeB = new float[3];
 
 			boolean worldUvWarningSent = false;
 			for (ModelInfo modelInfo : modelInfos) {
 				sceneContext.stagingBufferVertices.clear();
 				sceneContext.stagingBufferNormals.clear();
 				sceneContext.stagingBufferUvs.clear();
-				int firstMesh = meshList.size();
 				int firstVertex = vertices.position() / 3;
 				long hash = getHash(modelInfo.object);
 				int uuid = ModelHash.generateUuid(client, hash, modelInfo.renderable);
@@ -439,7 +494,7 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 				int uvOffset = sceneContext.getUvOffset();
 				int bakedOrientation = getBakedOrientation(modelInfo.object, modelInfo.renderable);
 				boolean skipHiddenFaces = LegacyModelPusher.SKIP_HIDDEN_FACES;
-				LegacyModelPusher.SKIP_HIDDEN_FACES = false;
+				LegacyModelPusher.SKIP_HIDDEN_FACES = true;
 				try {
 					if (model == null) {
 						var terrain = modelInfo.terrain;
@@ -463,6 +518,17 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 				var materialFaceCounts = new HashMap<Material, Integer>();
 				var faceMaterials = new Material[numFaces];
 				for (int face = 0; face < numFaces; face++) {
+					if (model != null) {
+						var data = sceneContext.stagingBufferVertices.getBuffer();
+						int offset = (vertexOffset + face * 3) * 4;
+						boolean zeroed = true;
+						for (int i = 0; i < 12; i++)
+							zeroed &= data.get(offset + i) == 0;
+						if (model.getFaceColors3()[face] == -2 || zeroed || (data.get(offset + 3) >>> 24) == 255) {
+							totalFaceCount--;
+							continue;
+						}
+					}
 					Material material = Material.NONE;
 					if (numUvs > 0) {
 						int packed = Float.floatToRawIntBits(sceneContext.stagingBufferUvs.getBuffer().get((uvOffset + face * 3) * 4 + 3));
@@ -483,6 +549,14 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 					materialFaceCounts.merge(material, 1, Integer::sum);
 				}
 				for (int face = 0; face < numFaces; face++) {
+					if (faceMaterials[face] == null) {
+						// Preserve source face indices until compactMesh removes unreferenced vertices.
+						vertices.position(vertices.position() + 9);
+						normals.position(normals.position() + 9);
+						uvs.position(uvs.position() + 9);
+						colors.position(colors.position() + 12);
+						continue;
+					}
 					int faceVertexOffset = vertexOffset + face * 3;
 					int faceUvOffset = uvOffset + face * 3;
 
@@ -497,9 +571,10 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 					if (buffers == null) {
 						var meshName = objectName.getValue() + "_" + nodes.size();
 
-						int materialIndex = materialList.indexOf(materialEntry);
-						if (materialIndex == -1) {
+						Integer materialIndex = materialIndices.get(materialEntry);
+						if (materialIndex == null) {
 							materialIndex = materialList.size();
+							materialIndices.put(materialEntry, materialIndex);
 							materialList.add(materialEntry);
 						}
 
@@ -512,17 +587,16 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 							.mColors(stack.pointers(memAddress0(colors) + firstVertex * 16L))
 							.mMaterialIndex(materialIndex)
 							.mName(s -> s.data(stack.UTF8(meshName)))
-							.mNumUVComponents(stack.ints(2, 2))
+							.mNumUVComponents(stack.ints(2, wholeScene ? 0 : 2))
 							.mTextureCoords(stack.pointers(
 								memAddress0(uvs) + firstVertex * 12L,
-								memAddress0(cornerIds) + firstVertex * 12L
+								cornerIds == null ? 0 : memAddress0(cornerIds) + firstVertex * 12L
 							));
 
 						var faces = AIFace.malloc(materialFaceCounts.get(materialEntry));
 						cleanupFaceBuffers.add(faces);
 						buffers = new MeshData(mesh, faces);
 						meshDataMap.put(materialEntry, buffers);
-						meshList.add(mesh);
 					}
 
 					// Advance the face buffer and assign the memory address of the current offset into the index buffer
@@ -557,7 +631,8 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 									.put(0);
 						}
 
-						float[] textureScale = (float[]) materialProperty(materialEntry, "textureScale");
+						float[] textureScale = textureScales.computeIfAbsent(materialEntry,
+							material -> (float[]) materialProperty(material, "textureScale"));
 						for (int i = 0; i < 3; i++) {
 							int offset = uvs.position() - 9 + i * 3;
 							float u = uvs.get(offset);
@@ -575,12 +650,10 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 						}
 					}
 
-					float[][] v = new float[3][3];
-					float[][] n = new float[3][3];
 					for (int i = 0; i < 3; i++) {
 						int vertex = faceVertexOffset + i;
 						for (int c = 0; c < 3; c++) {
-							v[i][c] = Float.intBitsToFloat(sceneContext.stagingBufferVertices.getBuffer().get(vertex * 4 + c));
+							positions[i][c] = Float.intBitsToFloat(sceneContext.stagingBufferVertices.getBuffer().get(vertex * 4 + c));
 							n[i][c] = sceneContext.stagingBufferNormals.getBuffer().get(vertex * 4 + c);
 						}
 
@@ -592,23 +665,24 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 							// Shoreline vertex colors encode foam, not water albedo.
 							colors.put(1).put(1).put(1).put(1);
 						} else {
-							colors.put(ColorUtils.packedHslToSrgb(packedColor)).put(alpha);
+							int hsl = packedColor & 0xFFFF;
+							if (hslColors[hsl] == null)
+								hslColors[hsl] = ColorUtils.packedHslToSrgb(hsl);
+							colors.put(hslColors[hsl]).put(alpha);
 						}
 
-						vertices.put(v[i]);
+						vertices.put(positions[i]);
 					}
 
-					float[] flatNormal = null;
+					boolean hasFlatNormal = false;
 					for (int i = 0; i < 3; i++) {
 						if (dot(n[i], n[i]) == 0) {
-							if (flatNormal == null) {
+							if (!hasFlatNormal) {
 								// Compute flat normal
-								flatNormal = new float[3];
-								float[] a = new float[3];
-								float[] b = new float[3];
-								subtract(a, v[1], v[0]);
-								subtract(b, v[2], v[0]);
-								cross(flatNormal, a, b);
+								subtract(edgeA, positions[1], positions[0]);
+								subtract(edgeB, positions[2], positions[0]);
+								cross(flatNormal, edgeA, edgeB);
+								hasFlatNormal = true;
 
 								float len = length(flatNormal);
 								if (len == 0) {
@@ -620,7 +694,7 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 										flatNormal[j] /= len;
 								}
 							}
-							n[i] = flatNormal;
+							copyTo(n[i], flatNormal);
 						} else {
 							// Normalize
 							normalize(n[i], n[i]);
@@ -630,22 +704,50 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 					}
 				}
 
-				// Since we don't know the number of faces per mesh in advance, assign them after
+				if (meshDataMap.isEmpty())
+					continue;
+				var nodeMeshes = stack.mallocInt(meshDataMap.size());
 				for (var meshData : meshDataMap.values()) {
 					meshData.mesh.mFaces(meshData.faces.flip());
-					if (wholeScene)
-						compactMesh(stack, meshData.mesh, cleanup);
+					compactMesh(stack, meshData.mesh, cleanup, !wholeScene);
+					int meshIndex = meshList.size();
+					if (wholeScene) {
+						// Compacted meshes have consecutive triangle indices. Compare all resolved attributes,
+						// not model IDs: contouring, overrides and baked shading can differ between instances.
+						var existing = meshIndices.putIfAbsent(new MeshKey(meshData.mesh), meshIndex);
+						if (existing != null) {
+							meshIndex = existing;
+							reusedMeshes++;
+						}
+					}
+					if (meshIndex == meshList.size())
+						meshList.add(meshData.mesh);
+					nodeMeshes.put(meshIndex);
 				}
-				var nodeMeshes = stack.mallocInt(meshList.size() - firstMesh);
-				for (int i = firstMesh; i < meshList.size(); i++)
-					nodeMeshes.put(i);
 				var node = AINode.calloc(stack)
 					.mName(s -> s.data(stack.UTF8(model == null ? "Terrain_" + nodes.size() : "Model_" + nodes.size())))
 					.mParent(rootNode)
 					.mMeshes(nodeMeshes.flip())
 					.mTransformation(sceneTransform(stack, modelInfo, wholeScene));
+				// Assimp merges multi-mesh nodes destructively, including references from other instances.
+				// Give each primitive a child so shared meshes remain untouched by that pass.
+				if (wholeScene && node.mNumMeshes() > 1) {
+					var primitives = stack.mallocPointer(node.mNumMeshes());
+					for (int i = 0; i < node.mNumMeshes(); i++) {
+						var child = AINode.calloc(stack)
+							.mName(s -> s.data(stack.UTF8("Primitive_" + primitives.position())))
+							.mParent(node)
+							.mMeshes(stack.ints(node.mMeshes().get(i)))
+							.mTransformation(AIMatrix4x4.calloc(stack).a1(1).b2(1).c3(1).d4(1));
+						primitives.put(child);
+					}
+					node.mMeshes(null);
+					node.mChildren(primitives.flip());
+				}
 				nodes.add(node);
 			}
+			if (wholeScene)
+				log.info("Export mesh reuse: {} shared primitives, {} unique meshes", reusedMeshes, meshList.size());
 
 			var meshPointers = stack.mallocPointer(meshList.size());
 			for (int i = 0; i < meshList.size(); i++) {
@@ -663,7 +765,9 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 //			p.getPlayerComposition().getEquipmentIds() // 12 slots, convert IDs to model IDs
 //			client.loadModelData(id)
 
-			if (!EMBED_TEXTURES) {
+			log.info("Export geometry preparation: {} seconds", (System.nanoTime() - preparationStart) / 1e9);
+			long materialsStart = System.nanoTime();
+			if (!EMBED_TEXTURES && !wholeScene) {
 				// Identify auxiliary maps by their usage, not naming conventions such as _N or _D.
 				// They are exported below in their owners' texture slots, not as standalone materials.
 				var textureMaps = new HashSet<Material>();
@@ -806,6 +910,7 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 					.mNumAllocated(mProperties.limit()); // used internally by Assimp when copying scenes
 			}
 
+			var textureImages = new HashMap<java.nio.file.Path, BufferedImage>();
 			var texturePointers = materialStack.callocPointer(EMBED_TEXTURES ? expandedMaterials.size() : 0);
 			for (Material material : expandedMaterials) {
 				String textureName = material.name.toLowerCase(java.util.Locale.ROOT);
@@ -846,8 +951,7 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 
 					log.debug("Loaded texture {} with dimensions {}x{}", material, orientedImage.getWidth(), orientedImage.getHeight());
 					if (!EMBED_TEXTURES) {
-						if (!ImageIO.write(orientedImage, "png", texturePath.toFile()))
-							throw new IOException("No PNG writer available for " + textureName);
+						textureImages.put(texturePath, orientedImage);
 						continue;
 					}
 					ByteBuffer textureEncoded;
@@ -882,10 +986,7 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 			if (EMBED_TEXTURES)
 				scene.mTextures(texturePointers.flip());
 
-			aiEnableVerboseLogging(true);
-			var logStream = AILogStream.calloc(stack);
-			aiGetPredefinedLogStream(aiDefaultLogStream_STDERR, (ByteBuffer) null, logStream);
-			aiAttachLogStream(logStream);
+			log.info("Export materials and textures: {} seconds", (System.nanoTime() - materialsStart) / 1e9);
 
 			// Extreme hack to make Assimp v5.2.5 skip the aiProcess_JoinIdenticalVertices step, even though it's forced for glTF2,
 			// by making it think that the step has already been completed:
@@ -898,53 +999,96 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 
 			log.info("Exporting {} nodes, {} material primitives and {} triangles to {}",
 				nodes.size(), meshList.size(), totalFaceCount, exportPath);
-			long exportStart = System.nanoTime();
-			int statusCode;
-			try {
-				statusCode = aiExportScene(scene, formatId, exportPath.toPath().toString(),
-					(EMBED_TEXTURES ? aiProcess_EmbedTextures : 0)
-					| aiProcess_ValidateDataStructure
-					| aiProcess_FindInvalidData
-				);
-			} finally {
-				aiDetachLogStream(logStream);
-				log.info("Assimp export finished after {} seconds", (System.nanoTime() - exportStart) / 1e9);
-			}
+			var destination = exportPath;
+			int faceCount = totalFaceCount;
+			var snapshot = wholeScene ? SceneGltfExporter.snapshot(plugin.uboGlobal, waterMaterials) : null;
+			exportThread = new Thread(() -> {
+				try {
+					for (var entry : textureImages.entrySet()) {
+						var target = entry.getKey();
+						if (Files.exists(target))
+							continue;
+						// Publish complete PNGs so concurrent exports never observe a partial texture.
+						var temporary = Files.createTempFile(target.getParent(), "export-texture-", ".tmp");
+						try {
+							if (!ImageIO.write(entry.getValue(), "png", temporary.toFile()))
+								throw new IOException("No PNG writer available for " + target);
+							try {
+								Files.move(temporary, target);
+							} catch (java.nio.file.FileAlreadyExistsException ignored) {
+								// Another export finished the same texture first.
+							}
+						} finally {
+							Files.deleteIfExists(temporary);
+						}
+					}
+					// Assimp's log streams and C error string are global, not per export.
+					// Avoid attaching/detaching streams while other native operations are running.
+					long exportStart = System.nanoTime();
+					int statusCode;
+					try {
+						statusCode = aiExportScene(scene, formatId, destination.toPath().toString(),
+							(EMBED_TEXTURES ? aiProcess_EmbedTextures : 0)
+							| aiProcess_ValidateDataStructure
+							| aiProcess_FindInvalidData
+						);
+					} finally {
+						log.info("Assimp export {} finished after {} seconds", destination, (System.nanoTime() - exportStart) / 1e9);
+					}
 
-			if (statusCode != 0) {
-				System.err.println(aiGetErrorString());
-				chatMessageManager.queue(QueuedMessage.builder()
-					.type(ChatMessageType.CONSOLE)
-					.runeLiteFormattedMessage(new ChatMessageBuilder()
-						.append("Error while exporting " + objectName.getKey() + " model for ")
-						.append(Color.CYAN, objectName.getValue())
-						.append(Color.LIGHT_GRAY, " (status code " + statusCode + ")")
-						.build())
-					.build());
-			} else {
-				if (wholeScene)
-					SceneGltfExporter.embed(exportPath.toPath(), plugin.uboGlobal, waterMaterials);
-				chatMessageManager.queue(QueuedMessage.builder()
-					.type(ChatMessageType.CONSOLE)
-					.runeLiteFormattedMessage(new ChatMessageBuilder()
-						.append(wholeScene ? "Exported scene as " : "Exported model as ")
-						.append(Color.CYAN, exportPath.getFilename())
-						.append(" (" + totalFaceCount + " faces)")
-						.build())
-					.build());
-			}
+					if (statusCode != 0) {
+						log.error("Assimp export failed for {} (status {})", destination, statusCode);
+						chatMessageManager.queue(QueuedMessage.builder()
+							.type(ChatMessageType.CONSOLE)
+							.runeLiteFormattedMessage(new ChatMessageBuilder()
+								.append("Error while exporting " + objectName.getKey() + " model for ")
+								.append(Color.CYAN, objectName.getValue())
+								.append(Color.LIGHT_GRAY, " (status code " + statusCode + ")")
+								.build())
+							.build());
+					} else {
+						long finalizeStart = System.nanoTime();
+						if (wholeScene)
+							SceneGltfExporter.embed(destination.toPath(), snapshot);
+						log.info("Export finalization: {} seconds", (System.nanoTime() - finalizeStart) / 1e9);
+						chatMessageManager.queue(QueuedMessage.builder()
+							.type(ChatMessageType.CONSOLE)
+							.runeLiteFormattedMessage(new ChatMessageBuilder()
+								.append(wholeScene ? "Exported scene as " : "Exported model as ")
+								.append(Color.CYAN, destination.getFilename())
+								.append(" (" + faceCount + " faces)")
+								.build())
+							.build());
+					}
+				} catch (Exception ex) {
+					log.error("Unable to export model or scene", ex);
+					chatMessageManager.queue(QueuedMessage.builder().type(ChatMessageType.CONSOLE)
+						.runeLiteFormattedMessage("Export failed. See the log for details.").build());
+				} finally {
+					release.run();
+				}
+			}, "117 HD export " + destination.getFilename());
+			exportThread.setDaemon(true);
 		} catch (IOException ex) {
 			log.error("Unable to export model or scene", ex);
 		} finally {
 			sceneContext.destroy();
 			sceneContext.staticUnorderedModelBuffer.destroy();
-			for (long address : cleanup)
-				if (address != 0)
-					nmemFree(address);
-			cleanup.clear();
-			for (var buffer : cleanupFaceBuffers)
-				buffer.free();
-			cleanupFaceBuffers.clear();
+			if (exportThread == null)
+				release.run();
+		}
+		if (exportThread != null) {
+			// Start only after the local stack frame is closed. Its backing allocations belong
+			// to the worker now and must remain alive through export and finalization.
+			chatMessageManager.queue(QueuedMessage.builder().type(ChatMessageType.CONSOLE)
+				.runeLiteFormattedMessage((wholeScene ? "Exporting scene to " : "Exporting model to ") +
+					exportPath.getFilename() + ". This may take a while...").build());
+			try {
+				exportThread.start();
+			} catch (RuntimeException | Error ex) {
+				release.run();
+				throw ex;
+			}
 		}
 	}
 
@@ -1349,17 +1493,50 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 
 		Scene scene = client.getScene();
 		Tile[][][] tiles = scene.getTiles();
+		var context = sceneManager.getContext(scene);
+		boolean useZoneBounds = context != null && context.sceneContext != null && context.sceneContext.scene == scene;
+		float[] rayOrigin = { 2f * (canvasPoint.getX() - client.getViewportXOffset()) / client.getViewportWidth() - 1,
+			1 - 2f * (canvasPoint.getY() - client.getViewportYOffset()) / client.getViewportHeight(), 1, 1 };
+		float[] rayDirection = { rayOrigin[0], rayOrigin[1], .5f, 1 };
+		Mat4.mulVec(rayOrigin, plugin.invViewProjMatrix, rayOrigin);
+		Mat4.mulVec(rayDirection, plugin.invViewProjMatrix, rayDirection);
+		for (int i = 0; i < 3; i++) {
+			rayOrigin[i] /= rayOrigin[3];
+			rayDirection[i] = rayDirection[i] / rayDirection[3] - rayOrigin[i];
+		}
+		float[] bounds = new float[6];
+		// Cache across planes; zone bounds include all planes and objects extending beyond their tiles.
+		byte[][] hoveredZones = new byte[(tiles[0].length + 7) >> 3][(tiles[0][0].length + 7) >> 3];
 		for (int plane = tiles.length - 1; plane >= 0; plane--) {
 			Tile[][] tilePlane = tiles[plane];
-			for (Tile[] tileColumn : tilePlane) {
-				for (Tile tile : tileColumn) {
-					if (tile == null)
-						continue;
-
-					if (localToCanvas(client, tile.getLocalLocation(), tile.getRenderLevel()) == null)
-						continue;
-
-					processTile(hoverPoint, tile);
+			for (int x = 0; x < tilePlane.length; x += 8) {
+				for (int z = 0; z < tilePlane[x].length; z += 8) {
+					if (useZoneBounds) {
+						int zx = (x + context.sceneContext.sceneOffset) >> 3;
+						int zz = (z + context.sceneContext.sceneOffset) >> 3;
+						if (hoveredZones[x >> 3][z >> 3] == 0) {
+							var zone = context.zones[zx][zz];
+							int zoneX = (zx * 8 - context.sceneContext.sceneOffset) * LOCAL_TILE_SIZE;
+							int zoneZ = (zz * 8 - context.sceneContext.sceneOffset) * LOCAL_TILE_SIZE;
+							bounds[0] = zoneX + zone.minX;
+							bounds[1] = zone.minY;
+							bounds[2] = zoneZ + zone.minZ;
+							bounds[3] = zoneX + zone.maxX;
+							bounds[4] = zone.maxY;
+							bounds[5] = zoneZ + zone.maxZ;
+							boolean hovered = !zone.initialized || zone.minY > zone.maxY || rayIntersectsBounds(rayOrigin, rayDirection, bounds);
+							hoveredZones[x >> 3][z >> 3] = (byte) (hovered ? 1 : -1);
+						}
+						if (hoveredZones[x >> 3][z >> 3] < 0)
+							continue;
+					}
+					for (int tx = x; tx < Math.min(x + 8, tilePlane.length); tx++) {
+						for (int tz = z; tz < Math.min(z + 8, tilePlane[tx].length); tz++) {
+							Tile tile = tilePlane[tx][tz];
+							if (tile != null)
+								processTile(hoverPoint, tile);
+						}
+					}
 				}
 			}
 		}
@@ -1373,6 +1550,25 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 		for (var projectile : client.getProjectiles())
 			addIfHovered(hoverPoint, projectile);
 		hoverChecked.clear();
+	}
+
+	private static boolean rayIntersectsBounds(float[] origin, float[] direction, float[] bounds) {
+		float near = 0;
+		float far = Float.POSITIVE_INFINITY;
+		for (int i = 0; i < 3; i++) {
+			if (direction[i] == 0) {
+				if (origin[i] < bounds[i] || origin[i] > bounds[i + 3])
+					return false;
+			} else {
+				float a = (bounds[i] - origin[i]) / direction[i];
+				float b = (bounds[i + 3] - origin[i]) / direction[i];
+				near = Math.max(near, Math.min(a, b));
+				far = Math.min(far, Math.max(a, b));
+				if (near > far)
+					return false;
+			}
+		}
+		return true;
 	}
 
 	private void processTile(Point2D hoverPoint, Tile tile) {
@@ -1596,19 +1792,24 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 	}
 
 	// Assimp exports every vertex of each material primitive, including unreferenced vertices.
-	// Keep scene primitives compact; UV1 corner identities are only needed for individual-model round trips.
-	private void compactMesh(MemoryStack stack, AIMesh mesh, List<Long> cleanup) {
+	// Preserve UV1 corner identities for individual-model round trips, even when hidden faces are omitted.
+	private void compactMesh(MemoryStack stack, AIMesh mesh, List<Long> cleanup, boolean preserveCornerIds) {
 		int count = mesh.mNumFaces() * 3;
-		var data = memAlloc(count * (12 + 12 + 12 + 16));
+		// A single-material model without hidden faces already references its entire contiguous slice.
+		if (count == mesh.mNumVertices())
+			return;
+		var data = memAlloc(count * (12 + 12 + 12 + 16 + (preserveCornerIds ? 12 : 0)));
 		long positions = memAddress0(data);
 		cleanup.add(positions);
 		long normals = positions + count * 12L;
 		long uvs = normals + count * 12L;
 		long colors = uvs + count * 12L;
+		long cornerIds = preserveCornerIds ? colors + count * 16L : 0;
 		long sourcePositions = mesh.mVertices().address();
 		long sourceNormals = mesh.mNormals().address();
 		long sourceUvs = mesh.mTextureCoords(0).address();
 		long sourceColors = mesh.mColors(0).address();
+		long sourceCornerIds = preserveCornerIds ? mesh.mTextureCoords(1).address() : 0;
 		var faces = mesh.mFaces();
 		for (int face = 0; face < mesh.mNumFaces(); face++) {
 			var indices = faces.get(face).mIndices();
@@ -1619,27 +1820,31 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 				memCopy(sourceNormals + source * 12L, normals + target * 12L, 12);
 				memCopy(sourceUvs + source * 12L, uvs + target * 12L, 12);
 				memCopy(sourceColors + source * 16L, colors + target * 16L, 16);
+				if (preserveCornerIds)
+					memCopy(sourceCornerIds + source * 12L, cornerIds + target * 12L, 12);
 				indices.put(corner, target);
 			}
 		}
 		mesh.mNumVertices(count)
 			.mVertices(AIVector3D.create(positions, count))
 			.mNormals(AIVector3D.create(normals, count))
-			.mTextureCoords(stack.pointers(uvs, 0))
+			.mTextureCoords(stack.pointers(uvs, cornerIds))
 			.mColors(stack.pointers(colors))
-			.mNumUVComponents(stack.ints(2, 0));
+			.mNumUVComponents(stack.ints(2, preserveCornerIds ? 2 : 0));
 	}
 
 	private void exportScene() {
 		var top = client.getTopLevelWorldView();
 		if (top == null || plugin.getSceneContext() == null)
 			return;
+		long collectionStart = System.nanoTime();
 		var models = new ArrayList<ModelInfo>();
 		collectScene(models, top);
 		for (var entity : top.worldEntities())
 			collectScene(models, entity.getWorldView());
 		for (var projectile : client.getProjectiles())
 			addSceneModels(models, top, null, projectile);
+		log.info("Export scene collection: {} seconds", (System.nanoTime() - collectionStart) / 1e9);
 		// Terrain is one object, with material primitives, rather than thousands of tiny tile meshes.
 		var terrain = new ModelInfo(null, null, null);
 		var tiles = new java.util.LinkedHashMap<WorldView, List<Tile>>();
@@ -1649,7 +1854,9 @@ public class ModelExporter extends Overlay implements MouseListener, MouseWheelL
 			tiles.computeIfAbsent(info.worldView, view -> new ArrayList<>()).add(info.tile);
 			return true;
 		});
+		long terrainStart = System.nanoTime();
 		terrain.terrain = terrainExporter.build(tiles);
+		log.info("Export terrain preparation: {} seconds", (System.nanoTime() - terrainStart) / 1e9);
 		try {
 			if (terrain.faceCount() > 0)
 				models.add(terrain);

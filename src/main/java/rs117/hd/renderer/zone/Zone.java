@@ -95,9 +95,9 @@ public class Zone implements Destructible {
 	public boolean isFirstLoadingAttempt = true;
 
 	// Zone-relative bounds
-	int minX, maxX = CHUNK_SIZE * LOCAL_TILE_SIZE;
-	int minY = Integer.MAX_VALUE, maxY = Integer.MIN_VALUE;
-	int minZ, maxZ = CHUNK_SIZE * LOCAL_TILE_SIZE;
+	public int minX, maxX = CHUNK_SIZE * LOCAL_TILE_SIZE;
+	public int minY = Integer.MAX_VALUE, maxY = Integer.MIN_VALUE;
+	public int minZ, maxZ = CHUNK_SIZE * LOCAL_TILE_SIZE;
 
 	public IntHashSet animatedDynamicObjectIds = new IntHashSet();
 
