@@ -196,7 +196,8 @@ public class LegacyModelPusher {
 			!isVanillaTextured &&
 			baseMaterial.packMaterialData(modelOverride, UvType.GEOMETRY, false) == 0 &&
 			modelOverride.colorOverrides == null &&
-			modelOverride.custom == null;
+			modelOverride.uvs == null &&
+			modelOverride.faceOverrides == null;
 
 		// ensure capacity upfront
 		sceneContext.stagingBufferVertices.ensureCapacity(bufferSize);
@@ -315,47 +316,46 @@ public class LegacyModelPusher {
 			if (plugin.enableDetailedTimers)
 				frameTimer.begin(Timer.MODEL_PUSHING_UV);
 
+			final boolean customUvs = modelOverride.hasCustomUvs(model);
+			final ModelOverride[] faceOverrides = modelOverride.faceOverrides;
 			int[] faceColors = model.getFaceColors1();
 			byte[] faceTransparencies = model.getFaceTransparencies();
 			for (int face = 0; face < faceCount; face++) {
 				short textureId = isVanillaTextured ? faceTextures[face] : -1;
 				UvType uvType = UvType.GEOMETRY;
-				Material material = baseMaterial;
 				ModelOverride faceOverride = modelOverride;
-
-				var customOverride = modelOverride.getCustomOverride(model, face);
-				if (customOverride != null) {
-					faceOverride = customOverride;
+				Material material = baseMaterial;
+				if (faceOverrides != null && face < faceOverrides.length) {
+					faceOverride = faceOverrides[face];
 					material = faceOverride.material;
-				} else if (textureId != -1) {
-					uvType = UvType.VANILLA;
-					if (textureMaterial != Material.NONE) {
-						material = textureMaterial;
-					} else {
-						material = materialManager.fromVanillaTexture(textureId);
-						if (modelOverride.materialOverrides != null) {
-							var override = modelOverride.materialOverrides.get(material);
-							if (override != null) {
+				}
+				if (faceOverride == modelOverride) {
+					if (textureId != -1) {
+						uvType = UvType.VANILLA;
+						if (textureMaterial != Material.NONE) {
+							material = textureMaterial;
+						} else {
+							material = materialManager.fromVanillaTexture(textureId);
+							if (modelOverride.materialOverrides != null) {
+								var override = modelOverride.materialOverrides.get(material);
+								if (override != null) {
+									faceOverride = override;
+									material = faceOverride.textureMaterial;
+								}
+							}
+						}
+					} else if (modelOverride.colorOverrides != null && (cacheUvData || !needsCaching)) {
+						// Color overrides are heavy. Only apply them if the UVs will be cached or don't need caching
+						int ahsl = (faceTransparencies == null ? 0xFF : 0xFF - (faceTransparencies[face] & 0xFF)) << 16 | faceColors[face];
+						for (var override : modelOverride.colorOverrides) {
+							if (override.ahslCondition.test(ahsl)) {
 								faceOverride = override;
-								material = faceOverride.textureMaterial;
+								material = faceOverride.material;
+								break;
 							}
 						}
 					}
-				} else if (modelOverride.colorOverrides != null && (cacheUvData || !needsCaching)) {
-					// Color overrides are heavy. Only apply them if the UVs will be cached or don't need caching
-					int ahsl = (faceTransparencies == null ? 0xFF : 0xFF - (faceTransparencies[face] & 0xFF)) << 16 | faceColors[face];
-					for (var override : modelOverride.colorOverrides) {
-						if (override.ahslCondition.test(ahsl)) {
-							faceOverride = override;
-							material = faceOverride.material;
-							break;
-						}
-					}
 				}
-
-				if (faceOverride.hide && SKIP_HIDDEN_FACES)
-					continue;
-
 				if (material != Material.NONE) {
 					uvType = faceOverride.uvType;
 					if (uvType == UvType.VANILLA || (textureId != -1 && faceOverride.retainVanillaUvs))
@@ -363,10 +363,11 @@ public class LegacyModelPusher {
 				}
 
 				final float[] uvData = sceneContext.modelFaceUvs;
-				boolean customUvs = modelOverride.fillUvOverride(uvData, model, face);
-				if (customUvs)
+				if (customUvs) {
+					modelOverride.fillCustomUvs(uvData, face);
 					uvType = UvType.GEOMETRY;
-				int materialData = material.packMaterialData(faceOverride, uvType, false);
+				}
+				int materialData = SKIP_HIDDEN_FACES && faceOverride.hide ? 0 : material.packMaterialData(faceOverride, uvType, false);
 
 				if (materialData == 0) {
 					Arrays.fill(uvData, 0);
@@ -399,9 +400,8 @@ public class LegacyModelPusher {
 	}
 
 	private void getNormalDataForFace(LegacySceneContext sceneContext, Model model, @Nonnull ModelOverride modelOverride, int face) {
-		var customOverride = modelOverride.getCustomOverride(model, face);
-		if (customOverride != null)
-			modelOverride = customOverride;
+		if (modelOverride.faceOverrides != null && face < modelOverride.faceOverrides.length)
+			modelOverride = modelOverride.faceOverrides[face];
 		assert packTerrainData(false, 0, WaterType.NONE, 0) == 0;
 		if (modelOverride.flatNormals || !plugin.configPreserveVanillaNormals && model.getFaceColors3()[face] == -1) {
 			Arrays.fill(sceneContext.modelFaceNormals, 0);
@@ -445,13 +445,13 @@ public class LegacyModelPusher {
 		@Nonnull ModelOverride modelOverride,
 		int face
 	) {
-		var customOverride = modelOverride.getCustomOverride(model, face);
-		if (customOverride != null)
-			modelOverride = customOverride;
-		if (SKIP_HIDDEN_FACES && modelOverride.hide)
+		boolean hasFaceOverride = modelOverride.faceOverrides != null && face < modelOverride.faceOverrides.length &&
+			modelOverride.faceOverrides[face] != modelOverride;
+		if (modelOverride.faceOverrides != null && face < modelOverride.faceOverrides.length)
+			modelOverride = modelOverride.faceOverrides[face];
+
+		if (SKIP_HIDDEN_FACES && (model.getFaceColors3()[face] == -2 || modelOverride.hide))
 			return ZEROED_INTS;
-		if (SKIP_HIDDEN_FACES && model.getFaceColors3()[face] == -2)
-			return ZEROED_INTS; // Hide the face
 
 		// Hide fake shadows or lighting that is often baked into models by making the fake shadow transparent
 		if (SKIP_HIDDEN_FACES && plugin.configHideFakeShadows && HDUtils.isBakedGroundShading(model, face)) {
@@ -492,7 +492,7 @@ public class LegacyModelPusher {
 		if (facePriorities != null)
 			packedAlphaPriorityFlags |= (facePriorities[face] & 0xF) << 16;
 
-		if (isTextured || customOverride != null && modelOverride.material.vanillaTextureIndex != -1) {
+		if (isTextured || modelOverride.material.vanillaTextureIndex != -1) {
 			// Without overriding the color for textured faces, vanilla shading remains pretty noticeable even after
 			// the approximate reversal above. Ardougne rooftops is a good example, where vanilla shading results in a
 			// weird-looking tint. The brightness clamp afterward is required to reduce the over-exposure introduced.
@@ -622,7 +622,7 @@ public class LegacyModelPusher {
 			}
 		}
 
-		if (customOverride != null) {
+		if (hasFaceOverride) {
 			if (modelOverride.modifiesColor) {
 				color1 = modelOverride.modifyColor(color1);
 				color2 = modelOverride.modifyColor(color2);

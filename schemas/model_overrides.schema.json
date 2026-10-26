@@ -68,54 +68,33 @@
         },
         "baseMaterial": {
           "$ref": "#/$defs/modelOverride/properties/material",
-          "description": "Alternate name for material."
+          "description": "Old alternative name for the `material` option."
         },
         "textureMaterial": {
           "type": "string",
           "description": "Case-sensitive name of the material to apply to textured faces."
         },
-        "custom": {
-          "description": "Full-model UVs and per-face overrides, ignored if the UV count does not match. During development, a path relative to model-exports imports UV0 and named materials; Ctrl+Alt+Enter bakes it. Preserve the exported UV1 identity channel and all original triangles. Vertex welding is supported if corner UVs survive. The most prevalent imported material becomes material.",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "uvs"
-              ],
-              "properties": {
-                "uvs": {
-                  "type": "array",
-                  "minItems": 6,
-                  "items": {
-                    "type": "number"
-                  }
-                },
-                "materials": {
-                  "type": "array",
-                  "description": "Independent overrides for the listed faces; omitted properties use standard defaults, not the parent. Unlisted faces use the outer override. Custom faces ignore textureMaterial and automatic material/color selection.",
-                  "items": {
-                    "$ref": "#/$defs/modelOverride",
-                    "required": [
-                      "faces"
-                    ]
-                  }
-                }
-              }
-            }
-          ]
+        "model": {
+          "type": "string",
+          "deprecated": true,
+          "description": "Development-only field, specifying the filename of a model to load UV mapping & face overrides from. Should not be committed."
         },
         "uvs": {
-          "type": [
-            "array",
-            "string"
-          ],
-          "description": "Custom UVs for the full model: [u1, v1, u2, v2, ...]. During development, a string path to an exported model, relative to model-exports, can be specified instead, to load UVs from it. Pressing Ctrl+Alt+Enter will bake the UVs, replacing the specified path with UVs loaded from the model.",
+          "type": "array",
+          "description": "Custom UVs for the whole model: [u1, v1, u2, v2, ...]. Requires 6 coordinates per face, and the face count must match the model's face count exactly.",
+          "minItems": 6,
           "items": {
             "type": "number"
+          }
+        },
+        "materials": {
+          "type": "array",
+          "description": "Overrides for specific faces listed in the `faces` field. Unspecified faces fall back to the parent override.",
+          "items": {
+            "$ref": "#/$defs/modelOverride",
+            "required": [
+              "faces"
+            ]
           }
         },
         "uvType": {
@@ -367,7 +346,7 @@
           }
         },
         "colorOverrides": {
-          "description": "Overrides for specific colors of the model.",
+          "description": "Overrides to apply to specific colors of the model, based on expressions provided in the `colors` field.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/modelOverride",
@@ -404,6 +383,7 @@
         },
         "faces": {
           "type": "array",
+          "description": "An array of face indices specified as a mix of either ranges like \"0-100\" or individual indices.",
           "items": {
             "oneOf": [
               {

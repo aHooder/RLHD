@@ -126,12 +126,13 @@ public class ModelUvImporter implements KeyListener, AutoCloseable {
 				count += resolve(child);
 		} else if (json.isJsonObject()) {
 			var object = json.getAsJsonObject();
-			var custom = object.get("custom");
+			var custom = object.get("model");
 			if (custom != null && custom.isJsonPrimitive() && custom.getAsJsonPrimitive().isString()) {
 				var path = Path.of("model-exports").resolve(custom.getAsString()).normalize();
 				var material = object.has("material") ? object.get("material") : object.get("baseMaterial");
 				var imported = loadCustom(path, material == null ? "NONE" : material.getAsString());
-				object.add("custom", imported.get("custom"));
+				for (var entry : imported.getAsJsonObject("custom").entrySet())
+					object.add(entry.getKey(), entry.getValue());
 				object.remove("baseMaterial");
 				object.add("material", imported.get("material"));
 				log.info("Loaded custom model override '{}' from {}", object.get("description"), path);
@@ -354,6 +355,8 @@ public class ModelUvImporter implements KeyListener, AutoCloseable {
 		String newline = original.contains("\r\n") ? "\r\n" : "\n";
 		var tokens = JSON_TOKEN.matcher(original);
 		String previousString = null;
+		int previousStringStart = 0;
+		int propertyStart = 0;
 		String property = null;
 		int line = 1;
 		int scanned = 0;
@@ -379,7 +382,14 @@ public class ModelUvImporter implements KeyListener, AutoCloseable {
 					while (indentEnd < object.customStart && (original.charAt(indentEnd) == ' ' || original.charAt(indentEnd) == '\t'))
 						indentEnd++;
 					String indent = original.substring(lineStart, indentEnd);
-					edits.add(new Replacement(object.customStart, object.customEnd, format(imported.get("custom"), indent, newline)));
+					var replacement = new StringBuilder();
+					for (var entry : imported.getAsJsonObject("custom").entrySet()) {
+						if (replacement.length() > 0)
+							replacement.append(',').append(newline).append(indent);
+						replacement.append(plugin.getGson().toJson(entry.getKey())).append(": ")
+							.append(format(entry.getValue(), indent, newline));
+					}
+					edits.add(new Replacement(object.customStart, object.customEnd, replacement.toString()));
 					String base = imported.get("material").getAsString();
 					if (!base.equals(object.baseMaterial)) {
 						String value = format(imported.get("material"), "", newline);
@@ -393,6 +403,7 @@ public class ModelUvImporter implements KeyListener, AutoCloseable {
 				}
 			} else if (token.equals(":")) {
 				property = previousString;
+				propertyStart = previousStringStart;
 				continue;
 			} else if (token.startsWith("\"")) {
 				String value = plugin.getGson().fromJson(token, String.class);
@@ -404,9 +415,9 @@ public class ModelUvImporter implements KeyListener, AutoCloseable {
 						object.baseMaterial = value;
 						object.baseStart = tokens.start();
 						object.baseEnd = tokens.end();
-					} else if ("custom".equals(property)) {
+					} else if ("model".equals(property)) {
 						object.customPath = value;
-						object.customStart = tokens.start();
+						object.customStart = propertyStart;
 						object.customEnd = tokens.end();
 						object.customLine = line;
 					} else if ("uvs".equals(property)) {
@@ -416,6 +427,7 @@ public class ModelUvImporter implements KeyListener, AutoCloseable {
 					}
 				}
 				previousString = value;
+				previousStringStart = tokens.start();
 				property = null;
 				continue;
 			}
