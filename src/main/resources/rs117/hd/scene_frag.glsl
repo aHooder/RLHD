@@ -99,7 +99,6 @@ vec2 worldUvs(float scale) {
 #endif
 
 #include <utils/water.glsl>
-#include <utils/void_shader.glsl>
 
 void main() {
     bool isTerrain = (fTerrainData[0] & 1) != 0;
