@@ -97,6 +97,7 @@ vec2 worldUvs(float scale) {
 #endif
 
 #include <utils/water.glsl>
+#include <utils/void_shader.glsl>
 
 void main() {
     bool isTerrain = (fTerrainData[0] & 1) != 0;
@@ -528,6 +529,20 @@ void main() {
 
         outputColor.rgb *= mix(compositeLight, vec3(1), unlit);
         outputColor.rgb = linearToSrgb(outputColor.rgb);
+
+        // Void shader materials show a starry void through the surface, in place of its texture & lighting. Only in
+        // environments that turn it on, branching on a uniform so it costs nothing elsewhere.
+        if (uboGlobal.voidShader) {
+            vec3 dPdx = dFdx(IN.position);
+            vec3 dPdy = dFdy(IN.position);
+            float voidShader = dot(fTexBlend, vec3(
+                getMaterialIsVoidShader(material1),
+                getMaterialIsVoidShader(material2),
+                getMaterialIsVoidShader(material3)
+            ));
+            if (voidShader > 0.0)
+                outputColor.rgb = mix(outputColor.rgb, linearToSrgb(sampleVoidShader(IN.position, N, viewDir, dPdx, dPdy)), voidShader);
+        }
 
         if (isUnderwater) {
             sampleUnderwater(outputColor.rgb, waterType, waterDepth, lightDotNormals);
