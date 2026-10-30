@@ -2867,7 +2867,6 @@
   },
   {
     "area": "Guthix Temple",
-    "voidShader": true,
     "ambientStrength": 0.9,
     "fogDepth": 30,
     "shadowAngles": [
