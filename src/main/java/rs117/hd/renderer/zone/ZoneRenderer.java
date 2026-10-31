@@ -671,6 +671,8 @@ public class ZoneRenderer implements Renderer {
 				environmentManager.getTargetEnvironment().allowRoofShadows;
 
 			plugin.uboGlobal.sceneBase.set(scene.getBaseX() * LOCAL_TILE_SIZE, scene.getBaseY() * LOCAL_TILE_SIZE);
+//			plugin.uboGlobal.voidShader.set(config.enableVoidShader().get(environmentManager.getTargetEnvironment().voidShader) ? 1 : 0);
+			plugin.uboGlobal.voidShader.set(config.enableVoidShader().get(true) ? 1 : 0);
 			plugin.uboGlobal.lightDir.set(directionalCamera.getForwardDirection());
 		}
 
@@ -726,7 +728,6 @@ public class ZoneRenderer implements Renderer {
 		plugin.uboGlobal.underwaterCausticsColor.set(env.getWaterCausticsColor());
 		plugin.uboGlobal.underwaterCausticsStrength.set(env.waterCausticsStrength);
 		plugin.uboGlobal.elapsedTime.set((float) (plugin.elapsedTime % MAX_FLOAT_WITH_128TH_PRECISION));
-		plugin.uboGlobal.voidShader.set(environmentManager.getTargetEnvironment().voidShader ? 1 : 0);
 		plugin.uboGlobal.orthographicProjection.set(plugin.orthographicProjection ? 1 : 0);
 
 		if (plugin.configColorFilter != ColorFilter.NONE) {
@@ -825,9 +826,9 @@ public class ZoneRenderer implements Renderer {
 				for (int i = 0; i < lightManager.getNumVisibleLights(); i++) {
 					final Light light = lightManager.getLights().get(i);
 					final float lightRadiusSq = light.radius * light.radius;
-					lightPosition[0] = light.pos[0] + plugin.cameraShift[0];
+					lightPosition[0] = light.pos[0];
 					lightPosition[1] = light.pos[1];
-					lightPosition[2] = light.pos[2] + plugin.cameraShift[1];
+					lightPosition[2] = light.pos[2];
 					lightPosition[3] = lightRadiusSq;
 
 					lightColor[0] = light.color[0] * light.strength;

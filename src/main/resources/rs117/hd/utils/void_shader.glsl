@@ -9,9 +9,12 @@
 #define VOID_MID_DEPTH 0.8
 #define VOID_FAR_DEPTH 1.8
 // Fraction of cells holding a star
-#define VOID_STAR_DENSITY 0.08
-// Star radius as a fraction of its cell, so stars shrink with the surface as the camera zooms out
-#define VOID_STAR_SIZE 0.05
+#define VOID_STAR_DENSITY (0.08 * 10 * GREEN)
+// Radius at a reference cell size of 10 pixels. Red/blue tune near/far layers independently.
+#define VOID_NEAR_STAR_RADIUS (4.0 * RED)
+#define VOID_FAR_STAR_RADIUS (4.0 * BLUE)
+// Alpha: 0 keeps apparent size constant; 1 scales it with the projected cell size.
+#define VOID_STAR_DISTANCE_SCALING OPACITY
 
 // Unit Gaussians & smooth noise from star_vert, for the sky stars' scintillation
 vec3 voidStarGaussian(vec2 seed) {
@@ -52,7 +55,7 @@ vec3 voidStarScintillation(vec2 starHash, vec3 position, float size, float brigh
 }
 
 // One layer of stars on a grid in UV space. pixelsPerUv maps UV offsets to screen pixels, accounting for the surface's angle.
-vec3 voidStarLayer(vec2 uv, float cellsPerUv, mat2 pixelsPerUv, float uvPerPixel, float seed) {
+vec3 voidStarLayer(vec2 uv, float cellsPerUv, mat2 pixelsPerUv, float uvPerPixel, float seed, float referenceRadius) {
     vec2 grid = uv * cellsPerUv;
     vec2 cell = floor(grid);
     vec4 h = hash42(cell + seed * 1013.0);
@@ -69,7 +72,8 @@ vec3 voidStarLayer(vec2 uv, float cellsPerUv, mat2 pixelsPerUv, float uvPerPixel
     float pixels = length(pixelsPerUv * ((grid - starPos) / cellsPerUv));
     // Like the sky's own star sprites, keep radii within a small pixel range, with the same falloff, and dim stars
     // below that rather than shrinking them, so they neither balloon when close nor blur or flicker when far
-    float trueRadius = VOID_STAR_SIZE * mix(0.6, 1.4, h.w * h.w) / max(cellsPerPixel, 1e-6);
+    float trueRadius = referenceRadius * mix(0.5, 1.5, h.w * h.w)
+        * pow(0.1 / max(cellsPerPixel, 1e-6), VOID_STAR_DISTANCE_SCALING);
     float radius = clamp(trueRadius, 1.25, 4.0);
     float d = pixels / radius;
     float falloff = exp(-d * d * 4.4);
@@ -116,9 +120,10 @@ vec3 sampleVoidShader(vec3 position, vec3 normal, vec3 viewDir, vec3 dPdx, vec3 
     vec2 shift = -viewTS.xy / max(abs(viewTS.z), 0.25);
 
     vec3 color = STARFIELD_BACKGROUND_COLOR;
-    // Nearer layers have fewer, larger-looking stars
-    color += voidStarLayer(uv + shift * VOID_NEAR_DEPTH, 6.0, pixelsPerUv, uvPerPixel, 1.0);
-    color += voidStarLayer(uv + shift * VOID_MID_DEPTH, 10.0, pixelsPerUv, uvPerPixel, 2.0) * 0.7;
-    color += voidStarLayer(uv + shift * VOID_FAR_DEPTH, 16.0, pixelsPerUv, uvPerPixel, 3.0) * 0.5;
+    // Layer density and parallax stay independent of the apparent star radii.
+    color += voidStarLayer(uv + shift * VOID_NEAR_DEPTH, 6.0, pixelsPerUv, uvPerPixel, 1.0, VOID_NEAR_STAR_RADIUS);
+    color += voidStarLayer(uv + shift * VOID_MID_DEPTH, 10.0, pixelsPerUv, uvPerPixel, 2.0,
+        mix(VOID_NEAR_STAR_RADIUS, VOID_FAR_STAR_RADIUS, (VOID_MID_DEPTH - VOID_NEAR_DEPTH) / (VOID_FAR_DEPTH - VOID_NEAR_DEPTH)));
+    color += voidStarLayer(uv + shift * VOID_FAR_DEPTH, 16.0, pixelsPerUv, uvPerPixel, 3.0, VOID_FAR_STAR_RADIUS);
     return color;
 }

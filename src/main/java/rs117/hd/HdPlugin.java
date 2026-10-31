@@ -993,6 +993,7 @@ public class HdPlugin extends Plugin {
 			.define("SHADOW_FILTERING_KERNEL", config.shadowFiltering().kernelSize)
 			.define("STAR_MODE", config.starMode())
 			.define("DAYLIGHT_CYCLE", !skyManager.isCycleDisabled())
+			.define("VOID_SHADER", config.compileVoidShader())
 			.define("POINT_SPRITES", config.pointSprites().get(true))
 			.define("NEBULAE", config.enableNebulae())
 			.define("VANILLA_COLOR_BANDING", config.vanillaColorBanding())
@@ -2000,6 +2001,7 @@ public class HdPlugin extends Plugin {
 							case KEY_WATER_SPECULAR_REFLECTIONS:
 							case KEY_DECOUPLE_WATER_FROM_SKY_COLOR:
 							case KEY_CENTROID_QUALIFIER:
+							case KEY_COMPILE_VOID_SHADER:
 								recompilePrograms = true;
 								break;
 							case KEY_GLARE_INTENSITY:

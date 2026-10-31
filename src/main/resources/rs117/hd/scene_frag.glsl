@@ -91,7 +91,6 @@ vec2 worldUvs(float scale) {
 #include <utils/fog.glsl>
 #include <utils/wireframe.glsl>
 #include <utils/lights.glsl>
-// Before the conditional sky include, since #pragma once would otherwise skip the starfield it needs when the cycle is off
 #include <utils/void_shader.glsl>
 
 #if DAYLIGHT_CYCLE
@@ -533,6 +532,7 @@ void main() {
 
         // Void shader materials show a starry void through the surface, in place of its texture & lighting. Only in
         // environments that turn it on, branching on a uniform so it costs nothing elsewhere.
+        #if VOID_SHADER
         if (uboGlobal.voidShader) {
             vec3 dPdx = dFdx(IN.position);
             vec3 dPdy = dFdy(IN.position);
@@ -544,6 +544,8 @@ void main() {
             if (voidShader > 0.0)
                 outputColor.rgb = mix(outputColor.rgb, linearToSrgb(sampleVoidShader(IN.position, N, viewDir, dPdx, dPdy)), voidShader);
         }
+
+        #endif
 
         if (isUnderwater) {
             sampleUnderwater(outputColor.rgb, waterType, waterDepth, lightDotNormals);

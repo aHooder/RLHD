@@ -1559,6 +1559,27 @@ public interface HdPluginConfig extends Config
 		return false;
 	}
 
+	String KEY_COMPILE_VOID_SHADER = "devCompileVoidShader";
+	@ConfigItem(
+		keyName = KEY_COMPILE_VOID_SHADER,
+		name = "dev: compile void shader",
+		description = "Include the void shader in scene programs. Disabling this strips it out at compile time.",
+		section = experimentalSettings
+	)
+	default boolean compileVoidShader() {
+		return true;
+	}
+
+	@ConfigItem(
+		keyName = "devEnableVoidShader",
+		name = "dev: enable void shader",
+		description = "Override the void shader uniform. Default follows the environment; On and Off force the runtime branch.",
+		section = experimentalSettings
+	)
+	default DefaultBoolean enableVoidShader() {
+		return DefaultBoolean.DEFAULT;
+	}
+
 	String KEY_CENTROID_QUALIFIER = "centroidQualifier";
 	@ConfigItem(
 		keyName = KEY_CENTROID_QUALIFIER,
