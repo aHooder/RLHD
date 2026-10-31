@@ -1559,6 +1559,17 @@ public interface HdPluginConfig extends Config
 		return false;
 	}
 
+	String KEY_UNNAMED_UNIFORM_BLOCKS = "unnamedUniformBlocks";
+	@ConfigItem(
+		keyName = KEY_UNNAMED_UNIFORM_BLOCKS,
+		name = "dev: Unnamed uniform blocks",
+		description = "Removes uniform block instance names and prefixes their fields, for shader compilation comparisons.",
+		section = technicalSettings
+	)
+	default boolean unnamedUniformBlocks() {
+		return false;
+	}
+
 	String KEY_CENTROID_QUALIFIER = "centroidQualifier";
 	@ConfigItem(
 		keyName = KEY_CENTROID_QUALIFIER,

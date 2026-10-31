@@ -34,6 +34,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.Stack;
 import java.util.function.Supplier;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
 import rs117.hd.opengl.uniforms.UniformBuffer;
@@ -58,6 +59,7 @@ public class ShaderIncludes {
 	private final List<IncludeProcessor> includeProcessors = new ArrayList<>();
 	private final List<ResourcePath> includePaths = new ArrayList<>();
 	private final Map<String, Supplier<String>> includeMap = new HashMap<>();
+	private boolean unnamedUniformBlocks;
 
 	public final Set<UniformBuffer<?>> uniformBuffers = new HashSet<>();
 
@@ -71,7 +73,58 @@ public class ShaderIncludes {
 		clone.includePaths.addAll(includePaths);
 		clone.includeMap.putAll(includeMap);
 		clone.uniformBuffers.addAll(uniformBuffers);
+		clone.unnamedUniformBlocks = unnamedUniformBlocks;
 		return clone;
+	}
+
+	public ShaderIncludes unnamedUniformBlocks(boolean enabled) {
+		unnamedUniformBlocks = enabled;
+		return this;
+	}
+
+	private static String flattenUniformBlocks(String source) throws ShaderException {
+		// Blank comments without changing line numbers, including comments between access tokens.
+		source = Pattern.compile("//[^\\r\\n]*|/\\*[\\s\\S]*?\\*/").matcher(source)
+			.replaceAll(match -> match.group().replaceAll("[^\\r\\n]", " "));
+		var blocks = Pattern.compile("\\buniform\\s+\\w+\\s*\\{([^}]*)}\\s*(\\w+)([^;]*);").matcher(source);
+		var members = new HashMap<String, String>();
+		var rewritten = new StringBuilder();
+		// Supports one member per declaration, including arrays and externally declared struct types.
+		var declaration = Pattern.compile("\\s*\\w+\\s+(\\w+)\\s*(?:\\[[^]{};]*]\\s*)*;");
+		while (blocks.find()) {
+			String instance = blocks.group(2);
+			if (!blocks.group(3).isBlank())
+				throw new ShaderException("Cannot flatten uniform block instance array: " + instance);
+			String body = blocks.group(1);
+			var fields = declaration.matcher(body);
+			var renamed = new StringBuilder();
+			int end = 0;
+			while (fields.find()) {
+				if (fields.start() != end)
+					throw new ShaderException("Unsupported uniform block declaration in " + instance);
+				String field = fields.group(1);
+				String name = instance + "_" + field;
+				members.put(instance + "." + field, name);
+				renamed.append(body, end, fields.start(1)).append(name);
+				renamed.append(body, fields.end(1), fields.end());
+				end = fields.end();
+			}
+			if (!body.substring(end).isBlank())
+				throw new ShaderException("Unsupported uniform block declaration in " + instance);
+			renamed.append(body.substring(end));
+			String replacement = source.substring(blocks.start(), blocks.start(1)) + renamed +
+				source.substring(blocks.end(1), blocks.start(2)) +
+				source.substring(blocks.end(2), blocks.end());
+			blocks.appendReplacement(rewritten, Matcher.quoteReplacement(replacement));
+		}
+		blocks.appendTail(rewritten);
+		// Also rewrites accesses in generated macros/getters. Struct member accesses after an array remain intact.
+		var accesses = Pattern.compile("\\b(\\w+)\\s*\\.\\s*(\\w+)\\b").matcher(rewritten);
+		return accesses.replaceAll(match -> {
+			String name = members.get(match.group(1) + "." + match.group(2));
+			return Matcher.quoteReplacement(name == null ? match.group() :
+				name + match.group().replaceAll("[^\\r\\n]", ""));
+		});
 	}
 
 	private static int nextUnescapedMatch(String s, int offset, char targetChar) {
@@ -264,6 +317,9 @@ public class ShaderIncludes {
 			var resourcePath = includePath.resolve(path);
 			if (resourcePath.exists()) {
 				source = parse(resourcePath.loadString());
+				// Only transform the fully expanded root, so generated includes and all usages are present.
+				if (includeStack.size() == 1 && includeType == Type.GLSL && unnamedUniformBlocks)
+					source = flattenUniformBlocks(source);
 				if (SHADER_DUMP_PATH != null)
 					SHADER_DUMP_PATH.resolve(resourcePath.path).mkdirs().writeString(source);
 				break;

@@ -969,6 +969,7 @@ public class HdPlugin extends Plugin {
 
 	public ShaderIncludes getShaderIncludes() {
 		var includes = new ShaderIncludes()
+			.unnamedUniformBlocks(config.unnamedUniformBlocks())
 			.addIncludePath(SHADER_PATH)
 			.addInclude("VERSION_HEADER", OSType.getOSType() == OSType.Linux ? LINUX_VERSION_HEADER : WINDOWS_VERSION_HEADER)
 			.define("UI_SCALING_MODE", config.uiScalingMode())
@@ -1982,6 +1983,7 @@ public class HdPlugin extends Plugin {
 								break;
 							case KEY_COLOR_BLINDNESS:
 							case KEY_MACOS_INTEL_WORKAROUND:
+							case KEY_UNNAMED_UNIFORM_BLOCKS:
 							case KEY_LIGHTS:
 							case KEY_TILED_LIGHTING:
 							case KEY_IMAGE_LOAD_STORE:
