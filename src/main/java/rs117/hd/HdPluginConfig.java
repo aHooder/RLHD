@@ -1559,6 +1559,17 @@ public interface HdPluginConfig extends Config
 		return false;
 	}
 
+	String KEY_SHADOW_UBER_SHADER = "shadowUberShader";
+	@ConfigItem(
+		keyName = KEY_SHADOW_UBER_SHADER,
+		name = "dev: Shadow uber shader",
+		description = "Shares one shader between fast and detailed model shadows in the zone renderer.",
+		section = technicalSettings
+	)
+	default boolean shadowUberShader() {
+		return true;
+	}
+
 	String KEY_UNNAMED_UNIFORM_BLOCKS = "unnamedUniformBlocks";
 	@ConfigItem(
 		keyName = KEY_UNNAMED_UNIFORM_BLOCKS,
@@ -1567,7 +1578,7 @@ public interface HdPluginConfig extends Config
 		section = technicalSettings
 	)
 	default boolean unnamedUniformBlocks() {
-		return false;
+		return true;
 	}
 
 	String KEY_CENTROID_QUALIFIER = "centroidQualifier";

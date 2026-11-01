@@ -35,6 +35,12 @@
 
 layout (location = 0) in vec3 vPosition;
 
+#if SHADOW_UBER_SHADER
+    uniform bool detailedShadows;
+#else
+    #define detailedShadows true
+#endif
+
 #if ZONE_RENDERER
     layout (location = 1) in vec4 vUv;
     layout (location = 2) in vec4 vNormal;
@@ -79,7 +85,7 @@ layout (location = 0) in vec3 vPosition;
 
             Material material = getMaterial(materialData >> MATERIAL_INDEX_SHIFT & MATERIAL_INDEX_MASK);
             #if SHADOW_MODE == SHADOW_MODE_DETAILED
-                if (!isShadowDisabled) {
+                if (!isShadowDisabled && detailedShadows) {
                     fUvw = vec4(vUv.xy, material.colorMap, material.shadowAlphaMap);
                     // Scroll UVs
                     fUvw.xy += material.scrollDuration * uboGlobal.elapsedTime;

@@ -156,6 +156,9 @@ public class ZoneRenderer implements Renderer {
 	private ShadowShaderProgram.Detailed detailedShadowProgram;
 
 	@Inject
+	private ShadowShaderProgram.Uber uberShadowProgram;
+
+	@Inject
 	private TerrainShadowShaderProgram terrainShadowProgram;
 
 	@Inject
@@ -337,8 +340,12 @@ public class ZoneRenderer implements Renderer {
 	public void initializeShaders(ShaderIncludes includes) throws ShaderException, IOException {
 		sceneProgram.compile(includes);
 		waterProgram.compile(includes);
-		fastShadowProgram.compile(includes);
-		detailedShadowProgram.compile(includes);
+		if (config.shadowUberShader()) {
+			uberShadowProgram.compile(includes);
+		} else {
+			fastShadowProgram.compile(includes);
+			detailedShadowProgram.compile(includes);
+		}
 		terrainShadowProgram.compile(includes);
 		skyRenderer.initializeShaders(includes);
 	}
@@ -349,8 +356,18 @@ public class ZoneRenderer implements Renderer {
 		waterProgram.destroy();
 		fastShadowProgram.destroy();
 		detailedShadowProgram.destroy();
+		uberShadowProgram.destroy();
 		terrainShadowProgram.destroy();
 		skyRenderer.destroyShaders();
+	}
+
+	private void setShadowProgram(CommandBuffer commands, boolean detailed) {
+		if (uberShadowProgram.isValid()) {
+			commands.SetShader(uberShadowProgram);
+			commands.SetUniform(uberShadowProgram.uniDetailedShadows, detailed);
+		} else {
+			commands.SetShader(detailed ? detailedShadowProgram : fastShadowProgram);
+		}
 	}
 
 	private void initializeBuffers() {
@@ -1113,7 +1130,7 @@ public class ZoneRenderer implements Renderer {
 
 			if (skyRenderer.castsShadows && !ctx.isSquashed && (!sceneManager.isRoot(ctx) || z.inShadowFrustum)) {
 				if (!z.onlyWater || z.modelCount > 0) {
-					directionalCmd.SetShader(fastShadowProgram);
+					setShadowProgram(directionalCmd, false);
 					z.renderOpaque(directionalCmd, ctx, shouldDrawRoofShadows);
 				}
 
@@ -1168,7 +1185,7 @@ public class ZoneRenderer implements Renderer {
 					z.alphaSort(zx - offset, zz - offset, sceneCamera);
 
 				if (skyRenderer.castsShadows && !ctx.isSquashed && (!sceneManager.isRoot(ctx) || z.inShadowFrustum)) {
-					directionalCmd.SetShader(plugin.configShadowMode == ShadowMode.DETAILED ? detailedShadowProgram : fastShadowProgram);
+					setShadowProgram(directionalCmd, plugin.configShadowMode == ShadowMode.DETAILED);
 					z.renderAlpha(directionalCmd, zx - offset, zz - offset, level, ctx, true, shouldDrawRoofShadows);
 				}
 
@@ -1227,7 +1244,7 @@ public class ZoneRenderer implements Renderer {
 
 			switch (pass) {
 				case DrawCallbacks.PASS_OPAQUE:
-					directionalCmd.SetShader(fastShadowProgram);
+					setShadowProgram(directionalCmd, false);
 					directionalCmd.ExecuteSubCommandBuffer(ctx.vaoDirectionalCmd);
 
 					sceneCmd.ExecuteSubCommandBuffer(ctx.vaoSceneCmd);

@@ -987,6 +987,7 @@ public class HdPlugin extends Plugin {
 			.define("NORMAL_MAPPING", config.normalMapping())
 			.define("PARALLAX_OCCLUSION_MAPPING", config.parallaxOcclusionMapping())
 			.define("SHADOW_MODE", configShadowMode)
+			.define("SHADOW_UBER_SHADER", false)
 			.define("TERRAIN_SHADOWS", configTerrainShadows)
 			.define("TERRAIN_ONLY_PASS", false)
 			.define("SHADOW_TRANSPARENCY", configShadowTransparency)
@@ -1984,6 +1985,7 @@ public class HdPlugin extends Plugin {
 							case KEY_COLOR_BLINDNESS:
 							case KEY_MACOS_INTEL_WORKAROUND:
 							case KEY_UNNAMED_UNIFORM_BLOCKS:
+							case KEY_SHADOW_UBER_SHADER:
 							case KEY_LIGHTS:
 							case KEY_TILED_LIGHTING:
 							case KEY_IMAGE_LOAD_STORE:

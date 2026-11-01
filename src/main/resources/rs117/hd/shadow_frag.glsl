@@ -30,6 +30,12 @@
 #include <utils/constants.glsl>
 #include <utils/color_utils.glsl>
 
+#if SHADOW_UBER_SHADER
+    uniform bool detailedShadows;
+#else
+    #define detailedShadows true
+#endif
+
 #if SHADOW_MODE == SHADOW_MODE_DETAILED
     uniform sampler2DArray textureArray;
     in vec4 fUvw;
@@ -47,7 +53,7 @@ void main() {
     #endif
 
     #if SHADOW_MODE == SHADOW_MODE_DETAILED
-        if (fUvw.z != -1) {
+        if (detailedShadows && fUvw.z != -1) {
             vec4 uvw = fUvw;
 
             // Vanilla tree textures rely on UVs being clamped horizontally,

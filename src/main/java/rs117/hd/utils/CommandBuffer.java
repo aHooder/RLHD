@@ -44,6 +44,7 @@ public class CommandBuffer {
 	private static final int GL_FENCE_SYNC = 16;
 
 	private static final int GL_EXECUTE_SUB_COMMAND_BUFFER = 17;
+	private static final int GL_UNIFORM_BOOL = 18;
 
 	private static final long INT_MASK = 0xFFFF_FFFFL;
 	private static final int DRAW_MODE_MASK = 0xF;
@@ -119,6 +120,11 @@ public class CommandBuffer {
 		ensureCapacity(1);
 		int objectIdx = writeObject(program);
 		cmd[writeHead++] = GL_USE_PROGRAM & 0xFF | (long) objectIdx << 8;
+	}
+
+	public void SetUniform(ShaderProgram.UniformBool uniform, boolean value) {
+		ensureCapacity(1);
+		cmd[writeHead++] = GL_UNIFORM_BOOL | (value ? 1L << 8 : 0) | (long) writeObject(uniform) << 9;
 	}
 
 	public void PushTimer(Timer timer) {
@@ -367,6 +373,11 @@ public class CommandBuffer {
 					case GL_USE_PROGRAM: {
 						int objectIdx = (int) (data >> 8);
 						renderState.program.set((ShaderProgram) objects[objectIdx]);
+						break;
+					}
+					case GL_UNIFORM_BOOL: {
+						var uniform = (ShaderProgram.UniformBool) objects[(int) (data >> 9)];
+						uniform.set((data & (1L << 8)) != 0);
 						break;
 					}
 					case GL_TIMER: {

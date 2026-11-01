@@ -43,6 +43,19 @@ public abstract class ShadowShaderProgram extends ShaderProgram {
 		}
 	}
 
+	public static class Uber extends ShadowShaderProgram {
+		public final UniformBool uniDetailedShadows = addUniformBool("detailedShadows");
+
+		public Uber() {
+			mode = ShadowMode.DETAILED;
+		}
+
+		@Override
+		public void compile(ShaderIncludes includes) throws ShaderException, IOException {
+			super.compile(includes.copy().define("SHADOW_UBER_SHADER", true));
+		}
+	}
+
 	public static class Legacy extends ShadowShaderProgram {
 		public Legacy setMode(ShadowMode mode) {
 			this.mode = mode;
