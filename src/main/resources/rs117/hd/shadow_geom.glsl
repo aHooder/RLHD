@@ -34,7 +34,6 @@ layout(triangles) in;
 layout(triangle_strip, max_vertices = 3) out;
 
 #include <utils/constants.glsl>
-#include <utils/misc.glsl>
 #include <utils/uvs.glsl>
 
 flat in vec3 gWorldPos[3];

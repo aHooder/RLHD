@@ -1,7 +1,5 @@
 #pragma once
 
-#include <utils/misc.glsl>
-
 #include MATERIAL_COUNT
 
 struct Material {

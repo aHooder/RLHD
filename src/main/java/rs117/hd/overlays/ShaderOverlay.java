@@ -31,7 +31,6 @@ import java.awt.Dimension;
 import java.awt.Graphics2D;
 import java.awt.Point;
 import java.awt.Rectangle;
-import java.io.IOException;
 import java.util.function.Consumer;
 import javax.inject.Inject;
 import lombok.Getter;
@@ -47,7 +46,6 @@ import net.runelite.client.ui.overlay.OverlayLayer;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.ui.overlay.OverlayPosition;
 import rs117.hd.HdPlugin;
-import rs117.hd.opengl.shader.ShaderException;
 import rs117.hd.opengl.shader.ShaderProgram;
 import rs117.hd.opengl.shader.ShaderTemplate;
 import rs117.hd.utils.ShaderRecompile;
@@ -96,6 +94,7 @@ public class ShaderOverlay<T extends ShaderOverlay.Shader> extends Overlay {
 	private boolean snappable = true;
 
 	private boolean initialized;
+	private boolean shaderCompilationFailed;
 	private final Dimension initialSize = new Dimension(256, 256);
 	private long becameHiddenAt;
 	private boolean isHidden = true;
@@ -123,12 +122,7 @@ public class ShaderOverlay<T extends ShaderOverlay.Shader> extends Overlay {
 	}
 
 	public void initialize() {
-		try {
-			shader.compile(plugin.getShaderIncludes());
-		} catch (Exception ex) {
-			log.error("Failed to compile shader:", ex);
-			return;
-		}
+		shaderCompilationFailed = false;
 		overlayManager.add(this);
 		eventBus.register(this);
 		initialized = true;
@@ -360,12 +354,14 @@ public class ShaderOverlay<T extends ShaderOverlay.Shader> extends Overlay {
 	}
 
 	@Subscribe
-	public void onShaderRecompile(ShaderRecompile event) throws ShaderException, IOException {
-		shader.compile(event.includes);
+	public void onShaderRecompile(ShaderRecompile event) {
+		// Hidden overlays need no program until they become visible again.
+		shader.destroy();
+		shaderCompilationFailed = false;
 	}
 
 	public boolean isHidden() {
-		return !initialized || !shader.isValid() || !isLoggedIn();
+		return !initialized || shaderCompilationFailed || !isLoggedIn();
 	}
 
 	public boolean isManageable() {
@@ -398,6 +394,18 @@ public class ShaderOverlay<T extends ShaderOverlay.Shader> extends Overlay {
 	public void render() {
 		if (isHidden())
 			return;
+
+		if (!shader.isValid()) {
+			try {
+				// Compile on the GL thread, only after the subclass's visibility checks pass.
+				glBindVertexArray(plugin.vaoTri);
+				shader.compile(plugin.getShaderIncludes());
+			} catch (Exception ex) {
+				shaderCompilationFailed = true;
+				log.error("Failed to compile overlay shader for {}:", getClass().getSimpleName(), ex);
+				return;
+			}
+		}
 
 		shader.use();
 		updateTransform();

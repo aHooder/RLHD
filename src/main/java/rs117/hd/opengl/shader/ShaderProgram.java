@@ -37,6 +37,9 @@ public class ShaderProgram implements Destructible {
 	}
 
 	public void compile(ShaderIncludes includes) throws ShaderException, IOException {
+		String name = getClass().getName();
+		log.info("Shader program {}: compiling", name);
+		long start = System.nanoTime();
 		int newProgram;
 		try {
 			newProgram = shaderTemplate.compile(includes);
@@ -44,6 +47,8 @@ public class ShaderProgram implements Destructible {
 			viable = false;
 			throw ex;
 		}
+		log.info("Shader program {}: compile/link total {} ms; setting up", name, (System.nanoTime() - start) / 1e6);
+		start = System.nanoTime();
 
 		if (isValid())
 			destroy();
@@ -65,14 +70,22 @@ public class ShaderProgram implements Destructible {
 
 		use();
 		initialize();
+		log.info("Shader program {}: setup {} ms", name, (System.nanoTime() - start) / 1e6);
 
 		// Shader validation can be horribly slow on macOS with AMD GPUs
 		if (!APPLE || log.isDebugEnabled()) {
+			log.info("Shader program {}: validating", name);
+			start = System.nanoTime();
 			glValidateProgram(program);
-			if (glGetProgrami(program, GL_VALIDATE_STATUS) == GL_FALSE) {
+			int status = glGetProgrami(program, GL_VALIDATE_STATUS);
+			log.info("Shader program {}: validation {} ms (success: {})",
+				name, (System.nanoTime() - start) / 1e6, status == GL_TRUE);
+			if (status == GL_FALSE) {
 				String err = glGetProgramInfoLog(program);
 				log.error("Failed to validate shader program: {}", getClass().getSimpleName(), new ShaderException(err));
 			}
+		} else {
+			log.info("Shader program {}: validation skipped", name);
 		}
 	}
 

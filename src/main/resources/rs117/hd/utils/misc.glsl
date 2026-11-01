@@ -30,6 +30,11 @@
 #include <utils/color_utils.glsl>
 #include <utils/hash.glsl>
 
+#define RED linearToSrgb(uboGlobal.colorPicker.r)
+#define GREEN linearToSrgb(uboGlobal.colorPicker.g)
+#define BLUE linearToSrgb(uboGlobal.colorPicker.b)
+#define OPACITY uboGlobal.colorPicker.a
+
 float saturate(float value) {
     return clamp(value, 0.0, 1.0);
 }
@@ -53,56 +58,12 @@ vec3 snap(vec3 position, float gridSpacing) {
     return position;
 }
 
-vec2 snap(vec2 position, float gridSpacing) {
-    return snap(vec3(position.x, 0.0, position.y), gridSpacing).xz;
-}
-
-float smooth_step(float edge0, float edge1, float x) {
-    float p = clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0);
-    float v = p * p * (3.0 - 2.0 * p); // smoothstep formula
-    return v;
-}
-
 vec3 safe_normalize(vec3 v) {
     vec3 r = normalize(v);
     r.x = isnan(r.x) ? 0.0 : r.x;
     r.y = isnan(r.y) ? 0.0 : r.y;
     r.z = isnan(r.z) ? 0.0 : r.z;
     return r;
-}
-
-float unpackHalfFloat(uint h) {
-    uint sign = (h >> 15u) & 0x1u;
-    uint exponent = (h >> 10u) & 0x1Fu;
-    uint mantissa = h & 0x3FFu;
-
-    uint f32sign = sign << 31u;
-    uint f32;
-
-    if (exponent == 0u) {
-        if (mantissa == 0u) {
-            // Signed zero
-            f32 = f32sign;
-        } else {
-            // Subnormal half -> normalize into float32
-            exponent = 127u - 15u + 1u;
-            while ((mantissa & 0x400u) == 0u) {
-                mantissa <<= 1u;
-                exponent -= 1u;
-            }
-            mantissa &= 0x3FFu; // clear the leading 1 we just normalized out
-            f32 = f32sign | (exponent << 23u) | (mantissa << 13u);
-        }
-    } else if (exponent == 0x1Fu) {
-        // Inf / NaN
-        f32 = f32sign | 0x7F800000u | (mantissa << 13u);
-    } else {
-        // Normalized
-        uint newExponent = exponent - 15u + 127u;
-        f32 = f32sign | (newExponent << 23u) | (mantissa << 13u);
-    }
-
-    return uintBitsToFloat(f32);
 }
 
 // translates a value from a custom range into 0-1

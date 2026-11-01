@@ -33,8 +33,6 @@ layout(triangle_strip, max_vertices = 3) out;
 #include <utils/constants.glsl>
 #define USE_VANILLA_UV_PROJECTION
 #include <utils/uvs.glsl>
-#include <utils/color_utils.glsl>
-#include <utils/misc.glsl>
 
 in vec3 gPosition[3];
 in vec3 gUv[3];
@@ -77,13 +75,6 @@ void main() {
 
     computeUvs(materialData, -1, vec3[](gPosition[0], gPosition[1], gPosition[2]), vUv);
 
-    // Calculate tangent-space vectors
-    mat2 triToUv = mat2(
-        vUv[1].xy - vUv[0].xy,
-        vUv[2].xy - vUv[0].xy
-    );
-    if (determinant(triToUv) == 0)
-        triToUv = mat2(1);
     mat2x3 triToWorld = mat2x3(
         gPosition[1] - gPosition[0],
         gPosition[2] - gPosition[0]

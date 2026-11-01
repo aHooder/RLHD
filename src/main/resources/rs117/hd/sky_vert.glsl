@@ -1,8 +1,5 @@
 #version 330
 
-#include <uniforms/global.glsl>
-#include <uniforms/sky.glsl>
-
 out vec2 fScreenPos;
 
 void main() {

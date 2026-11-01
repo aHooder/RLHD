@@ -27,7 +27,9 @@
 
 #include <uniforms/global.glsl>
 #include <uniforms/world_views.glsl>
-#include <uniforms/materials.glsl>
+#if !TERRAIN_ONLY_PASS
+    #include <uniforms/materials.glsl>
+#endif
 
 #include <utils/constants.glsl>
 

@@ -1,7 +1,5 @@
 #version 330
 
-#include <uniforms/global.glsl>
-
 layout (location = 0) in vec2 vPos;
 layout (location = 1) in vec2 vUv;
 
