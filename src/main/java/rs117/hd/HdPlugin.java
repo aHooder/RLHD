@@ -112,7 +112,8 @@ import rs117.hd.scene.GroundMaterialManager;
 import rs117.hd.scene.LightManager;
 import rs117.hd.scene.MaterialManager;
 import rs117.hd.scene.ModelOverrideManager;
-import rs117.hd.scene.PlayerModelParts;
+import rs117.hd.scene.PlayerModelPartsDiagnostic;
+import rs117.hd.scene.PlayerEquipmentOverrides;
 import rs117.hd.scene.ProceduralGenerator;
 import rs117.hd.scene.SceneContext;
 import rs117.hd.scene.SkyManager;
@@ -297,7 +298,10 @@ public class HdPlugin extends Plugin {
 	private ModelOverrideManager modelOverrideManager;
 
 	@Inject
-	public PlayerModelParts playerModelParts;
+	public PlayerModelPartsDiagnostic playerModelPartsDiagnostic;
+
+	@Inject
+	public PlayerEquipmentOverrides playerEquipmentOverrides;
 
 	@Inject
 	private FishingSpotReplacer fishingSpotReplacer;
@@ -793,7 +797,8 @@ public class HdPlugin extends Plugin {
 
 			if (renderer != null)
 				renderer.waitUntilIdle();
-			playerModelParts.update(false);
+			playerModelPartsDiagnostic.update(false);
+			playerEquipmentOverrides.clear();
 
 			var scene = client.getScene();
 			if (scene != null)
@@ -2176,7 +2181,7 @@ public class HdPlugin extends Plugin {
 		if (handleShutdownRequest())
 			return;
 
-		playerModelParts.update(config.playerModelParts());
+		playerModelPartsDiagnostic.update(config.playerModelParts());
 
 		SKIP_GL_ERROR_CHECKS = !log.isDebugEnabled() || developerTools.isFrameTimingsOverlayEnabled();
 

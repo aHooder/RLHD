@@ -587,9 +587,6 @@ public class Zone implements Destructible {
 
 		Arrays.fill(doubleSidedBitSet, 0, bucketCapacity, 0);
 
-		final Material baseMaterial = modelOverride.material;
-		final ModelOverride[] faceOverrides = modelOverride.faceOverrides;
-		final Material textureMaterial = modelOverride.textureMaterial;
 
 		int radius = 0;
 		char bufferIdx = 0;
@@ -602,34 +599,28 @@ public class Zone implements Destructible {
 			if (transparency == 255)
 				continue;
 
-			Material material = baseMaterial;
-			ModelOverride faceOverride = modelOverride;
-			if (faceOverrides != null && f < faceOverrides.length) {
-				faceOverride = faceOverrides[f];
-				material = faceOverride.material;
-			}
+			ModelOverride faceOverride = modelOverride.getFaceOverride(f);
+			Material material = faceOverride.material;
 			int textureId = faceTextures != null ? faceTextures[f] : -1;
-			if (faceOverride == modelOverride) {
-				if (textureId != -1) {
-					if (modelOverride.textureMaterial != Material.NONE) {
-						material = textureMaterial;
-					} else {
-						material = materialManager.fromVanillaTexture(textureId);
-						if (modelOverride.materialOverrides != null) {
-							var override = modelOverride.materialOverrides.get(material);
-							if (override != null) {
-								faceOverride = override;
-								material = override.textureMaterial;
-							}
+			if (textureId != -1) {
+				if (faceOverride.textureMaterial != Material.NONE) {
+					material = faceOverride.textureMaterial;
+				} else {
+					material = materialManager.fromVanillaTexture(textureId);
+					if (faceOverride.materialOverrides != null) {
+						var override = faceOverride.materialOverrides.get(material);
+						if (override != null) {
+							faceOverride = override;
+							material = override.textureMaterial;
 						}
 					}
-				} else if (modelOverride.colorOverrides != null) {
-					final int ahsl = (0xFF - transparency) << 16 | (unlitColor != null ? unlitColor[f] & 0xFFFF : color1[f]);
-					final var override = modelOverride.testColorOverrides(ahsl);
-					if (override != null) {
-						faceOverride = override;
-						material = override.material;
-					}
+				}
+			} else if (faceOverride.colorOverrides != null) {
+				final int ahsl = (0xFF - transparency) << 16 | (unlitColor != null ? unlitColor[f] & 0xFFFF : color1[f]);
+				final var override = faceOverride.testColorOverrides(ahsl);
+				if (override != null) {
+					faceOverride = override;
+					material = override.material;
 				}
 			}
 

@@ -34,6 +34,11 @@
             "$ref": "aabb.schema.json"
           }
         },
+        "equipmentIds": {
+          "type": "array",
+          "description": "Item IDs or item gameval names worn by players, including animation replacements. UV arrays and face indices are local to the equipment piece, including all of its constituent models in assembly order. Nested face, material and color overrides are supported; whole-model transforms/sorting are not.",
+          "items": { "type": ["string", "integer"] }
+        },
         "npcIds": {
           "type": "array",
           "description": "A set of NPC gameval names which the override should apply to.",
@@ -77,7 +82,7 @@
         "model": {
           "type": "string",
           "deprecated": true,
-          "description": "Development-only field, specifying the filename of a model to load UV mapping & face overrides from. Should not be committed."
+          "description": "Development-only field, specifying the filename of a model to load UV mapping, normals and face overrides from. Should not be committed."
         },
         "uvs": {
           "type": "array",
@@ -87,9 +92,15 @@
             "type": "number"
           }
         },
+        "normals": {
+          "type": "array",
+          "description": "Model-local corner normals: [nx1, ny1, nz1, nx2, ny2, nz2, ...]. Requires 9 components per face, matching the model or equipment part exactly. Zero vectors retain original face normals. Disable flatNormals to see custom smooth normals. These are fixed normals, not skinned with skeletal animations.",
+          "minItems": 9,
+          "items": { "type": "number" }
+        },
         "materials": {
           "type": "array",
-          "description": "Overrides for specific faces listed in the `faces` field. Unspecified faces fall back to the parent override.",
+          "description": "Overrides for specific faces listed in the `faces` field. Each selected override uses the normal textureMaterial, materialOverrides and colorOverrides resolution. Unspecified faces fall back to the parent override.",
           "items": {
             "$ref": "#/$defs/modelOverride",
             "required": [

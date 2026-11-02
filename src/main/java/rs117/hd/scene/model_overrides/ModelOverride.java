@@ -7,6 +7,7 @@ import com.google.gson.annotations.SerializedName;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.Set;
 import javax.annotation.Nullable;
@@ -57,6 +58,8 @@ public class ModelOverride
 	public Set<Integer> projectileIds = EMPTY;
 	@JsonAdapter(GamevalManager.SpotanimAdapter.class)
 	public Set<Integer> graphicsObjectIds = EMPTY;
+	@JsonAdapter(GamevalManager.ItemAdapter.class)
+	public Set<Integer> equipmentIds = EMPTY;
 
 	@SerializedName(value = "material", alternate = "baseMaterial")
 	public Material material = Material.NONE;
@@ -97,8 +100,9 @@ public class ModelOverride
 
 	public String model;
 	public float[] uvs;
+	public float[] normals;
 	private ModelOverride[] materials;
-	private JsonArray faces;
+	private JsonElement faces;
 
 	private int setHue = -1;
 	private int shiftHue;
@@ -128,6 +132,9 @@ public class ModelOverride
 	public transient boolean isDummy;
 	public transient boolean isGenerated;
 	public transient ModelOverride[] faceOverrides;
+	// Bound equipment copies use local face indices; parsed definitions describe a complete model.
+	private transient int faceOffset;
+	private transient int partFaceCount = -1;
 	public transient ModelOverride[] areaOverrides;
 	public transient AABB[] areaOverrideBounds;
 	public transient AhslPredicate ahslCondition;
@@ -286,6 +293,22 @@ public class ModelOverride
 
 		if (uvs != null && (uvs.length == 0 || uvs.length % 6 != 0))
 			throw new IllegalArgumentException("uvs must contain six coordinates per triangle");
+		if (normals != null) {
+			if (normals.length == 0 || normals.length % 9 != 0)
+				throw new IllegalArgumentException("normals must contain nine components per triangle");
+			for (int i = 0; i < normals.length; i += 3) {
+				float x = normals[i], y = normals[i + 1], z = normals[i + 2];
+				float length = (float) Math.sqrt((double) x * x + (double) y * y + (double) z * z);
+				if (!Float.isFinite(length))
+					throw new IllegalArgumentException("normals must be finite");
+				// Zero normals mark omitted faces, which retain their original normals.
+				if (length > 0) {
+					normals[i] /= length;
+					normals[i + 1] /= length;
+					normals[i + 2] /= length;
+				}
+			}
+		}
 
 		if (materials != null) {
 			if (faceOverrides == null) {
@@ -294,7 +317,14 @@ public class ModelOverride
 				for (var override : materials) {
 					if (override == null || override.faces == null)
 						throw new IllegalArgumentException("Custom material overrides must specify faces");
-					for (var range : override.faces) {
+					JsonArray faces;
+					if (override.faces.isJsonArray()) {
+						faces = override.faces.getAsJsonArray();
+					} else {
+						faces = new JsonArray();
+						faces.add(override.faces);
+					}
+					for (var range : faces) {
 						if (range == null || !range.isJsonPrimitive())
 							throw new IllegalArgumentException("Invalid custom face range: " + range);
 						String[] ends = range.getAsString().split("-", -1);
@@ -325,12 +355,17 @@ public class ModelOverride
 			}
 		}
 
+		if (equipmentIds != null && !equipmentIds.isEmpty() &&
+			(rotate != 0 || heightOffset != 0 || terrainVertexSnap || disablePrioritySorting))
+			throw new IllegalArgumentException("Equipment overrides do not yet support whole-model transforms/sorting");
+
 		if (!Props.DEVELOPMENT)
 			faces = null;
 	}
 
 	public void clearIds() {
 		areas = null;
+		equipmentIds = null;
 		npcIds = null;
 		objectIds = null;
 		projectileIds = null;
@@ -350,6 +385,7 @@ public class ModelOverride
 			objectIds,
 			projectileIds,
 			graphicsObjectIds,
+			equipmentIds,
 			material,
 			textureMaterial,
 			uvType,
@@ -387,6 +423,7 @@ public class ModelOverride
 			heightOffset,
 			model,
 			uvs,
+			normals,
 			materials,
 			faces,
 			setHue,
@@ -412,6 +449,8 @@ public class ModelOverride
 			isDummy,
 			isGenerated,
 			faceOverrides,
+			faceOffset,
+			partFaceCount,
 			areaOverrides,
 			areaOverrideBounds,
 			ahslCondition,
@@ -431,6 +470,62 @@ public class ModelOverride
 					copy.faceOverrides[face] = copy;
 		}
 		return copy;
+	}
+
+	/** Creates private, offset-aware copies once when a player's equipment layout changes. */
+	public ModelOverride copyForModelPart(int offset, int count) {
+		return copyForModelPart(offset, count, null, null, new IdentityHashMap<>());
+	}
+
+	private ModelOverride copyForModelPart(int offset, int count, float[] parentUvs, float[] parentNormals, Map<ModelOverride, ModelOverride> copies) {
+		ModelOverride bound = copies.get(this);
+		if (bound != null)
+			return bound;
+		bound = copy();
+		copies.put(this, bound);
+		bound.faceOffset = offset;
+		bound.partFaceCount = count;
+		if (uvs != null && uvs.length != count * 6) {
+			log.warn("Ignoring UVs for equipment override '{}': expected {} coordinates, got {}", description, count * 6, uvs.length);
+			bound.uvs = parentUvs;
+		} else if (uvs == null) {
+			bound.uvs = parentUvs;
+		}
+		if (normals != null && normals.length != count * 9) {
+			log.warn("Ignoring normals for equipment override '{}': expected {} components, got {}", description, count * 9, normals.length);
+			bound.normals = parentNormals;
+		} else if (normals == null) {
+			bound.normals = parentNormals;
+		}
+		if (faceOverrides != null) {
+			for (int face = 0; face < faceOverrides.length; face++)
+				bound.faceOverrides[face] = faceOverrides[face].copyForModelPart(offset, count, bound.uvs, bound.normals, copies);
+		}
+		if (colorOverrides != null) {
+			bound.colorOverrides = new ModelOverride[colorOverrides.length];
+			for (int i = 0; i < colorOverrides.length; i++)
+				bound.colorOverrides[i] = colorOverrides[i].copyForModelPart(offset, count, bound.uvs, bound.normals, copies);
+		}
+		if (materialOverrides != null) {
+			bound.materialOverrides = new HashMap<>();
+			for (var entry : materialOverrides.entrySet())
+				bound.materialOverrides.put(entry.getKey(), entry.getValue().copyForModelPart(offset, count, bound.uvs, bound.normals, copies));
+		}
+		return bound;
+	}
+
+	public ModelOverride getFaceOverride(int face) {
+		ModelOverride selected = this;
+		while (selected.faceOverrides != null) {
+			int localFace = face - selected.faceOffset;
+			if (localFace < 0 || localFace >= selected.faceOverrides.length)
+				break;
+			ModelOverride next = selected.faceOverrides[localFace];
+			if (next == selected)
+				break;
+			selected = next;
+		}
+		return selected;
 	}
 
 	private ModelOverride(boolean isDummy) {
@@ -560,11 +655,12 @@ public class ModelOverride
 	public boolean hasCustomUvs(Model model) {
 		if (uvs == null)
 			return false;
-		if (uvs.length != model.getFaceCount() * 6) {
+		int count = partFaceCount < 0 ? model.getFaceCount() : partFaceCount;
+		if (faceOffset + count > model.getFaceCount() || uvs.length != count * 6) {
 			if (Props.DEVELOPMENT) {
 				log.warn(
 					"Mismatch between face count ({}) and UV count ({}) in model override: {}",
-					model.getFaceCount() * 6,
+					count * 6,
 					uvs.length,
 					this
 				);
@@ -576,10 +672,40 @@ public class ModelOverride
 	}
 
 	public void fillCustomUvs(float[] out, int face) {
+		face -= faceOffset;
 		for (int i = 0; i < 3; i++) {
 			out[i * 4] = uvs[face * 6 + i * 2];
 			out[i * 4 + 1] = uvs[face * 6 + i * 2 + 1];
 			out[i * 4 + 2] = 0;
+		}
+	}
+
+	public boolean hasCustomNormals(Model model, int face) {
+		if (normals == null)
+			return false;
+		int count = partFaceCount < 0 ? model.getFaceCount() : partFaceCount;
+		face -= faceOffset;
+		if (face < 0 || face >= count || faceOffset + count > model.getFaceCount() || normals.length != count * 9)
+			return false;
+		for (int i = face * 9; i < face * 9 + 9; i += 3)
+			if (normals[i] == 0 && normals[i + 1] == 0 && normals[i + 2] == 0)
+				return false;
+		return true;
+	}
+
+	public void fillCustomNormals(int[] out, int face) {
+		int offset = (face - faceOffset) * 9;
+		// Zone vertices pack normals using the client's 256-unit normal scale.
+		for (int i = 0; i < 9; i++)
+			out[i] = Math.round(normals[offset + i] * 256);
+	}
+
+	public void fillCustomNormals(float[] out, int face) {
+		int offset = (face - faceOffset) * 9;
+		for (int i = 0; i < 3; i++) {
+			for (int c = 0; c < 3; c++)
+				out[i * 4 + c] = normals[offset + i * 3 + c] * 256;
+			out[i * 4 + 3] = 0;
 		}
 	}
 

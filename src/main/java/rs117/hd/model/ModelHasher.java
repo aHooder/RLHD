@@ -118,6 +118,10 @@ public class ModelHasher {
 
 	private long calculateNormalCacheHash(ModelOverride modelOverride) {
 		long h = faceCount;
+		// Material/color overrides can now select custom corner normals as well as UVs.
+		h = h * 31L + faceColorsOneHash;
+		h = h * 31L + faceTransparenciesHash;
+		h = h * 31L + faceTexturesHash;
 		h = h * 31L + faceIndicesOneHash;
 		h = h * 31L + faceIndicesTwoHash;
 		h = h * 31L + faceIndicesThreeHash;

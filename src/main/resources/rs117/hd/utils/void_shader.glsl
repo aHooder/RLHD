@@ -2,21 +2,24 @@
 
 #include <utils/starfield.glsl>
 
-// The void is projected onto world position, since vanilla UVs flip between faces. UV units per world unit (a tile is 128).
-#define VOID_UV_SCALE (1.0 / 256.0)
-// How far behind the surface each star layer sits, in UV units. Deeper layers shift more as the camera moves.
+// Fixed world-space projection; authored UVs and material texture scale do not affect the void.
+#define VOID_UV_SCALE (1.0 / 256.0 * RED * 10)
+// Depth in procedural units: approximately 77, 205 and 461 world units behind the surface.
 #define VOID_NEAR_DEPTH 0.3
 #define VOID_MID_DEPTH 0.8
 #define VOID_FAR_DEPTH 1.8
-// Fraction of cells holding a star, per layer
-#define VOID_NEAR_DENSITY 0.14
-#define VOID_MID_DENSITY 0.14
-#define VOID_FAR_DENSITY 0.07
-// Star radius as a fraction of its cell, so stars shrink with the surface as the camera zooms out
+// R: density multiplier from 0 to 4, preserving the relative density of each layer.
+#define VOID_NEAR_DENSITY (0.14 * 4.0 * RED)
+#define VOID_MID_DENSITY (0.14 * 4.0 * RED)
+#define VOID_FAR_DENSITY (0.07 * 4.0 * RED)
+// Star radius as a fraction of its cell.
 #define VOID_STAR_SIZE 0.08
-// Star radius limits in pixels. Stars smaller than the minimum are dimmed rather than shrunk.
-#define VOID_STAR_MIN_RADIUS 1.25
-#define VOID_STAR_MAX_RADIUS 2.5
+// G: radius floor up to 5 pixels; B: radius cap up to 10 pixels, never below the floor.
+// Stars smaller than the minimum are dimmed rather than shrunk. Keep the floor nonzero for division.
+#define VOID_STAR_MIN_RADIUS max(0.05, 5.0 * GREEN)
+#define VOID_STAR_MAX_RADIUS max(VOID_STAR_MIN_RADIUS, 10.0 * BLUE)
+// Opacity: size growth exponent from 0 (constant) through 1 (original) to 2 (quadratic).
+#define VOID_STAR_DISTANCE_SCALING (2.0 * OPACITY)
 // Overall star brightness
 #define VOID_STAR_BRIGHTNESS 6.0
 
@@ -63,7 +66,7 @@ vec3 voidStarLayer(vec2 uv, float cellsPerUv, float density, mat2 pixelsPerUv, f
     vec2 grid = uv * cellsPerUv;
     vec2 cell = floor(grid);
     vec4 h = hash42(cell + seed * 1013.0);
-    if (h.x > density)
+    if (h.x >= density)
         return vec3(0);
 
     // Skip cells under 2 pixels across, where stars have already dimmed to nothing
@@ -76,7 +79,9 @@ vec3 voidStarLayer(vec2 uv, float cellsPerUv, float density, mat2 pixelsPerUv, f
     float pixels = length(pixelsPerUv * ((grid - starPos) / cellsPerUv));
     // Like the sky's own star sprites, keep radii within a small pixel range, with the same falloff, and dim stars
     // below that rather than shrinking them, so they neither balloon when close nor blur or flicker when far
-    float trueRadius = VOID_STAR_SIZE * mix(0.6, 1.4, h.w * h.w) / max(cellsPerPixel, 1e-6);
+    // Anchor the growth curve at a cell size of 10 pixels, independently of the exponent.
+    float trueRadius = VOID_STAR_SIZE * 10.0 * mix(0.6, 1.4, h.w * h.w)
+        * pow(0.1 / max(cellsPerPixel, 1e-6), VOID_STAR_DISTANCE_SCALING);
     float radius = clamp(trueRadius, VOID_STAR_MIN_RADIUS, VOID_STAR_MAX_RADIUS);
     float d = pixels / radius;
     float falloff = exp(-d * d * 4.4);

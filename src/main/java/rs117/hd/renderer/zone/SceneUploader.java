@@ -1644,10 +1644,7 @@ public class SceneUploader implements AutoCloseable {
 
 		boolean isVanillaTextured = faceTextures != null;
 
-		final Material baseMaterial = modelOverride.material;
-		final ModelOverride[] faceOverrides = modelOverride.faceOverrides;
-		final Material textureMaterial = modelOverride.textureMaterial;
-		final boolean customUvs = modelOverride.hasCustomUvs(model);
+		final boolean parentCustomUvs = modelOverride.hasCustomUvs(model);
 
 		int len = 0;
 		for (int face = 0; face < faceCount; ++face) {
@@ -1669,37 +1666,31 @@ public class SceneUploader implements AutoCloseable {
 				continue;
 
 			UvType uvType = UvType.GEOMETRY;
-			Material material = baseMaterial;
-			ModelOverride faceOverride = modelOverride;
-			if (faceOverrides != null && face < faceOverrides.length) {
-				faceOverride = faceOverrides[face];
-				material = faceOverride.material;
-			}
+			ModelOverride faceOverride = modelOverride.getFaceOverride(face);
+			Material material = faceOverride.material;
 
 			int textureId = isVanillaTextured ? faceTextures[face] : -1;
 			boolean isTextured = textureId != -1;
-			if (faceOverride == modelOverride) {
-				if (isTextured) {
-					uvType = UvType.VANILLA;
-					if (textureMaterial != Material.NONE) {
-						material = textureMaterial;
-					} else {
-						material = materialManager.fromVanillaTexture(textureId);
-						if (modelOverride.materialOverrides != null) {
-							var override = modelOverride.materialOverrides.get(material);
-							if (override != null) {
-								faceOverride = override;
-								material = faceOverride.textureMaterial;
-							}
+			if (isTextured) {
+				uvType = UvType.VANILLA;
+				if (faceOverride.textureMaterial != Material.NONE) {
+					material = faceOverride.textureMaterial;
+				} else {
+					material = materialManager.fromVanillaTexture(textureId);
+					if (faceOverride.materialOverrides != null) {
+						var override = faceOverride.materialOverrides.get(material);
+						if (override != null) {
+							faceOverride = override;
+							material = faceOverride.textureMaterial;
 						}
 					}
-				} else if (modelOverride.colorOverrides != null) {
-					final int ahsl = (0xFF - transparency) << 16 | color1;
-					final var override = modelOverride.testColorOverrides(ahsl);
-					if (override != null) {
-						faceOverride = override;
-						material = faceOverride.material;
-					}
+				}
+			} else if (faceOverride.colorOverrides != null) {
+				final int ahsl = (0xFF - transparency) << 16 | color1;
+				final var override = faceOverride.testColorOverrides(ahsl);
+				if (override != null) {
+					faceOverride = override;
+					material = faceOverride.material;
 				}
 			}
 
@@ -1836,9 +1827,12 @@ public class SceneUploader implements AutoCloseable {
 			if (uvType == UvType.VANILLA && (textureId == -1 || textureFace == -1))
 				uvType = UvType.GEOMETRY;
 
+			boolean customUvs = faceOverride != modelOverride && faceOverride.hasCustomUvs(model);
+			ModelOverride uvOverride = customUvs ? faceOverride : modelOverride;
+			customUvs |= parentCustomUvs;
 			float[] faceUVs = modelUvs;
 			if (customUvs) {
-				modelOverride.fillCustomUvs(modelUvs, face);
+				uvOverride.fillCustomUvs(modelUvs, face);
 				uvType = UvType.GEOMETRY;
 			} else if (uvType == UvType.VANILLA) {
 				computeFaceUvsInline(faceUVs, model, textureFace, triangleA, triangleB, triangleC, null);
@@ -1885,7 +1879,11 @@ public class SceneUploader implements AutoCloseable {
 				color3 = undoVanillaShading(color3, plugin.configLegacyGreyColors, modelNormals[6], modelNormals[7], modelNormals[8]);
 			}
 
-			if (shouldRotateNormals)
+			ModelOverride normalOverride = faceOverride.hasCustomNormals(model, face) ? faceOverride : modelOverride;
+			boolean customNormals = normalOverride.hasCustomNormals(model, face);
+			if (customNormals)
+				normalOverride.fillCustomNormals(modelNormals, face);
+			if (shouldRotateNormals || customNormals && orientation != 0)
 				rotateNormals(modelNormals, orientSin, orientCos);
 
 			if (faceOverride.modifiesAlpha)
@@ -2060,9 +2058,6 @@ public class SceneUploader implements AutoCloseable {
 		final short[] faceTextures = model.getFaceTextures();
 		final byte[] textureFaces = model.getTextureFaces();
 
-		final Material baseMaterial = modelOverride.material;
-		final ModelOverride[] faceOverrides = modelOverride.faceOverrides;
-		final Material textureMaterial = modelOverride.textureMaterial;
 
 		final boolean isVanillaTextured = faceTextures != null;
 
@@ -2075,6 +2070,7 @@ public class SceneUploader implements AutoCloseable {
 
 		int cachedAhsl = -1;
 		ModelOverride cachedAhslOverride = null;
+		ModelOverride cachedFaceOverride = null;
 
 		this.faceOverrides.ensureCapacity(triangleCount);
 		this.faceMaterials.ensureCapacity(triangleCount);
@@ -2090,46 +2086,46 @@ public class SceneUploader implements AutoCloseable {
 				continue;
 
 			UvType uvType = UvType.GEOMETRY;
-			Material material = baseMaterial;
-			ModelOverride faceOverride = modelOverride;
-			if (faceOverrides != null && f < faceOverrides.length) {
-				faceOverride = faceOverrides[f];
-				material = faceOverride.material;
+			ModelOverride faceOverride = modelOverride.getFaceOverride(f);
+			Material material = faceOverride.material;
+
+			// The same texture/color can resolve differently in different face overrides.
+			if (cachedFaceOverride != faceOverride) {
+				cachedFaceOverride = faceOverride;
+				cachedVanillaTexturedId = cachedAhsl = -1;
 			}
 
 			final int textureId = isVanillaTextured ? faceTextures[f] : -1;
-			if (faceOverride == modelOverride) {
-				if (textureId != -1) {
-					uvType = UvType.VANILLA;
-					if (textureMaterial != Material.NONE) {
-						material = textureMaterial;
-					} else {
-						material = materialManager.fromVanillaTexture(textureId);
-						if (modelOverride.materialOverrides != null) {
-							final var override = cachedVanillaTexturedId == textureId ?
-								cachedVanillaTextureOverride :
-								modelOverride.materialOverrides.get(material);
-							cachedVanillaTexturedId = textureId;
-							cachedVanillaTextureOverride = override;
+			if (textureId != -1) {
+				uvType = UvType.VANILLA;
+				if (faceOverride.textureMaterial != Material.NONE) {
+					material = faceOverride.textureMaterial;
+				} else {
+					material = materialManager.fromVanillaTexture(textureId);
+					if (faceOverride.materialOverrides != null) {
+						final var override = cachedVanillaTexturedId == textureId ?
+							cachedVanillaTextureOverride :
+							faceOverride.materialOverrides.get(material);
+						cachedVanillaTexturedId = textureId;
+						cachedVanillaTextureOverride = override;
 
-							if (override != null) {
-								faceOverride = override;
-								material = faceOverride.textureMaterial;
-							}
+						if (override != null) {
+							faceOverride = override;
+							material = faceOverride.textureMaterial;
 						}
 					}
-				} else if (modelOverride.colorOverrides != null) {
-					final int ahsl = (0xFF - transparency) << 16 | model.getFaceColors1()[f];
-					final var override = cachedAhsl == ahsl ?
-						cachedAhslOverride :
-						modelOverride.testColorOverrides(ahsl);
-					cachedAhsl = ahsl;
-					cachedAhslOverride = override;
+				}
+			} else if (faceOverride.colorOverrides != null) {
+				final int ahsl = (0xFF - transparency) << 16 | model.getFaceColors1()[f];
+				final var override = cachedAhsl == ahsl ?
+					cachedAhslOverride :
+					faceOverride.testColorOverrides(ahsl);
+				cachedAhsl = ahsl;
+				cachedAhslOverride = override;
 
-					if (override != null) {
-						faceOverride = override;
-						material = faceOverride.material;
-					}
+				if (override != null) {
+					faceOverride = override;
+					material = faceOverride.material;
 				}
 			}
 
@@ -2251,7 +2247,7 @@ public class SceneUploader implements AutoCloseable {
 		final byte[] textureFaces = model.getTextureFaces();
 		final byte[] bias = model.getFaceBias();
 		final int[] faceNormals = isShadow ? EMPTY_NORMALS : modelNormals;
-		final boolean customUvs = modelOverride.hasCustomUvs(model);
+		final boolean parentCustomUvs = modelOverride.hasCustomUvs(model);
 
 		final int faceCount = model.getFaceCount();
 		final boolean hasBias = bias != null;
@@ -2315,9 +2311,12 @@ public class SceneUploader implements AutoCloseable {
 			final int triangleC = indices3[face];
 			final int vertexOffsetC = triangleC * 3;
 
+			boolean customUvs = faceOverride != modelOverride && faceOverride.hasCustomUvs(model);
+			ModelOverride uvOverride = customUvs ? faceOverride : modelOverride;
+			customUvs |= parentCustomUvs;
 			float[] faceUVs = modelUvs;
 			if (customUvs) {
-				modelOverride.fillCustomUvs(faceUVs, face);
+				uvOverride.fillCustomUvs(faceUVs, face);
 				uvType = UvType.GEOMETRY;
 			} else if (uvType == UvType.VANILLA) {
 				computeFaceUvsInline(faceUVs, model, textureFace, triangleA, triangleB, triangleC, modelProjected);
@@ -2365,7 +2364,11 @@ public class SceneUploader implements AutoCloseable {
 					color3 = undoVanillaShading(color3, plugin.configLegacyGreyColors, faceNormals[6], faceNormals[7], faceNormals[8]);
 				}
 
-				if (shouldRotateNormals && !shouldCalculateFaceNormal)
+				ModelOverride normalOverride = faceOverride.hasCustomNormals(model, face) ? faceOverride : modelOverride;
+				boolean customNormals = normalOverride.hasCustomNormals(model, face);
+				if (customNormals)
+					normalOverride.fillCustomNormals(faceNormals, face);
+				if (customNormals ? orientation != 0 : shouldRotateNormals && !shouldCalculateFaceNormal)
 					rotateNormals(faceNormals, orientSin, orientCos);
 			}
 

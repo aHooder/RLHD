@@ -6,29 +6,22 @@ import java.util.HashMap;
 import java.util.Map;
 import javax.inject.Inject;
 import javax.inject.Singleton;
-import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.ActorSpotAnim;
 import net.runelite.api.Player;
 import net.runelite.api.PlayerComposition;
-import net.runelite.api.Renderable;
-import net.runelite.cache.definitions.loaders.ItemLoader;
-import net.runelite.cache.definitions.loaders.KitLoader;
-import net.runelite.cache.definitions.loaders.SequenceLoader;
-import net.runelite.cache.definitions.loaders.SpotAnimLoader;
-import rs117.hd.HdPlugin;
-import rs117.hd.scene.materials.Material;
-import rs117.hd.scene.model_overrides.ModelOverride;
-import rs117.hd.scene.model_overrides.UvType;
+import rs117.hd.utils.collections.Int2IntHashMap;
 
 /** Experimental face provenance inferred from the historical player assembly order. */
-@Slf4j
 @Singleton
 public class PlayerModelParts {
+	// Animation hand getters expose raw empty equipment (0) minus the historical item offset.
+	private static final int EMPTY_HAND = -512;
+
 	@Inject
 	private Client client;
-	@Inject
-	private HdPlugin plugin;
+
+	private final Int2IntHashMap equipmentFaceCounts = new Int2IntHashMap();
 
 	private final Map<Integer, Integer> faceCounts = new HashMap<>();
 	private int[] equipment;
@@ -38,47 +31,56 @@ public class PlayerModelParts {
 	private ActorSpotAnim[] spotanims;
 	private int[] spotanimIds;
 
-	// Only this immutable result is read by render workers. Cache loading stays on the client thread.
-	private volatile Result result;
+	private final Result result = new Result();
+	private Part[] ranges = new Part[64];
 
-	private static class Result {
-		final Player player;
-		final ModelOverride override;
-		final ActorSpotAnim[] spotanims;
-		final ModelOverride[] spotanimOverrides;
-
-		Result(Player player, ModelOverride override, ActorSpotAnim[] spotanims, ModelOverride[] spotanimOverrides) {
-			this.player = player;
-			this.override = override;
-			this.spotanims = spotanims;
-			this.spotanimOverrides = spotanimOverrides;
-		}
+	/** Reused diagnostic ranges, valid until the next resolve. No client geometry is retained. */
+	public static class Part {
+		public int slot; // -1 for spotanims
+		public int index; // Source-model index within the equipment slot
+		public int modelId; // -1 for spotanims, whose model ID is not exposed by the API
+		public ActorSpotAnim spotanim;
+		public int spotanimId;
+		public int startFace;
+		public int faceCount;
 	}
 
-	public ModelOverride getOverride(Renderable renderable, ModelOverride fallback) {
-		Result current = result;
-		if (current != null) {
-			if (renderable == current.player)
-				return current.override;
-			for (int i = 0; i < current.spotanims.length; i++)
-				if (renderable == current.spotanims[i])
-					return current.spotanimOverrides[i];
-		}
-		return fallback;
+	public static class Result {
+		public Player player;
+		public int animation;
+		public int gender;
+		public ActorSpotAnim[] spotanims;
+		/** Null until every required definition/model is available. Treat this array as read-only. */
+		public Part[] parts;
+		public int partCount;
+		public boolean changed;
+		public int baseFaceCount;
+		public int faceCount;
 	}
 
-	public void update(boolean enabled) {
+	public void clear() {
+		result.parts = null;
+		result.player = null;
+		result.spotanims = null;
+		for (Part part : ranges)
+			if (part != null)
+				part.spotanim = null;
+		player = null;
+		equipment = null;
+		spotanims = null;
+		spotanimIds = null;
+		faceCounts.clear();
+		equipmentFaceCounts.clear();
+	}
+
+	/** Resolve on the client thread. Reuses the last result while the assembly inputs remain unchanged. */
+	public Result resolve(Player local) {
 		assert client.isClientThread();
-		Player local = client.getLocalPlayer();
+		result.changed = false;
 		PlayerComposition composition = local == null ? null : local.getPlayerComposition();
-		if (!enabled || composition == null || composition.getTransformedNpcId() != -1) {
-			result = null;
-			player = null;
-			equipment = null;
-			spotanims = null;
-			spotanimIds = null;
-			faceCounts.clear();
-			return;
+		if (composition == null || composition.getTransformedNpcId() != -1) {
+			clear();
+			return null;
 		}
 
 		int[] worn = composition.getEquipmentIds();
@@ -91,9 +93,13 @@ public class PlayerModelParts {
 		int[] effectIds = new int[effects.length];
 		for (int i = 0; i < effects.length; i++)
 			effectIds[i] = effects[i].getId();
-		if (player == local && gender == composition.getGender() && animation == action && Arrays.equals(equipment, worn)
-			&& Arrays.equals(spotanims, effects) && Arrays.equals(spotanimIds, effectIds))
-			return;
+		if (player == local &&
+			gender == composition.getGender() &&
+			animation == action &&
+			Arrays.equals(equipment, worn) &&
+			Arrays.equals(spotanims, effects) &&
+			Arrays.equals(spotanimIds, effectIds))
+			return result;
 
 		player = local;
 		gender = composition.getGender();
@@ -101,139 +107,153 @@ public class PlayerModelParts {
 		equipment = worn.clone();
 		spotanims = effects;
 		spotanimIds = effectIds;
-		ModelOverride gray = color(0, 0);
-		ModelOverride[] effectOverrides = new ModelOverride[effects.length];
-		Arrays.fill(effectOverrides, gray);
-		result = new Result(local, gray, effects, effectOverrides.clone());
+		result.player = local;
+		result.animation = action;
+		result.gender = gender;
+		result.spotanims = effects;
+		result.parts = null;
+		result.partCount = 0;
+		result.baseFaceCount = result.faceCount = 0;
+		result.changed = true;
 
-		try {
-			int[] effective = worn.clone();
-			var ranges = new StringBuilder();
-			if (action != -1) {
-				byte[] data = client.getIndexConfig().loadData(12, action);
+		int[] effective = new int[worn.length];
+		fillEquipment(effective, local);
+
+		int totalFaces = 0;
+		for (int slot = 0; slot < effective.length; slot++) {
+			int value = effective[slot];
+			int[] models;
+			if (value >= PlayerComposition.ITEM_OFFSET) {
+				int id = value - PlayerComposition.ITEM_OFFSET;
+				byte[] data = client.getIndexConfig().loadData(10, id);
+				if (data == null) {
+					equipment = null; // Retry when the cache data arrives.
+					return result;
+				}
+				models = PlayerModelDefinitions.readWornModels(data, gender == 1);
+			} else if (value >= PlayerComposition.KIT_OFFSET) {
+				int id = value - PlayerComposition.KIT_OFFSET;
+				byte[] data = client.getIndexConfig().loadData(3, id);
 				if (data == null) {
 					equipment = null;
-					return;
+					return result;
 				}
-				var raw = new SequenceLoader().load(action, data);
-				var sequence = client.loadAnimation(action);
-				int right = sequence.getRightHandItem();
-				int left = sequence.getLeftHandItem();
-				// Raw sequence fields distinguish no substitution (-1) from an empty hand (0).
-				effective[3] = handEquipment(raw.rightHandItem, right, effective[3]);
-				effective[5] = handEquipment(raw.leftHandItem, left, effective[5]);
-				ranges.append(" rightHand=").append(right).append(" rawRight=").append(raw.rightHandItem)
-					.append(" leftHand=").append(left).append(" rawLeft=").append(raw.leftHandItem);
+				models = PlayerModelDefinitions.readKitModels(data);
+			} else {
+				continue;
 			}
-
-			var faces = new ArrayList<ModelOverride>();
-			for (int slot = 0; slot < effective.length; slot++) {
-				int value = effective[slot];
-				int[] models;
-				if (value >= PlayerComposition.ITEM_OFFSET) {
-					int id = value - PlayerComposition.ITEM_OFFSET;
-					byte[] data = client.getIndexConfig().loadData(10, id);
-					if (data == null) {
-						equipment = null; // Retry when the cache data arrives.
-						return;
-					}
-					var item = new ItemLoader().load(id, data);
-					models = gender == 1 ? new int[] { item.femaleModel0, item.femaleModel1, item.femaleModel2 } :
-						new int[] { item.maleModel0, item.maleModel1, item.maleModel2 };
-				} else if (value >= PlayerComposition.KIT_OFFSET) {
-					int id = value - PlayerComposition.KIT_OFFSET;
-					byte[] data = client.getIndexConfig().loadData(3, id);
-					if (data == null) {
-						equipment = null;
-						return;
-					}
-					models = new KitLoader().load(id, data).models;
-				} else {
-					continue;
-				}
-				if (models == null)
-					continue;
-				for (int part = 0; part < models.length; part++) {
-					int id = models[part];
-					if (id == -1)
-						break; // Worn secondary/tertiary models require the preceding models.
-					Integer count = faceCounts.get(id);
-					if (count == null) {
-						var model = client.loadModelData(id);
-						if (model == null) {
-							equipment = null;
-							return;
-						}
-						count = model.getFaceCount();
-						faceCounts.put(id, count);
-					}
-					// Stable by slot and source-model index, so equipment changes don't recolor other slots.
-					int hue = (slot * 23 + part * 11) & 63;
-					ModelOverride tint = color(hue, 7);
-					ranges.append(" slot=").append(slot).append(" model=").append(id)
-						.append(" hue=").append(hue).append(" faces=[").append(faces.size())
-						.append(',').append(faces.size() + count).append(')');
-					for (int face = 0; face < count; face++)
-						faces.add(tint);
-				}
-			}
-			int baseFaces = faces.size();
-			// Test the hypothesis that combined effects follow the actor's iteration order.
-			// Separately rendered effects receive the same tint without relying on this assumption.
-			for (int i = 0; i < effects.length; i++) {
-				int id = effectIds[i];
-				byte[] data = client.getIndexConfig().loadData(13, id);
-				if (data == null) {
-					equipment = null;
-					return;
-				}
-				int modelId = new SpotAnimLoader().load(id, data).modelId;
-				Integer count = faceCounts.get(modelId);
+			if (models == null)
+				continue;
+			for (int part = 0; part < models.length; part++) {
+				int id = models[part];
+				if (id == -1)
+					break; // Worn secondary/tertiary models require the preceding models.
+				Integer count = faceCounts.get(id);
 				if (count == null) {
-					var model = client.loadModelData(modelId);
+					var model = client.loadModelData(id);
 					if (model == null) {
 						equipment = null;
-						return;
+						return result;
 					}
 					count = model.getFaceCount();
-					faceCounts.put(modelId, count);
+					faceCounts.put(id, count);
 				}
-				int hue = (id * 23 + 7) & 63;
-				ModelOverride tint = effectOverrides[i] = color(hue, 7);
-				ranges.append(" spotanim=").append(id).append(" model=").append(modelId)
-					.append(" hue=").append(hue).append(" combinedFaces=[").append(faces.size())
-					.append(',').append(faces.size() + count).append(')');
-				for (int face = 0; face < count; face++)
-					faces.add(tint);
+				addPart(slot, part, id, null, -1, totalFaces, count);
+				totalFaces += count;
 			}
-			// Publish only after all ranges have been resolved; never mutate a worker's snapshot.
-			ModelOverride override = color(0, 0);
-			override.faceOverrides = faces.toArray(new ModelOverride[0]);
-			result = new Result(local, override, effects, effectOverrides);
-			log.debug("Player model parts: animation={}, gender={}, predicted base faces={}, with effects={};{}",
-				action, gender, baseFaces, faces.size(), ranges);
-		} catch (RuntimeException ex) {
-			// Keep gray until the appearance changes, rather than throwing/logging every frame.
-			log.warn("Unable to infer player model parts for animation {}", action, ex);
+		}
+		int baseFaces = totalFaces;
+		// Assumes combined effects follow the actor's iteration order; not guaranteed by the public API.
+		for (int i = 0; i < effects.length; i++) {
+			int id = effectIds[i];
+			// Resolve before rendering on the client thread: getModel may reuse shared animation buffers.
+			// Only retain the count, never the returned model.
+			var model = effects[i].getModel();
+			if (model == null) {
+				equipment = null;
+				return result;
+			}
+			int count = model.getFaceCount();
+			addPart(-1, i, -1, effects[i], id, totalFaces, count);
+			totalFaces += count;
+		}
+		result.parts = ranges;
+		result.baseFaceCount = baseFaces;
+		result.faceCount = totalFaces;
+		return result;
+	}
+
+	private void addPart(int slot, int index, int modelId, ActorSpotAnim spotanim, int spotanimId, int startFace, int faceCount) {
+		if (result.partCount == ranges.length)
+			ranges = Arrays.copyOf(ranges, ranges.length * 2);
+		Part part = ranges[result.partCount];
+		if (part == null)
+			ranges[result.partCount] = part = new Part();
+		result.partCount++;
+		part.slot = slot;
+		part.index = index;
+		part.modelId = modelId;
+		part.spotanim = spotanim;
+		part.spotanimId = spotanimId;
+		part.startFace = startFace;
+		part.faceCount = faceCount;
+	}
+
+	/** Writes encoded equipment/kit IDs in assembly order, including action-animation substitutions. */
+	public void fillEquipment(int[] out, Player player) {
+		assert client.isClientThread();
+		int[] worn = player.getPlayerComposition().getEquipmentIds();
+		System.arraycopy(worn, 0, out, 0, worn.length);
+		int action = player.getAnimation();
+		if (action != -1) {
+			var sequence = client.loadAnimation(action);
+			out[3] = handEquipment(sequence.getRightHandItem(), out[3]);
+			out[5] = handEquipment(sequence.getLeftHandItem(), out[5]);
 		}
 	}
 
-	private static int handEquipment(int raw, int item, int equipped) {
-		if (raw < 0)
-			return equipped;
-		if (raw == 0)
+	/** Counts one slot without constructing per-source-model ranges. -1 means assets are still loading. */
+	public int getEquipmentFaceCount(int equipment, int gender) {
+		assert client.isClientThread();
+		if (equipment < PlayerComposition.KIT_OFFSET)
 			return 0;
-		if (item < 0)
-			throw new IllegalArgumentException("Sequence specifies hand equipment " + raw + " but API returned " + item);
-		return item + PlayerComposition.ITEM_OFFSET;
+		int key = equipment * 2 + gender;
+		int cached = equipmentFaceCounts.getOrDefault(key, -1);
+		if (cached >= 0)
+			return cached;
+		boolean item = equipment >= PlayerComposition.ITEM_OFFSET;
+		int id = equipment - (item ? PlayerComposition.ITEM_OFFSET : PlayerComposition.KIT_OFFSET);
+		byte[] data = client.getIndexConfig().loadData(item ? 10 : 3, id);
+		if (data == null)
+			return -1;
+		int[] models = item ? PlayerModelDefinitions.readWornModels(data, gender == 1) : PlayerModelDefinitions.readKitModels(data);
+		int total = 0;
+		if (models != null) {
+			for (int modelId : models) {
+				if (modelId == -1)
+					break;
+				Integer count = faceCounts.get(modelId);
+				if (count == null) {
+					var model = client.loadModelData(modelId);
+					if (model == null)
+						return -1;
+					count = model.getFaceCount();
+					faceCounts.put(modelId, count);
+				}
+				total += count;
+			}
+		}
+		equipmentFaceCounts.put(key, total);
+		return total;
 	}
 
-	private ModelOverride color(int hue, int saturation) {
-		ModelOverride tint = new ModelOverride()
-			.material(Material.UNLIT).textureMaterial(Material.UNLIT).forceMaterialChanges(true)
-			.uvType(UvType.GEOMETRY).undoVanillaShading(false)
-			.setHue(hue).setSaturation(saturation).setLightness(64);
-		tint.normalize(plugin);
-		return tint;
+	private static int handEquipment(int item, int equipped) {
+		if (item == -1)
+			return equipped;
+		if (item == EMPTY_HAND)
+			return 0;
+		if (item < 0)
+			throw new IllegalArgumentException("Unknown animation hand item " + item);
+		return item + PlayerComposition.ITEM_OFFSET;
 	}
 }

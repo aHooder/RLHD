@@ -64,6 +64,7 @@ public class ModelOverrideManager {
 					throw new IOException("Empty or invalid: " + path);
 
 				modelOverrides.clear();
+				plugin.playerEquipmentOverrides.clear();
 				for (ModelOverride override : parsedOverrides) {
 					// Ignore trailing commas in the JSON
 					if (override == null)
@@ -141,6 +142,8 @@ public class ModelOverrideManager {
 			addEntry(ModelHash.TYPE_PROJECTILE, id, override, gamevals);
 		for (int id : override.graphicsObjectIds)
 			addEntry(ModelHash.TYPE_GRAPHICS_OBJECT, id, override, gamevals);
+		for (int id : override.equipmentIds)
+			addEntry(ModelHash.TYPE_EQUIPMENT, id, override, gamevals);
 	}
 
 	private void addEntry(int type, int id, ModelOverride entry, GamevalManager.Handle gamevals) {
@@ -175,6 +178,9 @@ public class ModelOverrideManager {
 					case ModelHash.TYPE_PROJECTILE:
 					case ModelHash.TYPE_GRAPHICS_OBJECT:
 						name = gamevals.getSpotanimName(id);
+						break;
+					case ModelHash.TYPE_EQUIPMENT:
+						name = gamevals.getItemName(id);
 						break;
 				}
 

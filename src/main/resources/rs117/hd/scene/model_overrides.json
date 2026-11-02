@@ -108919,5 +108919,25 @@
       "POG_SEWER_BRICK_WALL_PLANTS_06",
       "POG_SEWER_BRICK_WALL_PLANTS_07"
     ]
+  },
+  {
+    "description": "shadow",
+    "equipmentIds": [ 27275 ],
+    "model": "shadow.glb"
+  },
+  {
+    "description": "magma helm",
+    "equipmentIds": [ 13199 ],
+    "model": "magma_helm3.glb"
+  },
+  {
+    "description": "infernal cape",
+    "equipmentIds": [ 21285 ],
+    "model": "infernal_cape.glb"
+  },
+  {
+    "description": "infernal hood",
+    "equipmentIds": [ 21282 ],
+    "model": "infernal_hood.glb"
   }
 ]

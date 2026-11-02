@@ -29,6 +29,7 @@ public class GamevalManager {
 	private static final ResourcePath GAMEVAL_PATH = Props
 		.getFile("rlhd.gameval-path", () -> path(GamevalManager.class, "gamevals.json"));
 
+	private static final String ITEM_KEY = "items";
 	private static final String NPC_KEY = "npcs";
 	private static final String OBJECT_KEY = "objects";
 	private static final String ANIM_KEY = "anims";
@@ -52,6 +53,7 @@ public class GamevalManager {
 	}
 
 	private static void clearGamevals() {
+		GAMEVALS.put(ITEM_KEY, Collections.emptyMap());
 		GAMEVALS.put(NPC_KEY, Collections.emptyMap());
 		GAMEVALS.put(OBJECT_KEY, Collections.emptyMap());
 		GAMEVALS.put(ANIM_KEY, Collections.emptyMap());
@@ -192,6 +194,12 @@ public class GamevalManager {
 		}
 	}
 
+	public static class ItemAdapter extends GamevalAdapter {
+		public ItemAdapter() {
+			super(ITEM_KEY);
+		}
+	}
+
 	public static class NpcAdapter extends GamevalAdapter {
 		public NpcAdapter() {
 			super(NPC_KEY);
@@ -275,6 +283,10 @@ public class GamevalManager {
 
 		public int getVarpId(String name) {
 			return getVarps().get(name);
+		}
+
+		public String getItemName(int id) {
+			return getName(ITEM_KEY, id);
 		}
 
 		public String getNpcName(int id) {
