@@ -1667,6 +1667,7 @@ public class LegacyRenderer implements Renderer {
 			}
 			int[] worldPos = sceneContext.localToWorld(x, z, plane);
 			ModelOverride modelOverride = modelOverrideManager.getOverride(uuid, worldPos);
+			modelOverride = plugin.playerModelParts.getOverride(renderable, modelOverride);
 			if (modelOverride.hide)
 				return;
 

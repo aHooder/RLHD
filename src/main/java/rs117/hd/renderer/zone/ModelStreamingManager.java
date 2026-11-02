@@ -225,6 +225,7 @@ public class ModelStreamingManager {
 
 		ctx.sceneContext.localToWorld(x, z, tileObject.getPlane(), streamingContext.worldPos);
 		ModelOverride modelOverride = modelOverrideManager.getOverride(uuid, streamingContext.worldPos);
+		modelOverride = plugin.playerModelParts.getOverride(r, modelOverride);
 		if (modelOverride.hide)
 			return;
 

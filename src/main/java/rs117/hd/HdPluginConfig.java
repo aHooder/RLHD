@@ -1390,6 +1390,16 @@ public interface HdPluginConfig extends Config
 	)
 	String experimentalSettings = "experimentalSettings";
 
+	@ConfigItem(
+		keyName = "experimentalPlayerModelParts",
+		name = "dev: Player model parts",
+		description = "Colors inferred equipment/body model face ranges on the local player. Gray indicates unassigned faces. Diagnostic only.",
+		section = experimentalSettings
+	)
+	default boolean playerModelParts() {
+		return false;
+	}
+
 
 	String KEY_PRESERVE_VANILLA_NORMALS = "experimentalPreserveVanillaNormals";
 	@ConfigItem(

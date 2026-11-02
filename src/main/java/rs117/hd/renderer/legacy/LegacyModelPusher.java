@@ -620,6 +620,12 @@ public class LegacyModelPusher {
 			}
 		}
 
+		if (modelOverride.modifiesColor) {
+			color1 = modelOverride.modifyColor(color1);
+			color2 = modelOverride.modifyColor(color2);
+			color3 = modelOverride.modifyColor(color3);
+		}
+
 		color1 |= packedAlphaPriorityFlags;
 		color2 |= packedAlphaPriorityFlags;
 		color3 |= packedAlphaPriorityFlags;

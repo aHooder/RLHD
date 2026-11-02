@@ -17,6 +17,9 @@ def runeLiteVersion = '1.13.+'
 def pluginMainClass = 'rs117.hd.HdPluginTest'
 
 dependencies {
+	implementation(group: 'net.runelite', name: 'cache', version: runeLiteVersion) {
+		exclude group: 'org.slf4j', module: 'slf4j-simple'
+	}
 	compileOnly group: 'net.runelite', name: 'client', version: runeLiteVersion
 
 	compileOnly 'org.projectlombok:lombok:1.18.30'
